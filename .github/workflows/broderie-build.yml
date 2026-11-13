@@ -45,6 +45,11 @@ jobs:
           M=android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.INTERNET' $M || sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' $M
           sed -i 's|android:label="[^"]*"|android:label="Atelier Broderie"|' $M
+      - name: Désactiver lintVital (plante sur les plugins tiers, ex. url_launcher)
+        run: |
+          F=android/build.gradle.kts; [ -f $F ] || F=android/build.gradle
+          printf '\nsubprojects {\n    tasks.matching { it.name.contains("lintVital") }.configureEach { enabled = false }\n}\n' >> $F
+          tail -4 $F
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
