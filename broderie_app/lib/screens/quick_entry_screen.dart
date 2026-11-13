@@ -7,7 +7,17 @@ import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
 
-/// Saisie rapide en 3 touches : ouvrier → dessin → nombre de robes.
+/// Équipe et date par défaut selon l'heure : 8 h–20 h = jour,
+/// après 20 h = nuit du jour, avant 8 h = nuit de la veille.
+(Equipe, DateTime) defaultShift() {
+  final now = DateTime.now();
+  final today = dayOnly(now);
+  if (now.hour >= 8 && now.hour < 20) return (Equipe.jour, today);
+  if (now.hour >= 20) return (Equipe.nuit, today);
+  return (Equipe.nuit, today.subtract(const Duration(days: 1)));
+}
+
+/// Saisie rapide : ouvrier → type de broderie → points du compteur.
 class QuickEntryScreen extends StatefulWidget {
   final VoidCallback? onGoToRefs;
   const QuickEntryScreen({super.key, this.onGoToRefs});
@@ -18,24 +28,33 @@ class QuickEntryScreen extends StatefulWidget {
 
 class _QuickEntryScreenState extends State<QuickEntryScreen> {
   String? _ouvrierId;
-  String? _dessinId;
+  String? _typeId;
   String? _machineId;
-  int _robes = 0;
-  DateTime _date = dayOnly(DateTime.now());
-  bool _busy = false;
+  String? _dessinId;
+  late Equipe _equipe;
+  late DateTime _date;
+  final _points = TextEditingController();
+  final _robes = TextEditingController();
   final _note = TextEditingController();
-  String _searchDessin = '';
+  final _pointsFocus = FocusNode();
+  bool _busy = false;
 
-  // Production du jour (bandeau du haut)
   int _todayPts = 0;
-  int _todayRobes = 0;
+  double _todayDA = 0;
   int _seenVersion = -1;
 
-  int get _step => _ouvrierId == null ? 0 : (_dessinId == null ? 1 : 2);
+  int get _step => _ouvrierId == null ? 0 : (_typeId == null ? 1 : 2);
+  int get _pts => parseInt(_points.text) ?? 0;
 
   @override
   void initState() {
     super.initState();
+    final (e, d) = defaultShift();
+    _equipe = e;
+    _date = d;
+    final actives = data.machines.where((m) => m.actif).toList();
+    if (actives.length == 1) _machineId = actives.first.id;
+    _points.addListener(() => setState(() {}));
     data.addListener(_onData);
     _loadToday();
   }
@@ -43,7 +62,10 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
   @override
   void dispose() {
     data.removeListener(_onData);
+    _points.dispose();
+    _robes.dispose();
     _note.dispose();
+    _pointsFocus.dispose();
     super.dispose();
   }
 
@@ -60,61 +82,40 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
       if (mounted) {
         setState(() {
           _todayPts = rows.fold<int>(0, (s, p) => s + p.totalPoints);
-          _todayRobes = rows.fold<int>(0, (s, p) => s + p.nbRobes);
+          _todayDA = rows.fold<double>(0, (s, p) => s + p.montant);
         });
       }
     } catch (_) {}
   }
 
-  void _add(int n) {
-    HapticFeedback.selectionClick();
-    setState(() => _robes = (_robes + n).clamp(0, 99999));
-  }
-
-  Future<void> _editRobes() async {
-    final c = TextEditingController(text: _robes == 0 ? '' : '$_robes');
-    final v = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Nombre de robes'),
-        content: TextField(
-          controller: c,
-          autofocus: true,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          onSubmitted: (s) => Navigator.pop(ctx, int.tryParse(s)),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, int.tryParse(c.text)), child: const Text('OK')),
-        ],
-      ),
-    );
-    if (v != null) setState(() => _robes = v.clamp(0, 99999));
-  }
-
   Future<void> _save() async {
     final o = data.ouvrier(_ouvrierId);
-    final d = data.dessin(_dessinId);
-    if (o == null || d == null || _robes <= 0) return;
+    final t = data.type(_typeId);
+    if (o == null || t == null || _pts <= 0) return;
     setState(() => _busy = true);
     try {
       await data.saveProduction(Production.toRow(
         dateKey: dateKey(_date),
+        equipe: _equipe,
         ouvrierId: o.id,
-        dessinId: d.id,
+        typeId: t.id,
         machineId: _machineId,
-        nbRobes: _robes,
-        pointsParRobe: d.points,
-        tarif1000: o.tarif1000,
+        dessinId: _dessinId,
+        nbRobes: parseInt(_robes.text),
+        totalPoints: _pts,
+        tarif1000: t.tarif1000,
         note: _note.text,
       ));
       HapticFeedback.mediumImpact();
       if (mounted) {
-        showSnack(context, '✓ ${o.nom} : ${fmtInt(_robes)} robes · ${fmtInt(_robes * d.points)} points');
+        showSnack(context, '✓ ${o.nom} · ${t.nom} : ${fmtInt(_pts)} points = ${fmtDA(_pts * t.tarif1000 / 1000)}');
         setState(() {
-          _robes = 0;
+          _points.clear();
+          _robes.clear();
           _note.clear();
+          _dessinId = null;
+          _ouvrierId = null;
+          _typeId = null;
         });
       }
     } catch (e) {
@@ -127,19 +128,16 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
   @override
   Widget build(BuildContext context) {
     final ouvriers = data.ouvriers.where((o) => o.actif).toList();
-    final dessins = data.dessins
-        .where((d) => d.actif)
-        .where((d) => _searchDessin.isEmpty || d.nom.toLowerCase().contains(_searchDessin.toLowerCase()))
-        .toList();
+    final types = data.types.where((t) => t.actif).toList();
 
-    if (ouvriers.isEmpty || data.dessins.where((d) => d.actif).isEmpty) {
+    if (ouvriers.isEmpty) {
       return ListView(padding: const EdgeInsets.all(16), children: [
         EmptyState(
-          'Pour commencer, ajoutez au moins un ouvrier et un dessin (avec son nombre de points).',
+          'Pour commencer, ajoutez vos ouvriers.',
           icon: Icons.rocket_launch_outlined,
           action: widget.onGoToRefs == null
               ? null
-              : FilledButton.icon(onPressed: widget.onGoToRefs, icon: const Icon(Icons.person_add_alt_1), label: const Text('Ajouter')),
+              : FilledButton.icon(onPressed: widget.onGoToRefs, icon: const Icon(Icons.person_add_alt_1), label: const Text('Ajouter un ouvrier')),
         ),
       ]);
     }
@@ -149,19 +147,22 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
       return ListView(
         padding: EdgeInsets.fromLTRB(pad, 8, pad, 32),
         children: [
-          _TodayBanner(points: _todayPts, robes: _todayRobes),
+          _TodayBanner(points: _todayPts, montant: _todayDA),
           const SizedBox(height: 16),
           _Steps(step: _step),
           const SizedBox(height: 16),
 
-          // ---------------- Étape 1 : ouvrier
+          // ---------------- 1. Ouvrier
           if (_step == 0) ...[
-            const SectionTitle('Qui a brodé ?', subtitle: 'Choisissez l\'ouvrier'),
+            const SectionTitle('Qui a travaillé ?', subtitle: 'Choisissez l\'ouvrier'),
             AutoGrid(minItemWidth: 150, children: [
               for (final o in ouvriers)
                 AppCard(
                   padding: const EdgeInsets.all(14),
-                  onTap: () => setState(() => _ouvrierId = o.id),
+                  onTap: () => setState(() {
+                    _ouvrierId = o.id;
+                    if (types.length == 1) _typeId = types.first.id;
+                  }),
                   child: Column(children: [
                     NameAvatar(o.nom, size: 56),
                     const SizedBox(height: 10),
@@ -175,88 +176,140 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
               label: 'Ouvrier',
               title: data.ouvrierNom(_ouvrierId!),
               leading: NameAvatar(data.ouvrierNom(_ouvrierId!), size: 40),
-              onChange: () => setState(() {
-                _ouvrierId = null;
-              }),
+              onChange: () => setState(() => _ouvrierId = null),
             ),
 
-          // ---------------- Étape 2 : dessin
+          // ---------------- 2. Type de broderie
           if (_step == 1) ...[
             const SizedBox(height: 16),
-            SectionTitle('Quel dessin ?', subtitle: 'Choisissez le dessin brodé',
-                trailing: SizedBox(
-                  width: 180,
-                  child: TextField(
-                    decoration: const InputDecoration(hintText: 'Rechercher', prefixIcon: Icon(Icons.search, size: 20)),
-                    onChanged: (v) => setState(() => _searchDessin = v),
-                  ),
-                )),
-            AutoGrid(minItemWidth: 160, children: [
-              for (final d in dessins)
-                AppCard(
-                  padding: const EdgeInsets.all(10),
-                  onTap: () => setState(() => _dessinId = d.id),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    AspectRatio(
-                      aspectRatio: 1.25,
-                      child: LayoutBuilder(builder: (_, bc) => DessinThumb(d, size: bc.maxWidth, radius: 14)),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(d.nom, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    Text('${fmtInt(d.points)} pts', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
-                  ]),
+            const SectionTitle('Type de broderie', subtitle: 'Le prix dépend du type'),
+            AutoGrid(minItemWidth: 200, children: [
+              for (var i = 0; i < types.length; i++)
+                _TypeCard(
+                  type: types[i],
+                  color: AppColors.series[i % AppColors.series.length],
+                  onTap: () {
+                    setState(() => _typeId = types[i].id);
+                    Future.delayed(const Duration(milliseconds: 120), () {
+                      if (mounted) _pointsFocus.requestFocus();
+                    });
+                  },
                 ),
             ]),
           ] else if (_step == 2) ...[
             const SizedBox(height: 10),
             _Selected(
-              label: 'Dessin',
-              title: data.dessinNom(_dessinId!),
-              subtitle: '${fmtInt(data.dessin(_dessinId)?.points ?? 0)} points / robe',
-              leading: DessinThumb(data.dessin(_dessinId), size: 40, radius: 12),
-              onChange: () => setState(() => _dessinId = null),
+              label: 'Type de broderie',
+              title: data.typeNom(_typeId),
+              subtitle: '${fmtDA(data.type(_typeId)?.tarif1000 ?? 0)} pour 1000 points',
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(gradient: AppColors.goldGradient, borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.gesture_rounded, color: Colors.white),
+              ),
+              onChange: () => setState(() => _typeId = null),
             ),
           ],
 
-          // ---------------- Étape 3 : quantité
+          // ---------------- 3. Compteur
           if (_step == 2) ...[
             const SizedBox(height: 16),
-            _CounterCard(
-              robes: _robes,
-              pointsParRobe: data.dessin(_dessinId)?.points ?? 0,
-              tarif: data.ouvrier(_ouvrierId)?.tarif1000 ?? 0,
-              onAdd: _add,
-              onTapValue: _editRobes,
-            ),
-            const SizedBox(height: 14),
-            Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-              ActionChip(
-                avatar: const Icon(Icons.event_rounded, size: 18),
-                label: Text(_date == dayOnly(DateTime.now()) ? 'Aujourd\'hui' : fmtDate(_date)),
-                onPressed: () async {
-                  final d = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100));
-                  if (d != null) setState(() => _date = d);
-                },
-              ),
-              for (final m in data.machines.where((m) => m.actif))
-                ChoiceChip(
-                  avatar: const Icon(Icons.precision_manufacturing_outlined, size: 18),
-                  label: Text(m.nom),
-                  selected: _machineId == m.id,
-                  onSelected: (s) => setState(() => _machineId = s ? m.id : null),
+            AppCard(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  SegmentedButton<Equipe>(
+                    segments: [
+                      for (final e in Equipe.values)
+                        ButtonSegment(
+                          value: e,
+                          icon: Icon(e == Equipe.jour ? Icons.wb_sunny_rounded : Icons.nightlight_round),
+                          label: Text('${e.label} · ${e.horaire}'),
+                        ),
+                    ],
+                    selected: {_equipe},
+                    onSelectionChanged: (s) => setState(() => _equipe = s.first),
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.event_rounded, size: 18),
+                    label: Text(_date == dayOnly(DateTime.now()) ? 'Aujourd\'hui' : fmtDate(_date)),
+                    onPressed: () async {
+                      final d = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100));
+                      if (d != null) setState(() => _date = d);
+                    },
+                  ),
+                ]),
+                if (data.machines.where((m) => m.actif).isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final m in data.machines.where((m) => m.actif))
+                      ChoiceChip(
+                        avatar: const Icon(Icons.precision_manufacturing_outlined, size: 18),
+                        label: Text('${m.nom} · ${m.nbTetes} têtes'),
+                        selected: _machineId == m.id,
+                        onSelected: (s) => setState(() => _machineId = s ? m.id : null),
+                      ),
+                  ]),
+                ],
+                const SizedBox(height: 18),
+                Text('Points du compteur', style: context.tt.titleMedium),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _points,
+                  focusNode: _pointsFocus,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  inputFormatters: [ThousandsFormatter()],
+                  style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: context.cs.primary, letterSpacing: 1),
+                  decoration: const InputDecoration(hintText: '0', suffixText: 'pts', contentPadding: EdgeInsets.symmetric(vertical: 18)),
+                  onSubmitted: (_) => _save(),
                 ),
-            ]),
-            const SizedBox(height: 12),
-            TextField(controller: _note, decoration: const InputDecoration(hintText: 'Remarque (facultatif)', prefixIcon: Icon(Icons.notes))),
+                const SizedBox(height: 14),
+                _CalcBox(points: _pts, tarif: data.type(_typeId)?.tarif1000 ?? 0),
+                const SizedBox(height: 6),
+                Theme(
+                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    title: Text('Détails facultatifs', style: TextStyle(color: context.pal.muted, fontSize: 14)),
+                    subtitle: Text('Dessin, nombre de robes, remarque', style: TextStyle(color: context.pal.muted, fontSize: 12)),
+                    children: [
+                      DropdownButtonFormField<String?>(
+                        value: _dessinId,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Dessin', prefixIcon: Icon(Icons.local_florist_outlined)),
+                        items: [
+                          const DropdownMenuItem<String?>(value: null, child: Text('—')),
+                          for (final d in data.dessins.where((d) => d.actif)) DropdownMenuItem<String?>(value: d.id, child: Text(d.nom)),
+                        ],
+                        onChanged: (v) => setState(() => _dessinId = v),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _robes,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: const InputDecoration(labelText: 'Nombre de robes', prefixIcon: Icon(Icons.checkroom_rounded)),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque', prefixIcon: Icon(Icons.notes))),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+              ]),
+            ),
             const SizedBox(height: 16),
             SizedBox(
-              height: 58,
+              height: 60,
               child: FilledButton.icon(
-                onPressed: (_busy || _robes <= 0) ? null : _save,
+                onPressed: (_busy || _pts <= 0) ? null : _save,
                 icon: _busy
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.check_rounded),
-                label: Text(_robes <= 0 ? 'Indiquez le nombre de robes' : 'Enregistrer ${fmtInt(_robes)} robes'),
+                label: Text(_pts <= 0
+                    ? 'Tapez les points du compteur'
+                    : 'Enregistrer · ${fmtDA(_pts * (data.type(_typeId)?.tarif1000 ?? 0) / 1000)}'),
               ),
             ),
           ],
@@ -266,10 +319,86 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
   }
 }
 
+/// Regroupe les chiffres par milliers pendant la frappe : 300000 → 300 000.
+class ThousandsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return const TextEditingValue(text: '');
+    final trimmed = digits.length > 12 ? digits.substring(0, 12) : digits;
+    final s = int.parse(trimmed).toString();
+    final b = StringBuffer();
+    for (var i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) b.write(' ');
+      b.write(s[i]);
+    }
+    final out = b.toString();
+    return TextEditingValue(text: out, selection: TextSelection.collapsed(offset: out.length));
+  }
+}
+
+class _CalcBox extends StatelessWidget {
+  final int points;
+  final double tarif;
+  const _CalcBox({required this.points, required this.tarif});
+
+  @override
+  Widget build(BuildContext context) {
+    final montant = points * tarif / 1000;
+    return AppCard(
+      gradient: AppColors.heroGradient,
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        Text('${fmtInt(points)} pts × ${fmtDA(tarif)} / 1000', style: const TextStyle(color: Colors.white70)),
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(fmtDA(montant), style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w900)),
+        ),
+        const Text('à payer pour ce relevé', style: TextStyle(color: Colors.white70, fontSize: 12)),
+      ]),
+    );
+  }
+}
+
+class _TypeCard extends StatelessWidget {
+  final TypeTravail type;
+  final Color color;
+  final VoidCallback onTap;
+  const _TypeCard({required this.type, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+        padding: const EdgeInsets.all(18),
+        onTap: onTap,
+        child: Row(children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [color, Color.lerp(color, Colors.black, 0.3)!]),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(Icons.gesture_rounded, color: Colors.white, size: 28),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(type.nom, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+              const SizedBox(height: 2),
+              Text('${fmtDA(type.tarif1000)} / 1000 pts', style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+              Text('300 000 pts = ${fmtDA(300 * type.tarif1000)}', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+            ]),
+          ),
+          Icon(Icons.chevron_right_rounded, color: context.pal.muted),
+        ]),
+      );
+}
+
 class _TodayBanner extends StatelessWidget {
   final int points;
-  final int robes;
-  const _TodayBanner({required this.points, required this.robes});
+  final double montant;
+  const _TodayBanner({required this.points, required this.montant});
 
   @override
   Widget build(BuildContext context) => AppCard(
@@ -283,7 +412,7 @@ class _TodayBanner extends StatelessWidget {
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('${fmtInt(points)} pts', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
-            Text('${fmtInt(robes)} robes', style: const TextStyle(color: Colors.white70)),
+            Text(fmtDA(montant), style: const TextStyle(color: Colors.white70)),
           ]),
         ]),
       );
@@ -295,7 +424,7 @@ class _Steps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['Ouvrier', 'Dessin', 'Quantité'];
+    const labels = ['Ouvrier', 'Type', 'Compteur'];
     return Row(children: [
       for (var i = 0; i < 3; i++) ...[
         Expanded(
@@ -347,74 +476,4 @@ class _Selected extends StatelessWidget {
           TextButton.icon(onPressed: onChange, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: const Text('Changer')),
         ]),
       );
-}
-
-class _CounterCard extends StatelessWidget {
-  final int robes;
-  final int pointsParRobe;
-  final double tarif;
-  final void Function(int) onAdd;
-  final VoidCallback onTapValue;
-  const _CounterCard({required this.robes, required this.pointsParRobe, required this.tarif, required this.onAdd, required this.onTapValue});
-
-  @override
-  Widget build(BuildContext context) {
-    final total = robes * pointsParRobe;
-    Widget round(IconData i, VoidCallback? f) => SizedBox(
-          width: 64,
-          height: 64,
-          child: IconButton.filledTonal(onPressed: f, icon: Icon(i, size: 30)),
-        );
-    return AppCard(
-      padding: const EdgeInsets.all(20),
-      child: Column(children: [
-        Text('Combien de robes ?', style: context.tt.titleMedium),
-        const SizedBox(height: 16),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          round(Icons.remove_rounded, robes > 0 ? () => onAdd(-1) : null),
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: onTapValue,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Column(children: [
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 150),
-                    transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
-                    child: Text('$robes',
-                        key: ValueKey(robes),
-                        style: TextStyle(fontSize: 56, fontWeight: FontWeight.w900, color: context.cs.primary, height: 1)),
-                  ),
-                  Text('toucher pour taper', style: context.tt.labelSmall?.copyWith(color: context.pal.muted)),
-                ]),
-              ),
-            ),
-          ),
-          round(Icons.add_rounded, () => onAdd(1)),
-        ]),
-        const SizedBox(height: 14),
-        Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
-          for (final n in [5, 10, 20, 50])
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
-              onPressed: () => onAdd(n),
-              child: Text('+$n', style: const TextStyle(fontWeight: FontWeight.w800)),
-            ),
-        ]),
-        const SizedBox(height: 18),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: context.pal.surface2, borderRadius: BorderRadius.circular(14)),
-          child: Column(children: [
-            Text('${fmtInt(robes)} × ${fmtInt(pointsParRobe)} points', style: TextStyle(color: context.pal.muted)),
-            const SizedBox(height: 2),
-            Text('${fmtInt(total)} points', style: context.tt.headlineSmall?.copyWith(color: context.cs.primary)),
-            if (tarif > 0) Text(fmtDA(total * tarif / 1000), style: const TextStyle(fontWeight: FontWeight.w700)),
-          ]),
-        ),
-      ]),
-    );
-  }
 }

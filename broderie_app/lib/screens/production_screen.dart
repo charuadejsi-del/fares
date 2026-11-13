@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/app_data.dart';
 import '../data/models.dart';
 import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
+import 'quick_entry_screen.dart';
 
 /// Historique de production, regroupé par jour.
 class ProductionScreen extends StatefulWidget {
@@ -74,7 +76,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
         heroTag: 'fab-hist',
         onPressed: () => openProductionForm(context),
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Saisie détaillée'),
+        label: const Text('Nouveau relevé'),
       ),
       body: RefreshIndicator(
         onRefresh: _load,
@@ -117,7 +119,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(color: context.cs.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
                     child: Text(
-                      '${fmtInt(byDay[d]!.fold<int>(0, (s, p) => s + p.nbRobes))} robes · ${fmtCompact(byDay[d]!.fold<int>(0, (s, p) => s + p.totalPoints))} pts',
+                      '${fmtCompact(byDay[d]!.fold<int>(0, (s, p) => s + p.totalPoints))} pts · ${fmtDA(byDay[d]!.fold<double>(0, (s, p) => s + p.montant))}',
                       style: TextStyle(color: context.cs.primary, fontWeight: FontWeight.w700, fontSize: 12),
                     ),
                   ),
@@ -144,8 +146,8 @@ class _ProductionScreenState extends State<ProductionScreen> {
 
 /// Ouvre le formulaire détaillé (ajout ou modification).
 Future<void> openProductionForm(BuildContext context, [Production? p]) async {
-  if (data.ouvriers.where((o) => o.actif).isEmpty || data.dessins.where((d) => d.actif).isEmpty) {
-    showSnack(context, 'Ajoutez d\'abord au moins un ouvrier et un dessin.', error: true);
+  if (data.ouvriers.where((o) => o.actif).isEmpty) {
+    showSnack(context, 'Ajoutez d\'abord au moins un ouvrier.', error: true);
     return;
   }
   final saved = await showDialog<bool>(context: context, builder: (_) => ProductionForm(existing: p));
@@ -154,7 +156,7 @@ Future<void> openProductionForm(BuildContext context, [Production? p]) async {
 
 Future<void> deleteProductionWithConfirm(BuildContext context, Production p) async {
   final ok = await confirmDialog(context, 'Supprimer la saisie',
-      '${data.ouvrierNom(p.ouvrierId)} — ${data.dessinNom(p.dessinId)} — ${p.nbRobes} robes du ${fmtDate(p.dateProd)} ?');
+      '${data.ouvrierNom(p.ouvrierId)} — ${data.typeNom(p.typeId)} — ${fmtInt(p.totalPoints)} points (${p.equipe.label}, ${fmtDate(p.dateProd)}) ?');
   if (!ok) return;
   try {
     await data.deleteProduction(p.id);
@@ -173,34 +175,51 @@ class ProductionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final details = [
-      '${fmtInt(p.nbRobes)} robes × ${fmtInt(p.pointsParRobe)}',
+      '${p.equipe == Equipe.jour ? '☀' : '☾'} ${p.equipe.label}',
       if (!showOuvrier) fmtDate(p.dateProd),
       if (p.machineId != null && data.machineNom(p.machineId).isNotEmpty) data.machineNom(p.machineId),
+      if (p.dessinId != null) data.dessinNom(p.dessinId!),
+      if (p.nbRobes != null) '${fmtInt(p.nbRobes!)} robes',
       if (p.note != null) p.note!,
     ].join(' · ');
+    final nuit = p.equipe == Equipe.nuit;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: () => openProductionForm(context, p),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
         child: Row(children: [
-          DessinThumb(data.dessin(p.dessinId), size: 46),
+          showOuvrier
+              ? NameAvatar(data.ouvrierNom(p.ouvrierId), size: 44)
+              : Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: (nuit ? AppColors.sky : AppColors.gold).withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(nuit ? Icons.nightlight_round : Icons.wb_sunny_rounded, color: nuit ? AppColors.sky : AppColors.gold),
+                ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(
-                showOuvrier ? '${data.ouvrierNom(p.ouvrierId)} — ${data.dessinNom(p.dessinId)}' : data.dessinNom(p.dessinId),
-                style: const TextStyle(fontWeight: FontWeight.w700),
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 2),
+              Row(children: [
+                if (showOuvrier)
+                  Flexible(
+                    child: Text(data.ouvrierNom(p.ouvrierId),
+                        style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
+                  ),
+                if (showOuvrier) const SizedBox(width: 6),
+                TypeBadge(p.typeId),
+              ]),
+              const SizedBox(height: 3),
               Text(details, style: context.tt.bodySmall?.copyWith(color: context.pal.muted), overflow: TextOverflow.ellipsis),
             ]),
           ),
           const SizedBox(width: 8),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(fmtInt(p.totalPoints), style: const TextStyle(fontWeight: FontWeight.w800)),
-            Text(p.montant > 0 ? fmtDA(p.montant) : 'pts', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+            Text(fmtDA(p.montant), style: const TextStyle(fontWeight: FontWeight.w800)),
+            Text('${fmtInt(p.totalPoints)} pts', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
           ]),
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert, color: context.pal.muted),
@@ -216,7 +235,7 @@ class ProductionTile extends StatelessWidget {
   }
 }
 
-/// Formulaire d'ajout / modification d'une saisie de production.
+/// Formulaire d'ajout / modification d'un relevé de compteur.
 class ProductionForm extends StatefulWidget {
   final Production? existing;
   const ProductionForm({super.key, this.existing});
@@ -228,9 +247,12 @@ class ProductionForm extends StatefulWidget {
 class _ProductionFormState extends State<ProductionForm> {
   final _form = GlobalKey<FormState>();
   late DateTime _date;
+  late Equipe _equipe;
   String? _ouvrierId;
-  String? _dessinId;
+  String? _typeId;
   String? _machineId;
+  String? _dessinId;
+  final _points = TextEditingController();
   final _robes = TextEditingController();
   final _note = TextEditingController();
   bool _busy = false;
@@ -241,33 +263,32 @@ class _ProductionFormState extends State<ProductionForm> {
   void initState() {
     super.initState();
     final e = _ex;
-    _date = e?.dateProd ?? dayOnly(DateTime.now());
+    final (eq, d) = defaultShift();
+    _date = e?.dateProd ?? d;
+    _equipe = e?.equipe ?? eq;
     _ouvrierId = e?.ouvrierId;
-    _dessinId = e?.dessinId;
+    _typeId = data.type(e?.typeId) == null ? null : e?.typeId;
     _machineId = data.machine(e?.machineId) == null ? null : e?.machineId;
-    if (e != null) _robes.text = e.nbRobes.toString();
+    _dessinId = data.dessin(e?.dessinId) == null ? null : e?.dessinId;
+    if (e != null) _points.text = ThousandsFormatter().formatEditUpdate(TextEditingValue.empty, TextEditingValue(text: '${e.totalPoints}')).text;
+    if (e?.nbRobes != null) _robes.text = '${e!.nbRobes}';
     _note.text = e?.note ?? '';
-    _robes.addListener(() => setState(() {}));
+    _points.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
+    _points.dispose();
     _robes.dispose();
     _note.dispose();
     super.dispose();
   }
 
-  /// Points par robe : on garde la valeur figée de la saisie si le dessin n'a pas changé.
-  int get _ppr {
-    final e = _ex;
-    if (e != null && e.dessinId == _dessinId) return e.pointsParRobe;
-    return data.dessin(_dessinId)?.points ?? 0;
-  }
-
+  /// Tarif : on garde celui de la saisie si le type n'a pas changé.
   double get _tarif {
     final e = _ex;
-    if (e != null && e.ouvrierId == _ouvrierId) return e.tarif1000;
-    return data.ouvrier(_ouvrierId)?.tarif1000 ?? 0;
+    if (e != null && e.typeId == _typeId) return e.tarif1000;
+    return data.type(_typeId)?.tarif1000 ?? 0;
   }
 
   Future<void> _save() async {
@@ -277,11 +298,13 @@ class _ProductionFormState extends State<ProductionForm> {
       await data.saveProduction(
         Production.toRow(
           dateKey: dateKey(_date),
+          equipe: _equipe,
           ouvrierId: _ouvrierId!,
-          dessinId: _dessinId!,
+          typeId: _typeId!,
           machineId: _machineId,
-          nbRobes: parseInt(_robes.text)!,
-          pointsParRobe: _ppr,
+          dessinId: _dessinId,
+          nbRobes: parseInt(_robes.text),
+          totalPoints: parseInt(_points.text)!,
           tarif1000: _tarif,
           note: _note.text,
         ),
@@ -298,33 +321,43 @@ class _ProductionFormState extends State<ProductionForm> {
 
   @override
   Widget build(BuildContext context) {
-    // Ouvriers / dessins actifs + celui de la saisie modifiée s'il a été désactivé
     final ouvriers = data.ouvriers.where((o) => o.actif || o.id == _ex?.ouvrierId).toList();
-    final dessins = data.dessins.where((d) => d.actif || d.id == _ex?.dessinId).toList();
+    final types = data.types.where((t) => t.actif || t.id == _ex?.typeId).toList();
     final machines = data.machines.where((m) => m.actif || m.id == _ex?.machineId).toList();
-    final robes = parseInt(_robes.text) ?? 0;
-    final total = robes * _ppr;
-    final montant = total * _tarif / 1000;
-    final t = Theme.of(context);
+    final pts = parseInt(_points.text) ?? 0;
 
     return AlertDialog(
-      title: Text(_ex == null ? 'Nouvelle saisie' : 'Modifier la saisie'),
+      title: Text(_ex == null ? 'Nouveau relevé' : 'Modifier le relevé'),
       content: SizedBox(
         width: 480,
         child: Form(
           key: _form,
           child: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              InkWell(
-                onTap: () async {
-                  final d = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100));
-                  if (d != null) setState(() => _date = d);
-                },
-                child: InputDecorator(
-                  decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.event)),
-                  child: Text(fmtDate(_date)),
+              Row(children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      final d = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100));
+                      if (d != null) setState(() => _date = d);
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.event)),
+                      child: Text(fmtDate(_date)),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                SegmentedButton<Equipe>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: Equipe.jour, icon: Icon(Icons.wb_sunny_rounded), label: Text('Jour')),
+                    ButtonSegment(value: Equipe.nuit, icon: Icon(Icons.nightlight_round), label: Text('Nuit')),
+                  ],
+                  selected: {_equipe},
+                  onSelectionChanged: (s) => setState(() => _equipe = s.first),
+                ),
+              ]),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: _ouvrierId,
@@ -336,57 +369,69 @@ class _ProductionFormState extends State<ProductionForm> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
+                value: _typeId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Type de broderie', prefixIcon: Icon(Icons.gesture_rounded)),
+                items: [
+                  for (final t in types) DropdownMenuItem(value: t.id, child: Text('${t.nom} — ${fmtDA(t.tarif1000)} / 1000 pts')),
+                ],
+                onChanged: (v) => setState(() => _typeId = v),
+                validator: (v) => v == null ? 'Choisissez le type' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _points,
+                keyboardType: TextInputType.number,
+                inputFormatters: [ThousandsFormatter()],
+                decoration: const InputDecoration(labelText: 'Points du compteur', prefixIcon: Icon(Icons.blur_on_rounded), suffixText: 'pts'),
+                validator: (v) {
+                  final n = parseInt(v ?? '');
+                  return (n == null || n <= 0) ? 'Nombre de points supérieur à 0' : null;
+                },
+              ),
+              const SizedBox(height: 12),
+              if (machines.isNotEmpty) ...[
+                DropdownButtonFormField<String?>(
+                  value: _machineId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Machine', prefixIcon: Icon(Icons.precision_manufacturing_outlined)),
+                  items: [
+                    const DropdownMenuItem<String?>(value: null, child: Text('—')),
+                    for (final m in machines) DropdownMenuItem<String?>(value: m.id, child: Text('${m.nom} · ${m.nbTetes} têtes')),
+                  ],
+                  onChanged: (v) => setState(() => _machineId = v),
+                ),
+                const SizedBox(height: 12),
+              ],
+              DropdownButtonFormField<String?>(
                 value: _dessinId,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Dessin', prefixIcon: Icon(Icons.draw_outlined)),
+                decoration: const InputDecoration(labelText: 'Dessin (facultatif)', prefixIcon: Icon(Icons.local_florist_outlined)),
                 items: [
-                  for (final d in dessins)
-                    DropdownMenuItem(value: d.id, child: Text('${d.nom} — ${fmtInt(d.points)} pts', overflow: TextOverflow.ellipsis)),
+                  const DropdownMenuItem<String?>(value: null, child: Text('—')),
+                  for (final d in data.dessins.where((d) => d.actif || d.id == _ex?.dessinId))
+                    DropdownMenuItem<String?>(value: d.id, child: Text(d.nom)),
                 ],
                 onChanged: (v) => setState(() => _dessinId = v),
-                validator: (v) => v == null ? 'Choisissez un dessin' : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _robes,
                 keyboardType: TextInputType.number,
-                autofocus: _ex == null,
-                decoration: const InputDecoration(labelText: 'Nombre de robes / pièces', prefixIcon: Icon(Icons.checkroom)),
-                validator: (v) {
-                  final n = parseInt(v ?? '');
-                  if (n == null || n <= 0) return 'Nombre entier supérieur à 0';
-                  if (n > 100000) return 'Nombre trop grand';
-                  return null;
-                },
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(labelText: 'Nombre de robes (facultatif)', prefixIcon: Icon(Icons.checkroom_rounded)),
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String?>(
-                value: _machineId,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Machine (facultatif)', prefixIcon: Icon(Icons.settings_input_component_outlined)),
-                items: [
-                  const DropdownMenuItem<String?>(value: null, child: Text('—')),
-                  for (final m in machines) DropdownMenuItem<String?>(value: m.id, child: Text(m.nom)),
-                ],
-                onChanged: (v) => setState(() => _machineId = v),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _note,
-                decoration: const InputDecoration(labelText: 'Remarque (facultatif)', prefixIcon: Icon(Icons.notes)),
-              ),
+              TextFormField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque (facultatif)', prefixIcon: Icon(Icons.notes))),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: t.colorScheme.primaryContainer, borderRadius: BorderRadius.circular(12)),
-                child: (_dessinId == null || robes <= 0)
-                    ? Text('Choisissez un dessin et un nombre de robes.', style: TextStyle(color: t.colorScheme.onPrimaryContainer))
-                    : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('${fmtInt(robes)} robes × ${fmtInt(_ppr)} points', style: TextStyle(color: t.colorScheme.onPrimaryContainer)),
-                        Text('${fmtInt(total)} points',
-                            style: t.textTheme.headlineSmall?.copyWith(color: t.colorScheme.onPrimaryContainer, fontWeight: FontWeight.w700)),
-                        if (_tarif > 0) Text(fmtDA(montant), style: TextStyle(color: t.colorScheme.onPrimaryContainer)),
-                      ]),
+                decoration: BoxDecoration(gradient: AppColors.heroGradient, borderRadius: BorderRadius.circular(14)),
+                child: Column(children: [
+                  Text('${fmtInt(pts)} pts × ${fmtDA(_tarif)} / 1000', style: const TextStyle(color: Colors.white70)),
+                  Text(fmtDA(pts * _tarif / 1000),
+                      style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
+                ]),
               ),
             ]),
           ),
@@ -399,6 +444,23 @@ class _ProductionFormState extends State<ProductionForm> {
           child: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Enregistrer'),
         ),
       ],
+    );
+  }
+}
+
+/// Pastille colorée du type de broderie.
+class TypeBadge extends StatelessWidget {
+  final String? typeId;
+  const TypeBadge(this.typeId, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final i = data.types.indexWhere((t) => t.id == typeId);
+    final c = i < 0 ? context.pal.muted : AppColors.series[i % AppColors.series.length];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: c.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+      child: Text(data.typeNom(typeId), style: TextStyle(color: c, fontSize: 11.5, fontWeight: FontWeight.w800)),
     );
   }
 }

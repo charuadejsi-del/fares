@@ -76,7 +76,7 @@ class _HomeShellState extends State<HomeShell> {
     }
     return switch (_index) {
       0 => const DashboardScreen(),
-      1 => QuickEntryScreen(onGoToRefs: () => _go(data.ouvriers.isEmpty ? 3 : 4)),
+      1 => QuickEntryScreen(onGoToRefs: () => _go(3)),
       2 => const ProductionScreen(),
       3 => const OuvriersScreen(),
       _ => const DessinsScreen(),

@@ -30,15 +30,16 @@ Future<Uint8List> buildFichePaie({
 
   final sorted = [...rows]..sort((a, b) => a.dateProd.compareTo(b.dateProd));
   final totPts = sorted.fold<int>(0, (s, p) => s + p.totalPoints);
-  final totRob = sorted.fold<int>(0, (s, p) => s + p.nbRobes);
   final totMt = sorted.fold<double>(0, (s, p) => s + p.montant);
-  final jours = sorted.map((p) => dateKey(p.dateProd)).toSet().length;
+  final nbJour = sorted.where((p) => p.equipe == Equipe.jour).length;
+  final nbNuit = sorted.length - nbJour;
 
-  final parDessin = <String, List<int>>{}; // id -> [robes, points]
+  final parType = <String, List<num>>{}; // type -> [points, montant, relevés]
   for (final p in sorted) {
-    final v = parDessin.putIfAbsent(p.dessinId, () => [0, 0]);
-    v[0] += p.nbRobes;
-    v[1] += p.totalPoints;
+    final v = parType.putIfAbsent(p.typeId ?? '', () => [0, 0.0, 0]);
+    v[0] += p.totalPoints;
+    v[1] += p.montant;
+    v[2] += 1;
   }
 
   final doc = pw.Document(title: 'Fiche de paie ${ouvrier.nom}', author: 'Atelier Broderie', theme: theme);
@@ -92,31 +93,33 @@ Future<Uint8List> buildFichePaie({
             ]),
             pw.Spacer(),
             pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-              pw.Text('Tarif actuel', style: const pw.TextStyle(fontSize: 8, color: grey)),
-              pw.Text('${fmtDA(ouvrier.tarif1000)} / 1000 points', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+              pw.Text('Tarifs (pour 1000 points)', style: const pw.TextStyle(fontSize: 8, color: grey)),
+              for (final t in data.types.where((t) => t.actif))
+                pw.Text('${t.nom} : ${fmtDA(t.tarif1000)}', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
             ]),
           ]),
         ),
         pw.SizedBox(height: 12),
         pw.Row(children: [
           kpi('Total points', fmtInt(totPts)),
-          kpi('Robes', fmtInt(totRob)),
-          kpi('Jours travaillés', '$jours'),
-          kpi('Montant', fmtDA(totMt)),
+          kpi('Équipes de jour', '$nbJour'),
+          kpi('Équipes de nuit', '$nbNuit'),
+          kpi('Montant à payer', fmtDA(totMt)),
         ]),
         pw.SizedBox(height: 18),
         pw.Text('Détail des travaux', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 6),
         pw.TableHelper.fromTextArray(
-          headers: ['Date', 'Dessin', 'Robes', 'Points/robe', 'Total points', 'Montant'],
+          headers: ['Date', 'Équipe', 'Machine', 'Type', 'Points', 'Tarif /1000', 'Montant'],
           data: [
             for (final p in sorted)
               [
                 fmtDate(p.dateProd),
-                data.dessinNom(p.dessinId),
-                fmtInt(p.nbRobes),
-                fmtInt(p.pointsParRobe),
+                p.equipe.label,
+                data.machineNom(p.machineId),
+                data.typeNom(p.typeId),
                 fmtInt(p.totalPoints),
+                fmtDA(p.tarif1000),
                 fmtDA(p.montant),
               ],
           ],
@@ -127,10 +130,11 @@ Future<Uint8List> buildFichePaie({
           cellAlignments: {
             0: pw.Alignment.centerLeft,
             1: pw.Alignment.centerLeft,
-            2: pw.Alignment.centerRight,
-            3: pw.Alignment.centerRight,
+            2: pw.Alignment.centerLeft,
+            3: pw.Alignment.centerLeft,
             4: pw.Alignment.centerRight,
             5: pw.Alignment.centerRight,
+            6: pw.Alignment.centerRight,
           },
           border: null,
         ),
@@ -140,23 +144,29 @@ Future<Uint8List> buildFichePaie({
           child: pw.Row(children: [
             pw.Text('TOTAL', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
             pw.Spacer(),
-            pw.Text('${fmtInt(totRob)} robes   ${fmtInt(totPts)} points   ', style: const pw.TextStyle(fontSize: 10)),
+            pw.Text('${sorted.length} relevés   ${fmtInt(totPts)} points   ', style: const pw.TextStyle(fontSize: 10)),
             pw.Text(fmtDA(totMt), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12, color: violet)),
           ]),
         ),
-        if (parDessin.length > 1) ...[
+        if (parType.isNotEmpty) ...[
           pw.SizedBox(height: 16),
-          pw.Text('Récapitulatif par dessin', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Récapitulatif par type de broderie', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.TableHelper.fromTextArray(
-            headers: ['Dessin', 'Robes', 'Points'],
+            headers: ['Type', 'Relevés', 'Points', 'Montant'],
             data: [
-              for (final e in parDessin.entries) [data.dessinNom(e.key), fmtInt(e.value[0]), fmtInt(e.value[1])],
+              for (final e in parType.entries)
+                [data.typeNom(e.key.isEmpty ? null : e.key), '${e.value[2]}', fmtInt(e.value[0]), fmtDA(e.value[1])],
             ],
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
             headerDecoration: const pw.BoxDecoration(color: light),
             cellStyle: const pw.TextStyle(fontSize: 9),
-            cellAlignments: {0: pw.Alignment.centerLeft, 1: pw.Alignment.centerRight, 2: pw.Alignment.centerRight},
+            cellAlignments: {
+              0: pw.Alignment.centerLeft,
+              1: pw.Alignment.centerRight,
+              2: pw.Alignment.centerRight,
+              3: pw.Alignment.centerRight,
+            },
             border: null,
           ),
         ],

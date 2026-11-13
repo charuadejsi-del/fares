@@ -15,6 +15,7 @@ class AppData extends ChangeNotifier {
   List<Ouvrier> ouvriers = [];
   List<Dessin> dessins = [];
   List<Machine> machines = [];
+  List<TypeTravail> types = [];
   bool refsLoaded = false;
 
   /// Incrémenté à chaque modification de la production, pour que les écrans rechargent.
@@ -23,6 +24,8 @@ class AppData extends ChangeNotifier {
   Ouvrier? ouvrier(String? id) => _find(ouvriers, id, (o) => o.id);
   Dessin? dessin(String? id) => _find(dessins, id, (d) => d.id);
   Machine? machine(String? id) => _find(machines, id, (m) => m.id);
+  TypeTravail? type(String? id) => _find(types, id, (t) => t.id);
+  String typeNom(String? id) => id == null ? '—' : (type(id)?.nom ?? '(supprimé)');
 
   String ouvrierNom(String id) => ouvrier(id)?.nom ?? '(supprimé)';
   String dessinNom(String id) => dessin(id)?.nom ?? '(supprimé)';
@@ -41,10 +44,20 @@ class AppData extends ChangeNotifier {
       _db.from('broderie_ouvriers').select().order('nom'),
       _db.from('broderie_dessins').select().order('nom'),
       _db.from('broderie_machines').select().order('nom'),
+      _db.from('broderie_types').select().order('ordre').order('nom'),
     ]);
     ouvriers = res[0].map(Ouvrier.fromMap).toList();
     dessins = res[1].map(Dessin.fromMap).toList();
     machines = res[2].map(Machine.fromMap).toList();
+    types = res[3].map(TypeTravail.fromMap).toList();
+    // Premier lancement : types par défaut
+    if (types.isEmpty) {
+      final rows = await _db.from('broderie_types').insert([
+        TypeTravail.toRow(nom: 'Passé plat', tarif1000: 10, ordre: 0),
+        TypeTravail.toRow(nom: 'Cordon', tarif1000: 15, ordre: 1),
+      ]).select();
+      types = rows.map(TypeTravail.fromMap).toList()..sort((a, b) => a.ordre.compareTo(b.ordre));
+    }
     refsLoaded = true;
     notifyListeners();
   }
@@ -53,6 +66,7 @@ class AppData extends ChangeNotifier {
     ouvriers = [];
     dessins = [];
     machines = [];
+    types = [];
     refsLoaded = false;
     productionVersion = 0;
   }

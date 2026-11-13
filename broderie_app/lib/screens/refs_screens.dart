@@ -105,8 +105,7 @@ class _OuvriersScreenState extends State<OuvriersScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 [
-                                  o.tarif1000 > 0 ? '${fmtDA(o.tarif1000)} / 1000 pts' : 'Tarif non défini',
-                                  if (o.telephone != null) o.telephone!,
+                                  o.telephone ?? 'Pas de téléphone',
                                   if (!o.actif) 'Inactif',
                                 ].join(' · '),
                                 style: context.tt.bodySmall?.copyWith(color: context.pal.muted),
@@ -153,7 +152,6 @@ class _OuvrierFormState extends State<OuvrierForm> {
   final _form = GlobalKey<FormState>();
   late final _nom = TextEditingController(text: widget.o?.nom);
   late final _tel = TextEditingController(text: widget.o?.telephone);
-  late final _tarif = TextEditingController(text: (widget.o?.tarif1000 ?? 0) > 0 ? widget.o!.tarif1000.toString() : '');
   late bool _actif = widget.o?.actif ?? true;
   bool _busy = false;
 
@@ -161,7 +159,6 @@ class _OuvrierFormState extends State<OuvrierForm> {
   void dispose() {
     _nom.dispose();
     _tel.dispose();
-    _tarif.dispose();
     super.dispose();
   }
 
@@ -171,7 +168,7 @@ class _OuvrierFormState extends State<OuvrierForm> {
     try {
       await data.saveRef(
         'broderie_ouvriers',
-        Ouvrier.toRow(nom: _nom.text, telephone: _tel.text, tarif1000: parseNum(_tarif.text) ?? 0, actif: _actif),
+        Ouvrier.toRow(nom: _nom.text, telephone: _tel.text, tarif1000: widget.o?.tarif1000 ?? 0, actif: _actif),
         id: widget.o?.id,
       );
       if (mounted) {
@@ -204,16 +201,6 @@ class _OuvrierFormState extends State<OuvrierForm> {
             controller: _tel,
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(labelText: 'Téléphone (facultatif)', prefixIcon: Icon(Icons.phone_outlined)),
-          ),
-          TextFormField(
-            controller: _tarif,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Tarif (DA pour 1000 points)',
-              prefixIcon: Icon(Icons.payments_outlined),
-              helperText: 'Laisser vide si non payé aux points',
-            ),
-            validator: (v) => (v != null && v.trim().isNotEmpty && (parseNum(v) == null || parseNum(v)! < 0)) ? 'Nombre invalide' : null,
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,

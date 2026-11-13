@@ -118,3 +118,33 @@ create policy "broderie_photos_update" on storage.objects for update to authenti
   with check (bucket_id = 'broderie-dessins' and (storage.foldername(name))[1] = (select auth.uid())::text);
 create policy "broderie_photos_delete" on storage.objects for delete to authenticated
   using (bucket_id = 'broderie-dessins' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- =====================================================================
+-- v3 : relevé du compteur de points, types de broderie (tarif / 1000 pts), équipes jour/nuit
+--      montant = points du compteur × tarif du type / 1000
+-- =====================================================================
+create table if not exists public.broderie_types (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  nom text not null check (length(trim(nom)) > 0),
+  tarif_1000 numeric(12,2) not null default 0 check (tarif_1000 >= 0),
+  ordre integer not null default 0,
+  actif boolean not null default true,
+  created_at timestamptz not null default now()
+);
+alter table public.broderie_types enable row level security;
+create policy broderie_types_owner_all on public.broderie_types for all to authenticated
+  using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+
+alter table public.broderie_production drop column if exists montant;
+alter table public.broderie_production drop column if exists total_points;
+alter table public.broderie_production
+  add column type_id uuid references public.broderie_types(id) on delete restrict,
+  add column equipe text not null default 'jour' check (equipe in ('jour','nuit')),
+  add column total_points bigint not null check (total_points > 0),
+  alter column nb_robes drop not null,
+  alter column points_par_robe drop not null,
+  alter column dessin_id drop not null;
+alter table public.broderie_production
+  add column montant numeric(14,2) generated always as (round(total_points::numeric * tarif_1000 / 1000, 2)) stored;
+-- (le trigger broderie_check_owner vérifie aussi type_id ; dessin_id devient facultatif)

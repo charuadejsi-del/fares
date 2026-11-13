@@ -19,7 +19,7 @@ class Agg {
   double montant = 0;
   void add(Production p) {
     saisies++;
-    robes += p.nbRobes;
+    robes += p.nbRobes ?? 0;
     points += p.totalPoints;
     montant += p.montant;
   }
@@ -108,18 +108,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _csv() {
     String q(Object? v) => '"${(v ?? '').toString().replaceAll('"', '""')}"';
-    final b = StringBuffer('Date;Ouvrier;Dessin;Machine;Robes;Points par robe;Total points;Tarif DA/1000;Montant DA;Remarque\n');
+    final b = StringBuffer('Date;Equipe;Ouvrier;Type;Machine;Points;Tarif DA/1000;Montant DA;Dessin;Robes;Remarque\n');
     for (final p in _rows) {
       b.writeln([
         dateKey(p.dateProd),
+        p.equipe.label,
         data.ouvrierNom(p.ouvrierId),
-        data.dessinNom(p.dessinId),
+        data.typeNom(p.typeId),
         data.machineNom(p.machineId),
-        p.nbRobes,
-        p.pointsParRobe,
         p.totalPoints,
         p.tarif1000.toStringAsFixed(2).replaceAll('.', ','),
         p.montant.toStringAsFixed(2).replaceAll('.', ','),
+        p.dessinId == null ? '' : data.dessinNom(p.dessinId!),
+        p.nbRobes ?? '',
         p.note,
       ].map(q).join(';'));
     }
@@ -155,25 +156,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final total = Agg();
     final parOuvrier = <String, Agg>{};
     final parDessin = <String, Agg>{};
+    final parType = <String, Agg>{};
+    final parEquipe = {Equipe.jour: Agg(), Equipe.nuit: Agg()};
     final jours = <String>{};
     for (final p in _rows) {
       total.add(p);
       parOuvrier.putIfAbsent(p.ouvrierId, Agg.new).add(p);
-      parDessin.putIfAbsent(p.dessinId, Agg.new).add(p);
+      if (p.dessinId != null) parDessin.putIfAbsent(p.dessinId!, Agg.new).add(p);
+      parType.putIfAbsent(p.typeId ?? '', Agg.new).add(p);
+      parEquipe[p.equipe]!.add(p);
       jours.add(dateKey(p.dateProd));
     }
+    final typesList = parType.entries.toList()..sort((a, b) => b.value.points.compareTo(a.value.points));
     final ouv = parOuvrier.entries.toList()..sort((a, b) => b.value.points.compareTo(a.value.points));
     final des = parDessin.entries.toList()..sort((a, b) => b.value.points.compareTo(a.value.points));
-    final moyJour = jours.isEmpty ? 0 : total.points / jours.length;
+    final moyEquipe = total.saisies == 0 ? 0 : total.points / total.saisies;
 
     final hero = _HeroCard(total: total, prevPoints: _prevPoints, periode: _periode);
 
     final stats = AutoGrid(minItemWidth: 165, children: [
-      StatTile(label: 'Robes brodées', value: fmtInt(total.robes), icon: Icons.checkroom_rounded, color: AppColors.gold),
       StatTile(label: 'À payer', value: fmtDA(total.montant), icon: Icons.payments_rounded, color: AppColors.green),
-      StatTile(label: 'Moyenne / jour travaillé', value: fmtInt(moyJour), icon: Icons.speed_rounded, color: AppColors.sky,
-          sub: '${jours.length} j'),
-      StatTile(label: 'Saisies', value: fmtInt(total.saisies), icon: Icons.receipt_long_rounded, color: AppColors.rose),
+      StatTile(label: 'Équipe de jour', value: '${fmtCompact(parEquipe[Equipe.jour]!.points)} pts', icon: Icons.wb_sunny_rounded,
+          color: AppColors.gold, sub: fmtDA(parEquipe[Equipe.jour]!.montant)),
+      StatTile(label: 'Équipe de nuit', value: '${fmtCompact(parEquipe[Equipe.nuit]!.points)} pts', icon: Icons.nightlight_round,
+          color: AppColors.sky, sub: fmtDA(parEquipe[Equipe.nuit]!.montant)),
+      StatTile(label: 'Moyenne par équipe', value: '${fmtCompact(moyEquipe)} pts', icon: Icons.speed_rounded, color: AppColors.rose,
+          sub: '${total.saisies} relevés'),
     ]);
 
     final chart = AppCard(
@@ -225,9 +233,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ]),
     );
 
-    final dessins = AppCard(
+    final typesCard = AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const SectionTitle('Dessins les plus brodés'),
+        const SectionTitle('Par type de broderie', subtitle: 'Points et montant'),
+        if (typesList.isEmpty)
+          const EmptyState('—', icon: Icons.gesture_rounded)
+        else
+          for (final e in typesList)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Row(children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(color: _typeColor(e.key), shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(data.typeNom(e.key.isEmpty ? null : e.key), style: const TextStyle(fontWeight: FontWeight.w700))),
+                  Text(fmtDA(e.value.montant), style: const TextStyle(fontWeight: FontWeight.w800)),
+                ]),
+                const SizedBox(height: 6),
+                Bar(total.points == 0 ? 0 : e.value.points / total.points, color: _typeColor(e.key)),
+                const SizedBox(height: 4),
+                Text('${fmtInt(e.value.points)} pts · ${e.value.saisies} relevés',
+                    style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+              ]),
+            ),
+      ]),
+    );
+
+    final dessins = des.isEmpty
+        ? const SizedBox.shrink()
+        : AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const SectionTitle('Dessins'),
         if (des.isEmpty)
           const EmptyState('—', icon: Icons.local_florist_outlined)
         else
@@ -245,8 +285,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ]),
                 ),
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text('${fmtInt(e.value.robes)} robes', style: const TextStyle(fontWeight: FontWeight.w700)),
-                  Text('${fmtCompact(e.value.points)} pts', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+                  Text('${fmtCompact(e.value.points)} pts', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  if (e.value.robes > 0)
+                    Text('${fmtInt(e.value.robes)} robes', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
                 ]),
               ]),
             ),
@@ -306,12 +347,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 16),
             if (wide)
               Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Expanded(child: Column(children: [classement])),
+                Expanded(child: Column(children: [classement, const SizedBox(height: 16), typesCard])),
                 const SizedBox(width: 16),
                 Expanded(child: Column(children: [donut, const SizedBox(height: 16), dessins])),
               ])
             else ...[
               classement,
+              const SizedBox(height: 16),
+              typesCard,
               const SizedBox(height: 16),
               donut,
               const SizedBox(height: 16),
@@ -322,6 +365,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }),
     );
   }
+}
+
+Color _typeColor(String typeId) {
+  final i = data.types.indexWhere((t) => t.id == typeId);
+  return i < 0 ? const Color(0xFF9AA0B4) : AppColors.series[i % AppColors.series.length];
 }
 
 class _HeroCard extends StatelessWidget {
@@ -375,8 +423,8 @@ class _HeroCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Wrap(spacing: 18, runSpacing: 6, children: [
-            _heroInfo(Icons.checkroom_rounded, '${fmtInt(total.robes)} robes'),
             _heroInfo(Icons.payments_rounded, fmtDA(total.montant)),
+            _heroInfo(Icons.receipt_long_rounded, '${total.saisies} relevés'),
             if (prevPoints != null) _heroInfo(Icons.history_rounded, 'Avant : ${fmtCompact(prevPoints!)} pts'),
           ]),
         ]),
@@ -429,7 +477,7 @@ class _RankRow extends StatelessWidget {
               const SizedBox(height: 6),
               Bar(ratio, color: AppColors.forName(nom)),
               const SizedBox(height: 4),
-              Text('${fmtInt(agg.robes)} robes · ${fmtDA(agg.montant)}',
+              Text('${agg.saisies} équipe${agg.saisies > 1 ? 's' : ''} · ${fmtDA(agg.montant)}',
                   style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
             ]),
           ),

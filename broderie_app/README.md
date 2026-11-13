@@ -4,6 +4,13 @@ Application native (Flutter) pour **PC Windows** et **Android** qui suit la prod
 points brodés par ouvrier, nombre de robes, points par dessin et montant à payer.
 Les données sont dans **Supabase** : le PC de l'atelier et les téléphones partagent les mêmes chiffres.
 
+## Principe de calcul (v3)
+On relève le **compteur de points** de la machine (ex. machine 15 têtes) à la fin de chaque équipe
+(**jour 8 h–20 h** ou **nuit 20 h–8 h**). Le montant dépend du **type de broderie** :
+`montant = points du compteur × tarif du type / 1000`.
+Par défaut : **passé plat 10 DA / 1000 pts** (300 000 pts = 3 000 DA), **cordon 15 DA / 1000 pts** (300 000 pts = 4 500 DA).
+Les tarifs se modifient dans Réglages ; un changement de tarif ne modifie pas les relevés déjà enregistrés.
+
 ## Fonctions (v2)
 - **Design pro** : thème **sombre premium** ou **clair** (ou automatique), cartes en dégradé, mise en page adaptée PC (menu latéral) et téléphone (barre du bas).
 - **Tableau de bord** : grand total des points avec évolution par rapport à la période précédente, robes, montant à payer, moyenne par jour, **histogramme** des points par jour/mois, **donut** de répartition par ouvrier, **classement** avec médailles, dessins les plus brodés, export CSV.

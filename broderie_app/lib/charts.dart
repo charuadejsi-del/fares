@@ -10,7 +10,7 @@ class _Bucket {
   final String label;
   final String tooltip;
   int points = 0;
-  int robes = 0;
+  double montant = 0;
   _Bucket(this.start, this.label, this.tooltip);
 }
 
@@ -45,7 +45,7 @@ class PointsBarChart extends StatelessWidget {
         final b = index['${p.dateProd.year}-${p.dateProd.month}'];
         if (b != null) {
           b.points += p.totalPoints;
-          b.robes += p.nbRobes;
+          b.montant += p.montant;
         }
       }
     } else {
@@ -59,7 +59,7 @@ class PointsBarChart extends StatelessWidget {
         final b = index[dateKey(p.dateProd)];
         if (b != null) {
           b.points += p.totalPoints;
-          b.robes += p.nbRobes;
+          b.montant += p.montant;
         }
       }
     }
@@ -128,7 +128,7 @@ class PointsBarChart extends StatelessWidget {
                   const TextStyle(color: Colors.white70, fontSize: 11),
                   children: [
                     TextSpan(
-                      text: '${fmtInt(b.points)} pts · ${fmtInt(b.robes)} robes',
+                      text: '${fmtInt(b.points)} pts · ${fmtDA(b.montant)}',
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
                     ),
                   ],

@@ -99,20 +99,24 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
       return Scaffold(appBar: AppBar(), body: const EmptyState('Ouvrier introuvable.'));
     }
     final range = rangeFor(_periode, _custom);
-    var pts = 0, robes = 0;
+    var pts = 0;
     var mt = 0.0;
-    final jours = <String>{};
-    final parDessin = <String, List<int>>{};
+    var nbJour = 0, nbNuit = 0;
+    final parType = <String, List<num>>{}; // type -> [points, montant, relevés]
     for (final p in _rows) {
       pts += p.totalPoints;
-      robes += p.nbRobes;
       mt += p.montant;
-      jours.add(dateKey(p.dateProd));
-      final v = parDessin.putIfAbsent(p.dessinId, () => [0, 0]);
-      v[0] += p.nbRobes;
-      v[1] += p.totalPoints;
+      if (p.equipe == Equipe.jour) {
+        nbJour++;
+      } else {
+        nbNuit++;
+      }
+      final v = parType.putIfAbsent(p.typeId ?? '', () => [0, 0.0, 0]);
+      v[0] += p.totalPoints;
+      v[1] += p.montant;
+      v[2] += 1;
     }
-    final des = parDessin.entries.toList()..sort((a, b) => b.value[1].compareTo(a.value[1]));
+    final types = parType.entries.toList()..sort((a, b) => b.value[0].compareTo(a.value[0]));
 
     return Scaffold(
       appBar: AppBar(
@@ -141,8 +145,8 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
                     const SizedBox(height: 4),
                     Text(
                       [
-                        o.tarif1000 > 0 ? '${fmtDA(o.tarif1000)} / 1000 pts' : 'Tarif non défini',
                         if (o.telephone != null) o.telephone!,
+                        'Payé selon le type de broderie',
                       ].join('  ·  '),
                       style: const TextStyle(color: Colors.white70),
                     ),
@@ -175,9 +179,9 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
             const SizedBox(height: 8),
             AutoGrid(minItemWidth: 160, children: [
               StatTile(label: 'Points brodés', value: fmtInt(pts), icon: Icons.blur_on_rounded, color: AppColors.violet),
-              StatTile(label: 'Robes', value: fmtInt(robes), icon: Icons.checkroom_rounded, color: AppColors.gold),
               StatTile(label: 'À payer', value: fmtDA(mt), icon: Icons.payments_rounded, color: AppColors.green),
-              StatTile(label: 'Jours travaillés', value: '${jours.length}', icon: Icons.event_available_rounded, color: AppColors.sky),
+              StatTile(label: 'Équipes de jour', value: '$nbJour', icon: Icons.wb_sunny_rounded, color: AppColors.gold),
+              StatTile(label: 'Équipes de nuit', value: '$nbNuit', icon: Icons.nightlight_round, color: AppColors.sky),
             ]),
             const SizedBox(height: 16),
             AppCard(
@@ -218,18 +222,21 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
             const SizedBox(height: 16),
             AppCard(
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                const SectionTitle('Par dessin'),
-                if (des.isEmpty)
-                  const EmptyState('—', icon: Icons.local_florist_outlined)
+                const SectionTitle('Par type de broderie'),
+                if (types.isEmpty)
+                  const EmptyState('—', icon: Icons.gesture_rounded)
                 else
-                  for (final e in des)
+                  for (final e in types)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Row(children: [
-                        DessinThumb(data.dessin(e.key), size: 42),
-                        const SizedBox(width: 12),
-                        Expanded(child: Text(data.dessinNom(e.key), style: const TextStyle(fontWeight: FontWeight.w600))),
-                        Text('${fmtInt(e.value[0])} robes · ${fmtCompact(e.value[1])} pts'),
+                        TypeBadge(e.key.isEmpty ? null : e.key),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text('${fmtInt(e.value[0])} pts · ${e.value[2]} relevés',
+                              style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+                        ),
+                        Text(fmtDA(e.value[1]), style: const TextStyle(fontWeight: FontWeight.w800)),
                       ]),
                     ),
               ]),
