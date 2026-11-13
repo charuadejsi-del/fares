@@ -1,163 +1,155 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../data/app_data.dart';
 import '../data/models.dart';
+import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
+import 'ouvrier_detail_screen.dart';
 
-/// Écran générique de liste (ouvriers, dessins, machines).
-class _RefList<T> extends StatefulWidget {
-  final String addLabel;
-  final String emptyText;
-  final IconData icon;
-  final List<T> Function() items;
-  final String Function(T) title;
-  final String Function(T) subtitle;
-  final bool Function(T) actif;
-  final String Function(T) id;
-  final Future<bool?> Function(BuildContext, T?) openForm;
-  final String table;
-
-  const _RefList({
-    super.key,
-    required this.addLabel,
-    required this.emptyText,
-    required this.icon,
-    required this.items,
-    required this.title,
-    required this.subtitle,
-    required this.actif,
-    required this.id,
-    required this.openForm,
-    required this.table,
-  });
+/// Barre de recherche + filtre « inactifs ».
+class _ListHeader extends StatelessWidget {
+  final ValueChanged<String> onSearch;
+  final int nbInactive;
+  final bool showInactive;
+  final ValueChanged<bool> onShowInactive;
+  const _ListHeader({required this.onSearch, required this.nbInactive, required this.showInactive, required this.onShowInactive});
 
   @override
-  State<_RefList<T>> createState() => _RefListState<T>();
+  Widget build(BuildContext context) => Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        SizedBox(
+          width: 300,
+          child: TextField(
+            decoration: const InputDecoration(hintText: 'Rechercher', prefixIcon: Icon(Icons.search)),
+            onChanged: onSearch,
+          ),
+        ),
+        if (nbInactive > 0)
+          FilterChip(
+            label: Text('Inactifs ($nbInactive)'),
+            selected: showInactive,
+            onSelected: onShowInactive,
+          ),
+      ]);
 }
 
-class _RefListState<T> extends State<_RefList<T>> {
-  bool _showInactive = false;
-  String _search = '';
-
-  Future<void> _delete(T item) async {
-    final ok = await confirmDialog(context, 'Supprimer', 'Supprimer « ${widget.title(item)} » définitivement ?');
-    if (!ok) return;
-    try {
-      await data.deleteRef(widget.table, widget.id(item));
-      if (mounted) showSnack(context, 'Supprimé');
-    } catch (e) {
-      if (mounted) showSnack(context, errorMessage(e), error: true);
-    }
-  }
-
-  Future<void> _open([T? item]) async {
-    final ok = await widget.openForm(context, item);
-    if (ok == true && mounted) showSnack(context, 'Enregistré');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: data,
-      builder: (context, _) {
-        final all = widget.items();
-        final q = _search.toLowerCase();
-        final list = all
-            .where((x) => _showInactive || widget.actif(x))
-            .where((x) => q.isEmpty || widget.title(x).toLowerCase().contains(q))
-            .toList();
-        final nbInactive = all.where((x) => !widget.actif(x)).length;
-        return Scaffold(
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => _open(),
-            icon: const Icon(Icons.add),
-            label: Text(widget.addLabel),
-          ),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            children: [
-              Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                SizedBox(
-                  width: 280,
-                  child: TextField(
-                    decoration: const InputDecoration(labelText: 'Rechercher', prefixIcon: Icon(Icons.search)),
-                    onChanged: (v) => setState(() => _search = v),
-                  ),
-                ),
-                if (nbInactive > 0)
-                  FilterChip(
-                    label: Text('Afficher les inactifs ($nbInactive)'),
-                    selected: _showInactive,
-                    onSelected: (v) => setState(() => _showInactive = v),
-                  ),
-              ]),
-              const SizedBox(height: 12),
-              if (list.isEmpty)
-                EmptyState(all.isEmpty ? widget.emptyText : 'Aucun résultat.', icon: widget.icon)
-              else
-                Card(
-                  child: Column(children: [
-                    for (var i = 0; i < list.length; i++) ...[
-                      ListTile(
-                        leading: CircleAvatar(child: Icon(widget.icon, size: 20)),
-                        title: Text(widget.title(list[i]),
-                            style: widget.actif(list[i]) ? null : const TextStyle(decoration: TextDecoration.lineThrough)),
-                        subtitle: Text(widget.subtitle(list[i])),
-                        onTap: () => _open(list[i]),
-                        trailing: PopupMenuButton<String>(
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'edit', child: Text('Modifier')),
-                            PopupMenuItem(value: 'del', child: Text('Supprimer')),
-                          ],
-                          onSelected: (v) => v == 'edit' ? _open(list[i]) : _delete(list[i]),
-                        ),
-                      ),
-                      if (i < list.length - 1) const Divider(height: 1),
-                    ],
-                  ]),
-                ),
-            ],
-          ),
-        );
-      },
-    );
+Future<void> _deleteRef(BuildContext context, String table, String id, String nom) async {
+  final ok = await confirmDialog(context, 'Supprimer', 'Supprimer « $nom » définitivement ?');
+  if (!ok) return;
+  try {
+    await data.deleteRef(table, id);
+    if (context.mounted) showSnack(context, 'Supprimé');
+  } catch (e) {
+    if (context.mounted) showSnack(context, errorMessage(e), error: true);
   }
 }
 
-// ---------------------------------------------------------------- Ouvriers
+// ======================================================================= Ouvriers
 
-class OuvriersScreen extends StatelessWidget {
+class OuvriersScreen extends StatefulWidget {
   const OuvriersScreen({super.key});
 
   @override
-  Widget build(BuildContext context) => _RefList<Ouvrier>(
-        table: 'broderie_ouvriers',
-        addLabel: 'Ajouter un ouvrier',
-        emptyText: 'Aucun ouvrier.\nAjoutez les ouvriers de l\'atelier.',
-        icon: Icons.person_outline,
-        items: () => data.ouvriers,
-        title: (o) => o.nom,
-        subtitle: (o) => [
-          o.tarif1000 > 0 ? '${fmtDA(o.tarif1000)} / 1000 pts' : 'Tarif non défini',
-          if (o.telephone != null) o.telephone!,
-          if (!o.actif) 'Inactif',
-        ].join(' · '),
-        actif: (o) => o.actif,
-        id: (o) => o.id,
-        openForm: (c, o) => showDialog<bool>(context: c, builder: (_) => _OuvrierForm(o)),
+  State<OuvriersScreen> createState() => _OuvriersScreenState();
+}
+
+class _OuvriersScreenState extends State<OuvriersScreen> {
+  String _q = '';
+  bool _inactive = false;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: data,
+        builder: (context, _) {
+          final all = data.ouvriers;
+          final list = all
+              .where((o) => _inactive || o.actif)
+              .where((o) => _q.isEmpty || o.nom.toLowerCase().contains(_q.toLowerCase()))
+              .toList();
+          return Scaffold(
+            floatingActionButton: FloatingActionButton.extended(
+              heroTag: 'fab-ouv',
+              onPressed: () => showDialog<bool>(context: context, builder: (_) => const OuvrierForm(null)),
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              label: const Text('Ajouter un ouvrier'),
+            ),
+            body: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              children: [
+                _ListHeader(
+                  onSearch: (v) => setState(() => _q = v),
+                  nbInactive: all.where((o) => !o.actif).length,
+                  showInactive: _inactive,
+                  onShowInactive: (v) => setState(() => _inactive = v),
+                ),
+                const SizedBox(height: 14),
+                if (list.isEmpty)
+                  EmptyState(all.isEmpty ? 'Aucun ouvrier.\nAjoutez les ouvriers de l\'atelier.' : 'Aucun résultat.',
+                      icon: Icons.people_outline)
+                else
+                  AutoGrid(minItemWidth: 300, children: [
+                    for (final o in list)
+                      AppCard(
+                        padding: const EdgeInsets.all(14),
+                        onTap: () => Navigator.of(context)
+                            .push(MaterialPageRoute(builder: (_) => OuvrierDetailScreen(ouvrierId: o.id))),
+                        child: Row(children: [
+                          Opacity(opacity: o.actif ? 1 : 0.45, child: NameAvatar(o.nom, size: 50)),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(o.nom, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16), overflow: TextOverflow.ellipsis),
+                              const SizedBox(height: 2),
+                              Text(
+                                [
+                                  o.tarif1000 > 0 ? '${fmtDA(o.tarif1000)} / 1000 pts' : 'Tarif non défini',
+                                  if (o.telephone != null) o.telephone!,
+                                  if (!o.actif) 'Inactif',
+                                ].join(' · '),
+                                style: context.tt.bodySmall?.copyWith(color: context.pal.muted),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ]),
+                          ),
+                          PopupMenuButton<String>(
+                            icon: Icon(Icons.more_vert, color: context.pal.muted),
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(value: 'fiche', child: Text('Fiche et paie')),
+                              PopupMenuItem(value: 'edit', child: Text('Modifier')),
+                              PopupMenuItem(value: 'del', child: Text('Supprimer')),
+                            ],
+                            onSelected: (v) {
+                              if (v == 'fiche') {
+                                Navigator.of(context).push(MaterialPageRoute(builder: (_) => OuvrierDetailScreen(ouvrierId: o.id)));
+                              } else if (v == 'edit') {
+                                showDialog<bool>(context: context, builder: (_) => OuvrierForm(o));
+                              } else {
+                                _deleteRef(context, 'broderie_ouvriers', o.id, o.nom);
+                              }
+                            },
+                          ),
+                        ]),
+                      ),
+                  ]),
+              ],
+            ),
+          );
+        },
       );
 }
 
-class _OuvrierForm extends StatefulWidget {
+class OuvrierForm extends StatefulWidget {
   final Ouvrier? o;
-  const _OuvrierForm(this.o);
+  const OuvrierForm(this.o, {super.key});
 
   @override
-  State<_OuvrierForm> createState() => _OuvrierFormState();
+  State<OuvrierForm> createState() => _OuvrierFormState();
 }
 
-class _OuvrierFormState extends State<_OuvrierForm> {
+class _OuvrierFormState extends State<OuvrierForm> {
   final _form = GlobalKey<FormState>();
   late final _nom = TextEditingController(text: widget.o?.nom);
   late final _tel = TextEditingController(text: widget.o?.telephone);
@@ -182,7 +174,10 @@ class _OuvrierFormState extends State<_OuvrierForm> {
         Ouvrier.toRow(nom: _nom.text, telephone: _tel.text, tarif1000: parseNum(_tarif.text) ?? 0, actif: _actif),
         id: widget.o?.id,
       );
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) {
+        showSnack(context, 'Ouvrier enregistré');
+        Navigator.pop(context, true);
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
@@ -192,7 +187,7 @@ class _OuvrierFormState extends State<_OuvrierForm> {
   }
 
   @override
-  Widget build(BuildContext context) => _FormDialog(
+  Widget build(BuildContext context) => FormDialog(
         title: widget.o == null ? 'Nouvel ouvrier' : 'Modifier l\'ouvrier',
         formKey: _form,
         busy: _busy,
@@ -202,18 +197,22 @@ class _OuvrierFormState extends State<_OuvrierForm> {
             controller: _nom,
             autofocus: true,
             textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(labelText: 'Nom et prénom'),
+            decoration: const InputDecoration(labelText: 'Nom et prénom', prefixIcon: Icon(Icons.person_outline)),
             validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
           ),
           TextFormField(
             controller: _tel,
             keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'Téléphone (facultatif)'),
+            decoration: const InputDecoration(labelText: 'Téléphone (facultatif)', prefixIcon: Icon(Icons.phone_outlined)),
           ),
           TextFormField(
             controller: _tarif,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Tarif (DA pour 1000 points)', helperText: 'Laisser vide si non payé aux points'),
+            decoration: const InputDecoration(
+              labelText: 'Tarif (DA pour 1000 points)',
+              prefixIcon: Icon(Icons.payments_outlined),
+              helperText: 'Laisser vide si non payé aux points',
+            ),
             validator: (v) => (v != null && v.trim().isNotEmpty && (parseNum(v) == null || parseNum(v)! < 0)) ? 'Nombre invalide' : null,
           ),
           SwitchListTile(
@@ -227,40 +226,114 @@ class _OuvrierFormState extends State<_OuvrierForm> {
       );
 }
 
-// ---------------------------------------------------------------- Dessins
+// ======================================================================= Dessins
 
-class DessinsScreen extends StatelessWidget {
+class DessinsScreen extends StatefulWidget {
   const DessinsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) => _RefList<Dessin>(
-        table: 'broderie_dessins',
-        addLabel: 'Ajouter un dessin',
-        emptyText: 'Aucun dessin.\nAjoutez vos dessins avec leur nombre de points.',
-        icon: Icons.draw_outlined,
-        items: () => data.dessins,
-        title: (d) => d.nom,
-        subtitle: (d) => [
-          '${fmtInt(d.points)} points / robe',
-          if (d.client != null) d.client!,
-          if (d.note != null) d.note!,
-          if (!d.actif) 'Inactif',
-        ].join(' · '),
-        actif: (d) => d.actif,
-        id: (d) => d.id,
-        openForm: (c, d) => showDialog<bool>(context: c, builder: (_) => _DessinForm(d)),
+  State<DessinsScreen> createState() => _DessinsScreenState();
+}
+
+class _DessinsScreenState extends State<DessinsScreen> {
+  String _q = '';
+  bool _inactive = false;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: data,
+        builder: (context, _) {
+          final all = data.dessins;
+          final list = all
+              .where((d) => _inactive || d.actif)
+              .where((d) => _q.isEmpty || d.nom.toLowerCase().contains(_q.toLowerCase()) || (d.client ?? '').toLowerCase().contains(_q.toLowerCase()))
+              .toList();
+          return Scaffold(
+            floatingActionButton: FloatingActionButton.extended(
+              heroTag: 'fab-des',
+              onPressed: () => showDialog<bool>(context: context, builder: (_) => const DessinForm(null)),
+              icon: const Icon(Icons.add_photo_alternate_rounded),
+              label: const Text('Ajouter un dessin'),
+            ),
+            body: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              children: [
+                _ListHeader(
+                  onSearch: (v) => setState(() => _q = v),
+                  nbInactive: all.where((d) => !d.actif).length,
+                  showInactive: _inactive,
+                  onShowInactive: (v) => setState(() => _inactive = v),
+                ),
+                const SizedBox(height: 14),
+                if (list.isEmpty)
+                  EmptyState(all.isEmpty ? 'Aucun dessin.\nAjoutez vos dessins avec leur photo et leur nombre de points.' : 'Aucun résultat.',
+                      icon: Icons.local_florist_outlined)
+                else
+                  AutoGrid(minItemWidth: 170, children: [
+                    for (final d in list)
+                      AppCard(
+                        padding: const EdgeInsets.all(10),
+                        onTap: () => showDialog<bool>(context: context, builder: (_) => DessinForm(d)),
+                        child: Opacity(
+                          opacity: d.actif ? 1 : 0.5,
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                            AspectRatio(
+                              aspectRatio: 1.1,
+                              child: LayoutBuilder(builder: (_, bc) => DessinThumb(d, size: bc.maxWidth, radius: 14)),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(children: [
+                              Expanded(
+                                child: Text(d.nom, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                              ),
+                              InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: () => _deleteRef(context, 'broderie_dessins', d.id, d.nom),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(Icons.delete_outline, size: 18, color: context.pal.muted),
+                                ),
+                              ),
+                            ]),
+                            const SizedBox(height: 4),
+                            Row(children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: context.cs.primary.withValues(alpha: 0.13),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text('${fmtInt(d.points)} pts',
+                                    style: TextStyle(color: context.cs.primary, fontWeight: FontWeight.w800, fontSize: 12)),
+                              ),
+                              const SizedBox(width: 6),
+                              if (d.client != null)
+                                Expanded(
+                                  child: Text(d.client!, overflow: TextOverflow.ellipsis,
+                                      style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+                                ),
+                            ]),
+                          ]),
+                        ),
+                      ),
+                  ]),
+              ],
+            ),
+          );
+        },
       );
 }
 
-class _DessinForm extends StatefulWidget {
+class DessinForm extends StatefulWidget {
   final Dessin? d;
-  const _DessinForm(this.d);
+  const DessinForm(this.d, {super.key});
 
   @override
-  State<_DessinForm> createState() => _DessinFormState();
+  State<DessinForm> createState() => _DessinFormState();
 }
 
-class _DessinFormState extends State<_DessinForm> {
+class _DessinFormState extends State<DessinForm> {
   final _form = GlobalKey<FormState>();
   late final _nom = TextEditingController(text: widget.d?.nom);
   late final _pts = TextEditingController(text: widget.d?.points.toString());
@@ -268,6 +341,10 @@ class _DessinFormState extends State<_DessinForm> {
   late final _note = TextEditingController(text: widget.d?.note);
   late bool _actif = widget.d?.actif ?? true;
   bool _busy = false;
+
+  Uint8List? _newPhoto;
+  String _newExt = 'jpg';
+  bool _removePhoto = false;
 
   @override
   void dispose() {
@@ -278,16 +355,62 @@ class _DessinFormState extends State<_DessinForm> {
     super.dispose();
   }
 
+  Future<void> _pick(ImageSource src) async {
+    try {
+      final x = await ImagePicker().pickImage(source: src, maxWidth: 1200, maxHeight: 1200, imageQuality: 82);
+      if (x == null) return;
+      final bytes = await x.readAsBytes();
+      final name = x.name.toLowerCase();
+      setState(() {
+        _newPhoto = bytes;
+        _newExt = name.contains('.') ? name.split('.').last : 'jpg';
+        _removePhoto = false;
+      });
+    } catch (e) {
+      if (mounted) showSnack(context, 'Impossible d\'ouvrir la photo : ${errorMessage(e)}', error: true);
+    }
+  }
+
+  Future<void> _choosePhoto() async {
+    final canCamera = Theme.of(context).platform == TargetPlatform.android || Theme.of(context).platform == TargetPlatform.iOS;
+    if (!canCamera) return _pick(ImageSource.gallery);
+    final src = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(leading: const Icon(Icons.photo_camera_outlined), title: const Text('Prendre une photo'),
+              onTap: () => Navigator.pop(c, ImageSource.camera)),
+          ListTile(leading: const Icon(Icons.photo_library_outlined), title: const Text('Choisir dans la galerie'),
+              onTap: () => Navigator.pop(c, ImageSource.gallery)),
+        ]),
+      ),
+    );
+    if (src != null) await _pick(src);
+  }
+
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
     setState(() => _busy = true);
     try {
-      await data.saveRef(
+      final id = await data.saveRef(
         'broderie_dessins',
         Dessin.toRow(nom: _nom.text, points: parseInt(_pts.text)!, client: _client.text, note: _note.text, actif: _actif),
         id: widget.d?.id,
       );
-      if (mounted) Navigator.pop(context, true);
+      final old = widget.d?.photoPath;
+      if (_newPhoto != null) {
+        final path = await data.uploadPhoto(id, _newPhoto!, _newExt);
+        await data.setDessinPhoto(id, path);
+        if (old != null) await data.removePhoto(old);
+      } else if (_removePhoto && old != null) {
+        await data.setDessinPhoto(id, null);
+        await data.removePhoto(old);
+      }
+      if (mounted) {
+        showSnack(context, 'Dessin enregistré');
+        Navigator.pop(context, true);
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
@@ -296,17 +419,61 @@ class _DessinFormState extends State<_DessinForm> {
     }
   }
 
+  Widget _photoBox() {
+    final hasOld = widget.d?.photoPath != null && !_removePhoto;
+    Widget content;
+    if (_newPhoto != null) {
+      content = Image.memory(_newPhoto!, fit: BoxFit.cover);
+    } else if (hasOld) {
+      content = LayoutBuilder(builder: (_, c) => DessinThumb(widget.d, size: c.maxWidth, radius: 0));
+    } else {
+      content = Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(Icons.add_a_photo_outlined, size: 36, color: context.cs.primary),
+        const SizedBox(height: 8),
+        Text('Ajouter une photo du dessin', style: TextStyle(color: context.pal.muted)),
+      ]);
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: _busy ? null : _choosePhoto,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: 170,
+            color: context.pal.surface2,
+            child: content,
+          ),
+        ),
+      ),
+      if (_newPhoto != null || hasOld)
+        Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          TextButton.icon(onPressed: _busy ? null : _choosePhoto, icon: const Icon(Icons.swap_horiz, size: 18), label: const Text('Changer')),
+          TextButton.icon(
+            onPressed: _busy
+                ? null
+                : () => setState(() {
+                      _newPhoto = null;
+                      _removePhoto = true;
+                    }),
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: const Text('Retirer'),
+          ),
+        ]),
+    ]);
+  }
+
   @override
-  Widget build(BuildContext context) => _FormDialog(
+  Widget build(BuildContext context) => FormDialog(
         title: widget.d == null ? 'Nouveau dessin' : 'Modifier le dessin',
         formKey: _form,
         busy: _busy,
         onSave: _save,
         children: [
+          _photoBox(),
           TextFormField(
             controller: _nom,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'Nom / référence du dessin'),
+            decoration: const InputDecoration(labelText: 'Nom / référence du dessin', prefixIcon: Icon(Icons.local_florist_outlined)),
             validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
           ),
           TextFormField(
@@ -314,6 +481,7 @@ class _DessinFormState extends State<_DessinForm> {
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
               labelText: 'Nombre de points (par robe)',
+              prefixIcon: const Icon(Icons.blur_on_rounded),
               helperText: widget.d == null ? null : 'Modifier ce nombre ne change pas les saisies déjà enregistrées',
             ),
             validator: (v) {
@@ -321,8 +489,8 @@ class _DessinFormState extends State<_DessinForm> {
               return (n == null || n <= 0) ? 'Nombre entier supérieur à 0' : null;
             },
           ),
-          TextFormField(controller: _client, decoration: const InputDecoration(labelText: 'Client (facultatif)')),
-          TextFormField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque (facultatif)')),
+          TextFormField(controller: _client, decoration: const InputDecoration(labelText: 'Client (facultatif)', prefixIcon: Icon(Icons.storefront_outlined))),
+          TextFormField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque (facultatif)', prefixIcon: Icon(Icons.notes))),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Actif'),
@@ -333,23 +501,59 @@ class _DessinFormState extends State<_DessinForm> {
       );
 }
 
-// ---------------------------------------------------------------- Machines
+// ======================================================================= Machines
 
 class MachinesScreen extends StatelessWidget {
   const MachinesScreen({super.key});
 
   @override
-  Widget build(BuildContext context) => _RefList<Machine>(
-        table: 'broderie_machines',
-        addLabel: 'Ajouter une machine',
-        emptyText: 'Aucune machine (facultatif).\nAjoutez vos machines pour savoir laquelle a brodé.',
-        icon: Icons.settings_input_component_outlined,
-        items: () => data.machines,
-        title: (m) => m.nom,
-        subtitle: (m) => ['${m.nbTetes} tête${m.nbTetes > 1 ? 's' : ''}', if (!m.actif) 'Inactive'].join(' · '),
-        actif: (m) => m.actif,
-        id: (m) => m.id,
-        openForm: (c, m) => showDialog<bool>(context: c, builder: (_) => _MachineForm(m)),
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Machines')),
+        floatingActionButton: FloatingActionButton.extended(
+          heroTag: 'fab-mac',
+          onPressed: () => showDialog<bool>(context: context, builder: (_) => const _MachineForm(null)),
+          icon: const Icon(Icons.add),
+          label: const Text('Ajouter une machine'),
+        ),
+        body: ListenableBuilder(
+          listenable: data,
+          builder: (context, _) => ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+            children: [
+              if (data.machines.isEmpty)
+                const EmptyState('Aucune machine (facultatif).\nAjoutez vos machines pour savoir laquelle a brodé.',
+                    icon: Icons.precision_manufacturing_outlined)
+              else
+                for (final m in data.machines)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: AppCard(
+                      padding: const EdgeInsets.all(14),
+                      onTap: () => showDialog<bool>(context: context, builder: (_) => _MachineForm(m)),
+                      child: Row(children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: AppColors.teal.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+                          child: const Icon(Icons.precision_manufacturing_rounded, color: AppColors.teal),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(m.nom, style: const TextStyle(fontWeight: FontWeight.w800)),
+                            Text('${m.nbTetes} tête${m.nbTetes > 1 ? 's' : ''}${m.actif ? '' : ' · Inactive'}',
+                                style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+                          ]),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.delete_outline, color: context.pal.muted),
+                          onPressed: () => _deleteRef(context, 'broderie_machines', m.id, m.nom),
+                        ),
+                      ]),
+                    ),
+                  ),
+            ],
+          ),
+        ),
       );
 }
 
@@ -394,7 +598,7 @@ class _MachineFormState extends State<_MachineForm> {
   }
 
   @override
-  Widget build(BuildContext context) => _FormDialog(
+  Widget build(BuildContext context) => FormDialog(
         title: widget.m == null ? 'Nouvelle machine' : 'Modifier la machine',
         formKey: _form,
         busy: _busy,
@@ -425,27 +629,27 @@ class _MachineFormState extends State<_MachineForm> {
       );
 }
 
-// ---------------------------------------------------------------- Dialogue commun
+// ======================================================================= Dialogue commun
 
-class _FormDialog extends StatelessWidget {
+class FormDialog extends StatelessWidget {
   final String title;
   final GlobalKey<FormState> formKey;
   final bool busy;
   final VoidCallback onSave;
   final List<Widget> children;
 
-  const _FormDialog({required this.title, required this.formKey, required this.busy, required this.onSave, required this.children});
+  const FormDialog({super.key, required this.title, required this.formKey, required this.busy, required this.onSave, required this.children});
 
   @override
   Widget build(BuildContext context) => AlertDialog(
         title: Text(title),
         content: SizedBox(
-          width: 440,
+          width: 460,
           child: Form(
             key: formKey,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                for (final c in children) Padding(padding: const EdgeInsets.only(bottom: 12), child: c),
+                for (final c in children) Padding(padding: const EdgeInsets.only(bottom: 14), child: c),
               ]),
             ),
           ),

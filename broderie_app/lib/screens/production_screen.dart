@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../data/app_data.dart';
 import '../data/models.dart';
+import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
 
+/// Historique de production, regroupé par jour.
 class ProductionScreen extends StatefulWidget {
   const ProductionScreen({super.key});
 
@@ -13,7 +15,7 @@ class ProductionScreen extends StatefulWidget {
 }
 
 class _ProductionScreenState extends State<ProductionScreen> {
-  Periode _periode = Periode.aujourdhui;
+  Periode _periode = Periode.semaine;
   DateTimeRange? _custom;
   String? _ouvrierId;
   List<Production> _rows = [];
@@ -59,111 +61,74 @@ class _ProductionScreenState extends State<ProductionScreen> {
     }
   }
 
-  Future<void> _openForm([Production? p]) async {
-    if (data.ouvriers.where((o) => o.actif).isEmpty || data.dessins.where((d) => d.actif).isEmpty) {
-      showSnack(context, 'Ajoutez d\'abord au moins un ouvrier et un dessin.', error: true);
-      return;
-    }
-    final saved = await showDialog<bool>(context: context, builder: (_) => ProductionForm(existing: p));
-    if (saved == true && mounted) showSnack(context, p == null ? 'Saisie enregistrée' : 'Saisie modifiée');
-  }
-
-  Future<void> _delete(Production p) async {
-    final ok = await confirmDialog(context, 'Supprimer la saisie',
-        '${data.ouvrierNom(p.ouvrierId)} — ${data.dessinNom(p.dessinId)} — ${p.nbRobes} robes du ${fmtDate(p.dateProd)} ?');
-    if (!ok) return;
-    try {
-      await data.deleteProduction(p.id);
-      if (mounted) showSnack(context, 'Saisie supprimée');
-    } catch (e) {
-      if (mounted) showSnack(context, errorMessage(e), error: true);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Regroupement par jour
     final byDay = <DateTime, List<Production>>{};
     for (final p in _rows) {
       byDay.putIfAbsent(dayOnly(p.dateProd), () => []).add(p);
     }
     final days = byDay.keys.toList()..sort((a, b) => b.compareTo(a));
-    final t = Theme.of(context);
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openForm(),
-        icon: const Icon(Icons.add),
-        label: const Text('Nouvelle saisie'),
+        heroTag: 'fab-hist',
+        onPressed: () => openProductionForm(context),
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Saisie détaillée'),
       ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           children: [
-            FilterBar(
+            PeriodChips(
               periode: _periode,
               custom: _custom,
-              ouvrierId: _ouvrierId,
-              onPeriode: (p, c) {
+              onChanged: (p, c) {
                 setState(() {
                   _periode = p;
                   _custom = c;
                 });
                 _load();
               },
-              onOuvrier: (id) {
+            ),
+            const SizedBox(height: 12),
+            OuvrierFilter(
+              value: _ouvrierId,
+              onChanged: (id) {
                 setState(() => _ouvrierId = id);
                 _load();
               },
             ),
-            const SizedBox(height: 12),
-            if (_loading) const LinearProgressIndicator(),
-            if (_error != null)
-              Card(
-                color: t.colorScheme.errorContainer,
-                child: ListTile(title: Text(_error!), trailing: TextButton(onPressed: _load, child: const Text('Réessayer'))),
-              ),
+            const SizedBox(height: 10),
+            if (_loading) const LinearProgressIndicator(minHeight: 2),
+            if (_error != null) ErrorBanner(_error!, onRetry: _load),
             if (!_loading && _rows.isEmpty && _error == null)
-              const EmptyState('Aucune saisie sur cette période.\nAppuyez sur « Nouvelle saisie ».', icon: Icons.precision_manufacturing_outlined),
+              const EmptyState('Aucune saisie sur cette période.', icon: Icons.history_rounded),
             for (final d in days) ...[
               Padding(
-                padding: const EdgeInsets.only(top: 12, bottom: 6),
+                padding: const EdgeInsets.only(top: 18, bottom: 8, left: 4, right: 4),
                 child: Row(children: [
-                  Expanded(child: Text(fmtDateLong(d), style: t.textTheme.titleSmall?.copyWith(color: t.colorScheme.primary))),
-                  Text(
-                    '${fmtInt(byDay[d]!.fold<int>(0, (s, p) => s + p.nbRobes))} robes · ${fmtInt(byDay[d]!.fold<int>(0, (s, p) => s + p.totalPoints))} pts',
-                    style: t.textTheme.bodySmall,
+                  Expanded(
+                    child: Text(_capitalize(fmtDateLong(d)),
+                        style: context.tt.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: context.cs.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                    child: Text(
+                      '${fmtInt(byDay[d]!.fold<int>(0, (s, p) => s + p.nbRobes))} robes · ${fmtCompact(byDay[d]!.fold<int>(0, (s, p) => s + p.totalPoints))} pts',
+                      style: TextStyle(color: context.cs.primary, fontWeight: FontWeight.w700, fontSize: 12),
+                    ),
                   ),
                 ]),
               ),
-              Card(
+              AppCard(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Column(children: [
                   for (final p in byDay[d]!) ...[
-                    ListTile(
-                      leading: CircleAvatar(child: Text(_initials(data.ouvrierNom(p.ouvrierId)))),
-                      title: Text('${data.ouvrierNom(p.ouvrierId)} — ${data.dessinNom(p.dessinId)}'),
-                      subtitle: Text([
-                        '${fmtInt(p.nbRobes)} robes × ${fmtInt(p.pointsParRobe)} pts',
-                        if (p.machineId != null && data.machineNom(p.machineId).isNotEmpty) data.machineNom(p.machineId),
-                        if (p.note != null) p.note!,
-                      ].join(' · ')),
-                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                          Text('${fmtInt(p.totalPoints)} pts', style: const TextStyle(fontWeight: FontWeight.w700)),
-                          if (p.montant > 0) Text(fmtDA(p.montant), style: t.textTheme.bodySmall),
-                        ]),
-                        PopupMenuButton<String>(
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'edit', child: Text('Modifier')),
-                            PopupMenuItem(value: 'del', child: Text('Supprimer')),
-                          ],
-                          onSelected: (v) => v == 'edit' ? _openForm(p) : _delete(p),
-                        ),
-                      ]),
-                      onTap: () => _openForm(p),
-                    ),
-                    if (p != byDay[d]!.last) const Divider(height: 1),
+                    ProductionTile(p),
+                    if (p != byDay[d]!.last) const Divider(height: 1, indent: 64),
                   ],
                 ]),
               ),
@@ -174,11 +139,80 @@ class _ProductionScreenState extends State<ProductionScreen> {
     );
   }
 
-  static String _initials(String nom) {
-    final parts = nom.trim().split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts[0].substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
+  static String _capitalize(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+}
+
+/// Ouvre le formulaire détaillé (ajout ou modification).
+Future<void> openProductionForm(BuildContext context, [Production? p]) async {
+  if (data.ouvriers.where((o) => o.actif).isEmpty || data.dessins.where((d) => d.actif).isEmpty) {
+    showSnack(context, 'Ajoutez d\'abord au moins un ouvrier et un dessin.', error: true);
+    return;
+  }
+  final saved = await showDialog<bool>(context: context, builder: (_) => ProductionForm(existing: p));
+  if (saved == true && context.mounted) showSnack(context, p == null ? 'Saisie enregistrée' : 'Saisie modifiée');
+}
+
+Future<void> deleteProductionWithConfirm(BuildContext context, Production p) async {
+  final ok = await confirmDialog(context, 'Supprimer la saisie',
+      '${data.ouvrierNom(p.ouvrierId)} — ${data.dessinNom(p.dessinId)} — ${p.nbRobes} robes du ${fmtDate(p.dateProd)} ?');
+  if (!ok) return;
+  try {
+    await data.deleteProduction(p.id);
+    if (context.mounted) showSnack(context, 'Saisie supprimée');
+  } catch (e) {
+    if (context.mounted) showSnack(context, errorMessage(e), error: true);
+  }
+}
+
+/// Ligne d'une saisie de production.
+class ProductionTile extends StatelessWidget {
+  final Production p;
+  final bool showOuvrier;
+  const ProductionTile(this.p, {super.key, this.showOuvrier = true});
+
+  @override
+  Widget build(BuildContext context) {
+    final details = [
+      '${fmtInt(p.nbRobes)} robes × ${fmtInt(p.pointsParRobe)}',
+      if (!showOuvrier) fmtDate(p.dateProd),
+      if (p.machineId != null && data.machineNom(p.machineId).isNotEmpty) data.machineNom(p.machineId),
+      if (p.note != null) p.note!,
+    ].join(' · ');
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => openProductionForm(context, p),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+        child: Row(children: [
+          DessinThumb(data.dessin(p.dessinId), size: 46),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                showOuvrier ? '${data.ouvrierNom(p.ouvrierId)} — ${data.dessinNom(p.dessinId)}' : data.dessinNom(p.dessinId),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(details, style: context.tt.bodySmall?.copyWith(color: context.pal.muted), overflow: TextOverflow.ellipsis),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(fmtInt(p.totalPoints), style: const TextStyle(fontWeight: FontWeight.w800)),
+            Text(p.montant > 0 ? fmtDA(p.montant) : 'pts', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+          ]),
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, color: context.pal.muted),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'edit', child: Text('Modifier')),
+              PopupMenuItem(value: 'del', child: Text('Supprimer')),
+            ],
+            onSelected: (v) => v == 'edit' ? openProductionForm(context, p) : deleteProductionWithConfirm(context, p),
+          ),
+        ]),
+      ),
+    );
   }
 }
 

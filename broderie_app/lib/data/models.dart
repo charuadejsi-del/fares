@@ -44,8 +44,9 @@ class Dessin {
   final String? client;
   final String? note;
   final bool actif;
+  final String? photoPath;
 
-  const Dessin({required this.id, required this.nom, required this.points, this.client, this.note, this.actif = true});
+  const Dessin({required this.id, required this.nom, required this.points, this.client, this.note, this.actif = true, this.photoPath});
 
   factory Dessin.fromMap(Map<String, dynamic> m) => Dessin(
         id: m['id'] as String,
@@ -54,6 +55,7 @@ class Dessin {
         client: m['client'] as String?,
         note: m['note'] as String?,
         actif: (m['actif'] ?? true) as bool,
+        photoPath: m['photo_path'] as String?,
       );
 
   static Map<String, dynamic> toRow({required String nom, required int points, String? client, String? note, bool actif = true}) => {

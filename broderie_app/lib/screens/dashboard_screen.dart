@@ -4,19 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../charts.dart';
 import '../data/app_data.dart';
 import '../data/models.dart';
+import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
+import 'ouvrier_detail_screen.dart';
 
-class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
-
-  @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
-}
-
-class _Agg {
+class Agg {
   int saisies = 0;
   int robes = 0;
   int points = 0;
@@ -29,11 +25,19 @@ class _Agg {
   }
 }
 
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
 class _DashboardScreenState extends State<DashboardScreen> {
   Periode _periode = Periode.mois;
   DateTimeRange? _custom;
   String? _ouvrierId;
   List<Production> _rows = [];
+  int? _prevPoints;
   bool _loading = true;
   String? _error;
   int _seenVersion = -1;
@@ -55,7 +59,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (data.productionVersion != _seenVersion) {
       _load();
     } else if (mounted) {
-      setState(() {}); // noms mis à jour
+      setState(() {});
+    }
+  }
+
+  /// Période précédente de même durée (pour la comparaison).
+  DateTimeRange? _previous(DateTimeRange r) {
+    switch (_periode) {
+      case Periode.tout:
+        return null;
+      case Periode.mois:
+        final s = DateTime(r.start.year, r.start.month - 1, 1);
+        final e = DateTime(s.year, s.month, r.end.day).isAfter(DateTime(s.year, s.month + 1, 0))
+            ? DateTime(s.year, s.month + 1, 0)
+            : DateTime(s.year, s.month, r.end.day);
+        return DateTimeRange(start: s, end: e);
+      default:
+        final len = r.end.difference(r.start).inDays + 1;
+        return DateTimeRange(start: r.start.subtract(Duration(days: len)), end: r.start.subtract(const Duration(days: 1)));
     }
   }
 
@@ -66,9 +87,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _error = null;
     });
     final r = rangeFor(_periode, _custom);
+    final prev = _previous(r);
     try {
-      final rows = await data.fetchProduction(r.start, r.end, ouvrierId: _ouvrierId);
-      if (mounted) setState(() => _rows = rows);
+      final res = await Future.wait([
+        data.fetchProduction(r.start, r.end, ouvrierId: _ouvrierId),
+        if (prev != null) data.fetchProduction(prev.start, prev.end, ouvrierId: _ouvrierId),
+      ]);
+      if (mounted) {
+        setState(() {
+          _rows = res[0];
+          _prevPoints = prev == null ? null : res[1].fold<int>(0, (s, p) => s + p.totalPoints);
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = errorMessage(e));
     } finally {
@@ -110,7 +140,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         dir = (await getDownloadsDirectory()) ?? await getApplicationDocumentsDirectory();
       }
       final f = File('${dir.path}${Platform.pathSeparator}production_${dateKey(DateTime.now())}_${DateTime.now().millisecondsSinceEpoch}.csv');
-      // BOM UTF-8 pour qu'Excel affiche correctement les accents
       await f.writeAsString('﻿$csv');
       await Clipboard.setData(ClipboardData(text: csv));
       if (mounted) showSnack(context, 'Exporté : ${f.path} (copié aussi dans le presse-papiers)');
@@ -122,107 +151,289 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final total = _Agg();
-    final parOuvrier = <String, _Agg>{};
-    final parDessin = <String, _Agg>{};
+    final range = rangeFor(_periode, _custom);
+    final total = Agg();
+    final parOuvrier = <String, Agg>{};
+    final parDessin = <String, Agg>{};
+    final jours = <String>{};
     for (final p in _rows) {
       total.add(p);
-      parOuvrier.putIfAbsent(p.ouvrierId, _Agg.new).add(p);
-      parDessin.putIfAbsent(p.dessinId, _Agg.new).add(p);
+      parOuvrier.putIfAbsent(p.ouvrierId, Agg.new).add(p);
+      parDessin.putIfAbsent(p.dessinId, Agg.new).add(p);
+      jours.add(dateKey(p.dateProd));
     }
     final ouv = parOuvrier.entries.toList()..sort((a, b) => b.value.points.compareTo(a.value.points));
     final des = parDessin.entries.toList()..sort((a, b) => b.value.points.compareTo(a.value.points));
-    final maxPts = (ouv.isEmpty || ouv.first.value.points <= 0) ? 1 : ouv.first.value.points;
+    final moyJour = jours.isEmpty ? 0 : total.points / jours.length;
+
+    final hero = _HeroCard(total: total, prevPoints: _prevPoints, periode: _periode);
+
+    final stats = AutoGrid(minItemWidth: 165, children: [
+      StatTile(label: 'Robes brodées', value: fmtInt(total.robes), icon: Icons.checkroom_rounded, color: AppColors.gold),
+      StatTile(label: 'À payer', value: fmtDA(total.montant), icon: Icons.payments_rounded, color: AppColors.green),
+      StatTile(label: 'Moyenne / jour travaillé', value: fmtInt(moyJour), icon: Icons.speed_rounded, color: AppColors.sky,
+          sub: '${jours.length} j'),
+      StatTile(label: 'Saisies', value: fmtInt(total.saisies), icon: Icons.receipt_long_rounded, color: AppColors.rose),
+    ]);
+
+    final chart = AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SectionTitle('Production', subtitle: 'Points brodés sur la période'),
+        PointsBarChart(rows: _rows, range: range),
+      ]),
+    );
+
+    final donut = AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const SectionTitle('Répartition', subtitle: 'Part des points par ouvrier'),
+        if (ouv.isEmpty)
+          const EmptyState('Aucune production sur cette période.', icon: Icons.pie_chart_outline)
+        else
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 24,
+            runSpacing: 16,
+            children: [
+              ShareDonut(
+                parts: [for (final e in ouv.take(8)) MapEntry(data.ouvrierNom(e.key), e.value.points)],
+                centerValue: fmtCompact(total.points),
+                centerLabel: 'points',
+              ),
+              SizedBox(
+                width: 220,
+                child: DonutLegend(parts: [for (final e in ouv.take(8)) MapEntry(data.ouvrierNom(e.key), e.value.points)]),
+              ),
+            ],
+          ),
+      ]),
+    );
+
+    final classement = AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const SectionTitle('Classement des ouvriers', subtitle: 'Touchez un ouvrier pour sa fiche'),
+        if (ouv.isEmpty)
+          const EmptyState('Aucun ouvrier n\'a produit sur cette période.', icon: Icons.emoji_events_outlined)
+        else
+          for (var i = 0; i < ouv.length; i++)
+            _RankRow(
+              rank: i + 1,
+              ouvrierId: ouv[i].key,
+              agg: ouv[i].value,
+              ratio: ouv.first.value.points == 0 ? 0 : ouv[i].value.points / ouv.first.value.points,
+            ),
+      ]),
+    );
+
+    final dessins = AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const SectionTitle('Dessins les plus brodés'),
+        if (des.isEmpty)
+          const EmptyState('—', icon: Icons.local_florist_outlined)
+        else
+          for (final e in des.take(8))
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(children: [
+                DessinThumb(data.dessin(e.key), size: 46),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(data.dessinNom(e.key), style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
+                    Text('${fmtInt(data.dessin(e.key)?.points ?? 0)} pts / robe',
+                        style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+                  ]),
+                ),
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text('${fmtInt(e.value.robes)} robes', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  Text('${fmtCompact(e.value.points)} pts', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+                ]),
+              ]),
+            ),
+      ]),
+    );
 
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          FilterBar(
-            periode: _periode,
-            custom: _custom,
-            ouvrierId: _ouvrierId,
-            onPeriode: (p, c) {
-              setState(() {
-                _periode = p;
-                _custom = c;
-              });
-              _load();
-            },
-            onOuvrier: (id) {
-              setState(() => _ouvrierId = id);
-              _load();
-            },
-            trailing: [
-              OutlinedButton.icon(onPressed: _export, icon: const Icon(Icons.file_download_outlined), label: const Text('Exporter CSV')),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (_loading) const LinearProgressIndicator(),
-          if (_error != null)
-            Card(
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: ListTile(leading: const Icon(Icons.error_outline), title: Text(_error!), trailing: TextButton(onPressed: _load, child: const Text('Réessayer'))),
+      child: LayoutBuilder(builder: (context, c) {
+        final wide = c.maxWidth >= 960;
+        return ListView(
+          padding: EdgeInsets.fromLTRB(wide ? 28 : 16, 8, wide ? 28 : 16, 32),
+          children: [
+            PeriodChips(
+              periode: _periode,
+              custom: _custom,
+              onChanged: (p, cr) {
+                setState(() {
+                  _periode = p;
+                  _custom = cr;
+                });
+                _load();
+              },
             ),
-          const SizedBox(height: 8),
-          Wrap(spacing: 12, runSpacing: 12, children: [
-            KpiCard(label: 'Total points', value: fmtInt(total.points), icon: Icons.blur_on),
-            KpiCard(label: 'Total robes', value: fmtInt(total.robes), icon: Icons.checkroom),
-            KpiCard(label: 'À payer', value: fmtDA(total.montant), icon: Icons.payments_outlined),
-            KpiCard(label: 'Saisies', value: fmtInt(total.saisies), icon: Icons.receipt_long_outlined),
+            const SizedBox(height: 12),
+            Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              OuvrierFilter(
+                value: _ouvrierId,
+                onChanged: (id) {
+                  setState(() => _ouvrierId = id);
+                  _load();
+                },
+              ),
+              OutlinedButton.icon(onPressed: _export, icon: const Icon(Icons.file_download_outlined), label: const Text('Exporter CSV')),
+            ]),
+            const SizedBox(height: 14),
+            AnimatedOpacity(
+              opacity: _loading ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: const LinearProgressIndicator(minHeight: 2),
+            ),
+            const SizedBox(height: 6),
+            if (_error != null) ErrorBanner(_error!, onRetry: _load),
+            if (wide)
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(flex: 5, child: hero),
+                const SizedBox(width: 16),
+                Expanded(flex: 6, child: stats),
+              ])
+            else ...[
+              hero,
+              const SizedBox(height: 12),
+              stats,
+            ],
+            const SizedBox(height: 16),
+            chart,
+            const SizedBox(height: 16),
+            if (wide)
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: Column(children: [classement])),
+                const SizedBox(width: 16),
+                Expanded(child: Column(children: [donut, const SizedBox(height: 16), dessins])),
+              ])
+            else ...[
+              classement,
+              const SizedBox(height: 16),
+              donut,
+              const SizedBox(height: 16),
+              dessins,
+            ],
+          ],
+        );
+      }),
+    );
+  }
+}
+
+class _HeroCard extends StatelessWidget {
+  final Agg total;
+  final int? prevPoints;
+  final Periode periode;
+  const _HeroCard({required this.total, required this.prevPoints, required this.periode});
+
+  @override
+  Widget build(BuildContext context) {
+    double? evol;
+    if (prevPoints != null && prevPoints! > 0) evol = (total.points - prevPoints!) * 100 / prevPoints!;
+    const white = Colors.white;
+    return AppCard(
+      gradient: AppColors.heroGradient,
+      padding: const EdgeInsets.all(22),
+      child: Stack(children: [
+        Positioned(
+          right: -10,
+          top: -14,
+          child: Icon(Icons.blur_on_rounded, size: 130, color: white.withValues(alpha: 0.10)),
+        ),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(color: white.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(30)),
+              child: Text(periode.label, style: const TextStyle(color: white, fontWeight: FontWeight.w600, fontSize: 12)),
+            ),
+            const Spacer(),
+            if (evol != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(color: white.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(30)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(evol >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded, color: white, size: 16),
+                  const SizedBox(width: 4),
+                  Text('${evol >= 0 ? '+' : ''}${evol.toStringAsFixed(0)} %',
+                      style: const TextStyle(color: white, fontWeight: FontWeight.w700, fontSize: 12)),
+                ]),
+              ),
           ]),
-          const SizedBox(height: 16),
-          SectionCard(
-            title: 'Par ouvrier',
-            child: ouv.isEmpty
-                ? const EmptyState('Aucune production sur cette période.')
-                : Column(children: [
-                    for (final e in ouv)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                          Row(children: [
-                            Expanded(child: Text(data.ouvrierNom(e.key), style: const TextStyle(fontWeight: FontWeight.w600))),
-                            Text('${fmtInt(e.value.points)} pts'),
-                          ]),
-                          const SizedBox(height: 4),
-                          LinearProgressIndicator(value: e.value.points / maxPts, minHeight: 6, borderRadius: BorderRadius.circular(3)),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${fmtInt(e.value.robes)} robes · ${e.value.saisies} saisies · ${fmtDA(e.value.montant)}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ]),
-                      ),
-                    const Divider(),
-                    Row(children: [
-                      const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700))),
-                      Text('${fmtInt(total.robes)} robes · ${fmtInt(total.points)} pts · ${fmtDA(total.montant)}',
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                    ]),
-                  ]),
+          const SizedBox(height: 18),
+          const Text('Points brodés', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(fmtInt(total.points),
+                style: const TextStyle(color: white, fontSize: 40, fontWeight: FontWeight.w900, letterSpacing: -1)),
           ),
-          const SizedBox(height: 16),
-          SectionCard(
-            title: 'Par dessin',
-            child: des.isEmpty
-                ? const EmptyState('—')
-                : SimpleTable(
-                    headers: const ['Dessin', 'Points / robe', 'Robes', 'Total points'],
-                    numericCols: const {1, 2, 3},
-                    rows: [
-                      for (final e in des)
-                        [
-                          data.dessinNom(e.key),
-                          fmtInt(data.dessin(e.key)?.points ?? 0),
-                          fmtInt(e.value.robes),
-                          fmtInt(e.value.points),
-                        ],
-                    ],
-                  ),
+          const SizedBox(height: 14),
+          Wrap(spacing: 18, runSpacing: 6, children: [
+            _heroInfo(Icons.checkroom_rounded, '${fmtInt(total.robes)} robes'),
+            _heroInfo(Icons.payments_rounded, fmtDA(total.montant)),
+            if (prevPoints != null) _heroInfo(Icons.history_rounded, 'Avant : ${fmtCompact(prevPoints!)} pts'),
+          ]),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _heroInfo(IconData i, String t) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(i, size: 16, color: Colors.white70),
+        const SizedBox(width: 5),
+        Text(t, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+      ]);
+}
+
+class _RankRow extends StatelessWidget {
+  final int rank;
+  final String ouvrierId;
+  final Agg agg;
+  final double ratio;
+  const _RankRow({required this.rank, required this.ouvrierId, required this.agg, required this.ratio});
+
+  @override
+  Widget build(BuildContext context) {
+    final nom = data.ouvrierNom(ouvrierId);
+    final medal = switch (rank) { 1 => AppColors.gold, 2 => const Color(0xFFB8C2CC), 3 => const Color(0xFFCD7F32), _ => null };
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: data.ouvrier(ouvrierId) == null
+          ? null
+          : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => OuvrierDetailScreen(ouvrierId: ouvrierId))),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(children: [
+          SizedBox(
+            width: 28,
+            child: medal != null
+                ? Icon(Icons.emoji_events_rounded, color: medal, size: 22)
+                : Text('$rank', textAlign: TextAlign.center, style: TextStyle(color: context.pal.muted, fontWeight: FontWeight.w700)),
           ),
-        ],
+          const SizedBox(width: 8),
+          NameAvatar(nom, size: 40),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text(nom, style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis)),
+                Text(fmtInt(agg.points), style: const TextStyle(fontWeight: FontWeight.w800)),
+                Text(' pts', style: TextStyle(color: context.pal.muted, fontSize: 12)),
+              ]),
+              const SizedBox(height: 6),
+              Bar(ratio, color: AppColors.forName(nom)),
+              const SizedBox(height: 4),
+              Text('${fmtInt(agg.robes)} robes · ${fmtDA(agg.montant)}',
+                  style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+            ]),
+          ),
+        ]),
       ),
     );
   }

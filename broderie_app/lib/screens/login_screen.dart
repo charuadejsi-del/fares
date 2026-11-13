@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../theme.dart';
 import '../utils.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -55,7 +56,16 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final t = Theme.of(context);
     return Scaffold(
-      body: Center(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.violetDeep, t.scaffoldBackgroundColor, t.scaffoldBackgroundColor],
+            stops: const [0, 0.55, 1],
+          ),
+        ),
+        child: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
@@ -66,7 +76,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Form(
                   key: _form,
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Icon(Icons.auto_awesome_mosaic_outlined, size: 48, color: t.colorScheme.primary),
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(gradient: AppColors.heroGradient, borderRadius: BorderRadius.circular(22)),
+                        child: const Icon(Icons.auto_awesome_rounded, size: 40, color: Colors.white),
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     Text('Atelier Broderie', textAlign: TextAlign.center, style: t.textTheme.headlineSmall),
                     Text(_signup ? 'Créer le compte de l\'atelier' : 'Connexion',
@@ -116,6 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

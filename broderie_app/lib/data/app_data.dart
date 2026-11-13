@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../utils.dart';
@@ -101,17 +102,64 @@ class AppData extends ChangeNotifier {
 
   // ---------------- Référentiels ----------------
 
-  Future<void> saveRef(String table, Map<String, dynamic> row, {String? id}) async {
+  /// Enregistre et renvoie l'id de la ligne.
+  Future<String> saveRef(String table, Map<String, dynamic> row, {String? id}) async {
+    String newId;
     if (id == null) {
-      await _db.from(table).insert(row);
+      final r = await _db.from(table).insert(row).select('id').single();
+      newId = r['id'] as String;
     } else {
       await _db.from(table).update(row).eq('id', id);
+      newId = id;
     }
     await loadRefs();
+    return newId;
   }
 
   Future<void> deleteRef(String table, String id) async {
     await _db.from(table).delete().eq('id', id);
+    await loadRefs();
+  }
+
+  // ---------------- Photos des dessins (Storage privé) ----------------
+
+  static const _bucket = 'broderie-dessins';
+  final Map<String, String> _signed = {};
+
+  /// URL signée (valable 7 jours, mise en cache) ou null.
+  Future<String?> photoUrl(String? path) async {
+    if (path == null || path.isEmpty) return null;
+    final cached = _signed[path];
+    if (cached != null) return cached;
+    try {
+      final url = await _db.storage.from(_bucket).createSignedUrl(path, 60 * 60 * 24 * 7);
+      _signed[path] = url;
+      return url;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String> uploadPhoto(String dessinId, Uint8List bytes, String ext) async {
+    final uid = _db.auth.currentUser!.id;
+    final e = ext.toLowerCase().replaceAll('.', '');
+    final clean = (e == 'jpeg' || e == 'jpg') ? 'jpg' : (e == 'png' || e == 'webp' ? e : 'jpg');
+    final mime = clean == 'jpg' ? 'image/jpeg' : 'image/$clean';
+    final path = '$uid/$dessinId-${DateTime.now().millisecondsSinceEpoch}.$clean';
+    await _db.storage.from(_bucket).uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime, upsert: true));
+    return path;
+  }
+
+  Future<void> removePhoto(String? path) async {
+    if (path == null || path.isEmpty) return;
+    try {
+      await _db.storage.from(_bucket).remove([path]);
+    } catch (_) {}
+    _signed.remove(path);
+  }
+
+  Future<void> setDessinPhoto(String dessinId, String? path) async {
+    await _db.from('broderie_dessins').update({'photo_path': path}).eq('id', dessinId);
     await loadRefs();
   }
 }

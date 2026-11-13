@@ -4,12 +4,14 @@ Application native (Flutter) pour **PC Windows** et **Android** qui suit la prod
 points brodés par ouvrier, nombre de robes, points par dessin et montant à payer.
 Les données sont dans **Supabase** : le PC de l'atelier et les téléphones partagent les mêmes chiffres.
 
-## Fonctions
-- **Tableau de bord** : total des points, des robes, du montant à payer et des saisies, par période (aujourd'hui, semaine à partir du samedi, mois, mois dernier, dates au choix) et par ouvrier ; classement des ouvriers ; totaux par dessin ; export CSV pour Excel.
-- **Production** : saisie (date, ouvrier, dessin, nombre de robes, machine, remarque) avec calcul automatique `robes × points du dessin` et du montant. Les saisies sont regroupées par jour, et on peut les modifier ou les supprimer.
-- **Ouvriers** : nom, téléphone, tarif en DA pour 1000 points, actif/inactif.
-- **Dessins** : nom, nombre de points par robe, client, remarque.
-- **Machines** (facultatif) : nom, nombre de têtes.
+## Fonctions (v2)
+- **Design pro** : thème **sombre premium** ou **clair** (ou automatique), cartes en dégradé, mise en page adaptée PC (menu latéral) et téléphone (barre du bas).
+- **Tableau de bord** : grand total des points avec évolution par rapport à la période précédente, robes, montant à payer, moyenne par jour, **histogramme** des points par jour/mois, **donut** de répartition par ouvrier, **classement** avec médailles, dessins les plus brodés, export CSV.
+- **Saisie rapide** en 3 touches : ouvrier → dessin (avec photo) → nombre de robes (boutons −/+, +5, +10, +20, +50), calcul en direct, total du jour.
+- **Historique** : saisies regroupées par jour, modification et suppression, saisie détaillée.
+- **Fiche ouvrier** : statistiques, graphique, détail par dessin, historique et **fiche de paie PDF** (impression ou partage).
+- **Dessins avec photo** (appareil photo ou galerie), stockées dans Supabase Storage (privé par compte).
+- **Machines** et **thème** dans Réglages.
 
 Une saisie garde les points du dessin et le tarif de l'ouvrier **au moment où elle est enregistrée** : les modifier plus tard ne fausse pas l'historique.
 

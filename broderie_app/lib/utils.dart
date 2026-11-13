@@ -7,6 +7,11 @@ final _money = NumberFormat('#,##0.00', 'fr_FR');
 final _dateKey = DateFormat('yyyy-MM-dd');
 final _dateFr = DateFormat('dd/MM/yyyy', 'fr_FR');
 final _dateLong = DateFormat('EEEE d MMMM yyyy', 'fr_FR');
+final _dateShort = DateFormat('dd/MM', 'fr_FR');
+final _monthYear = DateFormat('MMMM yyyy', 'fr_FR');
+final _compact = NumberFormat.compact(locale: 'fr_FR');
+final _weekday = DateFormat('E', 'fr_FR');
+final _shortMonth = DateFormat('MMM', 'fr_FR');
 
 String fmtInt(num n) => _int.format(n.round());
 String fmtDA(num n) => '${_money.format(n)} DA';
@@ -14,6 +19,11 @@ String dateKey(DateTime d) => _dateKey.format(d);
 String fmtDate(DateTime d) => _dateFr.format(d);
 String fmtDateLong(DateTime d) => _dateLong.format(d);
 DateTime dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+String fmtShort(DateTime d) => _dateShort.format(d);
+String fmtMonthYear(DateTime d) => _monthYear.format(d);
+String fmtCompact(num n) => _compact.format(n);
+String fmtWeekday(DateTime d) => _weekday.format(d);
+String fmtShortMonth(DateTime d) => _shortMonth.format(d);
 
 /// Périodes de filtrage. La semaine commence le samedi (Algérie).
 enum Periode { aujourdhui, semaine, mois, moisDernier, tout, personnalisee }
