@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_data.dart';
+import '../data/session.dart';
+import '../data/stock.dart';
 import '../theme.dart';
 import '../utils.dart';
-import 'dashboard_screen.dart';
-import 'production_screen.dart';
-import 'quick_entry_screen.dart';
+import 'admin_screens.dart';
+import 'modules.dart';
 import 'refs_screens.dart';
 import 'settings_screen.dart';
 
@@ -16,26 +17,31 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
+enum _Cle { accueil, broderie, paie, stock }
+
 class _Dest {
+  final _Cle cle;
   final String label;
   final String title;
   final IconData icon;
   final IconData selected;
-  const _Dest(this.label, this.title, this.icon, this.selected);
+  const _Dest(this.cle, this.label, this.title, this.icon, this.selected);
 }
-
-const _dests = [
-  _Dest('Accueil', 'Tableau de bord', Icons.space_dashboard_outlined, Icons.space_dashboard_rounded),
-  _Dest('Saisie', 'Saisie rapide', Icons.add_circle_outline_rounded, Icons.add_circle_rounded),
-  _Dest('Historique', 'Historique', Icons.history_rounded, Icons.history_rounded),
-  _Dest('Ouvriers', 'Ouvriers', Icons.people_outline_rounded, Icons.people_rounded),
-  _Dest('Dessins', 'Dessins', Icons.local_florist_outlined, Icons.local_florist_rounded),
-];
 
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   bool _loading = true;
   String? _error;
+
+  List<_Dest> get _dests => [
+        if (session.admin) const _Dest(_Cle.accueil, 'Accueil', 'Vue d\'ensemble', Icons.space_dashboard_outlined, Icons.space_dashboard_rounded),
+        if (session.peut(Espace.broderie))
+          const _Dest(_Cle.broderie, 'Broderie', 'Broderie', Icons.blur_on_outlined, Icons.blur_on_rounded),
+        if (session.peut(Espace.paie))
+          const _Dest(_Cle.paie, 'Paie', 'Ouvriers · paie & avances', Icons.account_balance_wallet_outlined, Icons.account_balance_wallet_rounded),
+        if (session.peut(Espace.stock))
+          const _Dest(_Cle.stock, 'Stock', 'Stock & ventes', Icons.inventory_2_outlined, Icons.inventory_2_rounded),
+      ];
 
   @override
   void initState() {
@@ -49,18 +55,24 @@ class _HomeShellState extends State<HomeShell> {
       _error = null;
     });
     try {
-      await data.loadRefs();
+      await Future.wait<void>([
+        if (session.peut(Espace.broderie) || session.peut(Espace.paie)) data.loadRefs(),
+        if (session.peut(Espace.stock)) stock.load(),
+      ]);
     } catch (e) {
       _error = errorMessage(e);
     }
     if (mounted) setState(() => _loading = false);
   }
 
-  void _go(int i) => setState(() => _index = i);
+  void _aller(_Cle c) {
+    final i = _dests.indexWhere((d) => d.cle == c);
+    if (i >= 0) setState(() => _index = i);
+  }
 
-  Widget _page() {
-    if (_loading && !data.refsLoaded) return const Center(child: CircularProgressIndicator());
-    if (_error != null && !data.refsLoaded) {
+  Widget _page(_Dest d) {
+    if (_loading && !data.refsLoaded && !stock.loaded) return const Center(child: CircularProgressIndicator());
+    if (_error != null && !data.refsLoaded && !stock.loaded) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -74,17 +86,36 @@ class _HomeShellState extends State<HomeShell> {
         ),
       );
     }
-    return switch (_index) {
-      0 => const DashboardScreen(),
-      1 => QuickEntryScreen(onGoToRefs: () => _go(3)),
-      2 => const ProductionScreen(),
-      3 => const OuvriersScreen(),
-      _ => const DessinsScreen(),
+    return switch (d.cle) {
+      _Cle.accueil => VueEnsembleScreen(
+          onAller: (i) => _aller(switch (i) {
+            1 => _Cle.broderie,
+            2 => _Cle.paie,
+            _ => _Cle.stock,
+          }),
+        ),
+      _Cle.broderie => BroderieModule(onGoToOuvriers: session.peut(Espace.paie) ? () => _aller(_Cle.paie) : null),
+      _Cle.paie => const OuvriersScreen(),
+      _Cle.stock => const StockModule(),
     };
   }
 
   @override
   Widget build(BuildContext context) {
+    final dests = _dests;
+    if (dests.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Atelier'), actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
+          ),
+        ]),
+        body: const Center(child: Text('Aucun accès n\'est attribué à ce compte.\nDemandez à l\'administrateur.', textAlign: TextAlign.center)),
+      );
+    }
+    if (_index >= dests.length) _index = 0;
+    final d = dests[_index];
     final w = MediaQuery.sizeOf(context).width;
     final wide = w >= 840;
     final appBar = AppBar(
@@ -97,7 +128,7 @@ class _HomeShellState extends State<HomeShell> {
           ),
           const SizedBox(width: 10),
         ],
-        Text(_dests[_index].title),
+        Flexible(child: Text(d.title, overflow: TextOverflow.ellipsis)),
       ]),
       actions: [
         IconButton(tooltip: 'Actualiser', onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
@@ -110,15 +141,17 @@ class _HomeShellState extends State<HomeShell> {
       ],
     );
 
+    if (dests.length == 1) return Scaffold(appBar: appBar, body: _page(d));
+
     if (wide) {
       final extended = w >= 1150;
       return Scaffold(
         body: Row(children: [
           NavigationRail(
             extended: extended,
-            minExtendedWidth: 220,
+            minExtendedWidth: 230,
             selectedIndex: _index,
-            onDestinationSelected: _go,
+            onDestinationSelected: (i) => setState(() => _index = i),
             labelType: extended ? NavigationRailLabelType.none : NavigationRailLabelType.all,
             leading: Padding(
               padding: const EdgeInsets.fromLTRB(8, 20, 8, 20),
@@ -130,32 +163,33 @@ class _HomeShellState extends State<HomeShell> {
                 ),
                 if (extended) ...[
                   const SizedBox(width: 12),
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Atelier', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                    Text('Broderie', style: TextStyle(color: context.pal.muted, fontSize: 12)),
-                  ]),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 150),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(session.atelier?.nom ?? 'Atelier',
+                          overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                      Text(session.membre?.nom ?? '', overflow: TextOverflow.ellipsis, style: TextStyle(color: context.pal.muted, fontSize: 12)),
+                    ]),
+                  ),
                 ],
               ]),
             ),
             destinations: [
-              for (final d in _dests)
-                NavigationRailDestination(icon: Icon(d.icon), selectedIcon: Icon(d.selected), label: Text(d.label)),
+              for (final x in dests) NavigationRailDestination(icon: Icon(x.icon), selectedIcon: Icon(x.selected), label: Text(x.label)),
             ],
           ),
           VerticalDivider(width: 1, color: context.pal.line),
-          Expanded(child: Scaffold(appBar: appBar, body: _page())),
+          Expanded(child: Scaffold(appBar: appBar, body: _page(d))),
         ]),
       );
     }
     return Scaffold(
       appBar: appBar,
-      body: _page(),
+      body: _page(d),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: _go,
-        destinations: [
-          for (final d in _dests) NavigationDestination(icon: Icon(d.icon), selectedIcon: Icon(d.selected), label: d.label),
-        ],
+        onDestinationSelected: (i) => setState(() => _index = i),
+        destinations: [for (final x in dests) NavigationDestination(icon: Icon(x.icon), selectedIcon: Icon(x.selected), label: x.label)],
       ),
     );
   }

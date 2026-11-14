@@ -1,7 +1,7 @@
 name: atelier_broderie
 description: "Atelier Broderie — suivi de la production des machines à broder (points, robes, ouvriers, paie)."
 publish_to: 'none'
-version: 2.0.0+2
+version: 5.0.0+5
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -19,6 +19,8 @@ dependencies:
   pdf: ^3.11.0
   printing: ^5.13.0
   image_picker: ^1.1.2
+  mobile_scanner: ^6.0.0
+  barcode_widget: ^2.0.4
 
 dev_dependencies:
   flutter_test:

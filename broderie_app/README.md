@@ -4,6 +4,16 @@ Application native (Flutter) pour **PC Windows** et **Android** qui suit la prod
 points brodés par ouvrier, nombre de robes, points par dessin et montant à payer.
 Les données sont dans **Supabase** : le PC de l'atelier et les téléphones partagent les mêmes chiffres.
 
+## Atelier partagé, employés, stock et ventes (v5)
+- **Comptes** : l'administrateur crée des comptes employés (Réglages → Employés et accès) avec un identifiant et un mot de passe.
+  Chaque compte n'a accès qu'aux espaces cochés : **Broderie**, **Paie & avances**, **Stock & ventes**. L'admin voit tout (Vue d'ensemble).
+- **Stock** : produits (robes) avec référence = QR code, stock en temps réel, alertes, inventaire, historique, impression d'étiquettes QR (A4 ou imprimante d'étiquettes).
+- **Scan** : appareil photo du téléphone (ou douchette USB sur PC) pour ajouter/retirer du stock ou remplir une vente.
+- **Ventes en gros** : panier par scan, prix modifiables, remise, TVA (réglable), versement à la vente ; le stock baisse automatiquement.
+  Numérotation automatique **facture F-AAAA-0001** et **bon de livraison BL-AAAA-0001**, PDF prêts à imprimer/partager (montant en lettres).
+- **Clients** : total acheté, versé, reste à payer, versements (espèces, chèque, virement, CCP), relevé de compte PDF.
+- Base : `supabase/v5a_atelier_droits.sql`, `supabase/v5b_stock_ventes.sql` ; fonction serveur `supabase/functions/atelier-employes`.
+
 ## Paie, avances et autres départements (v4)
 - Chaque ouvrier a un **département** (Broderie, Couture, Coupe, Repassage, Finition, Emballage… ou libre) et un **mode de paie** :
   **Points** (broderie, compteur), **Au mois** (salaire fixe, bouton « Salaire du mois »), **À la pièce** (quantité × prix).

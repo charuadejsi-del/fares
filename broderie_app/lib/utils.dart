@@ -83,7 +83,7 @@ String errorMessage(Object e) {
     return e.message;
   }
   if (e is AuthException) return e.message;
-  final s = e.toString();
+  final s = e.toString().replaceFirst('Exception: ', '');
   if (s.contains('SocketException') || s.contains('ClientException') || s.contains('Failed host lookup')) {
     return 'Pas de connexion Internet.';
   }

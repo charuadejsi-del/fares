@@ -3,9 +3,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/app_data.dart';
 import '../data/models.dart';
+import '../data/session.dart';
+import '../data/stock.dart';
 import '../utils.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'admin_screens.dart';
 import 'refs_screens.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -36,29 +39,55 @@ class SettingsScreen extends StatelessWidget {
               ),
             ]),
           ),
-          const SizedBox(height: 14),
-          const _TypesCard(),
-          const SizedBox(height: 14),
-          AppCard(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-            child: Column(children: [
-              ListTile(
-                leading: const Icon(Icons.precision_manufacturing_outlined),
-                title: const Text('Machines'),
-                subtitle: Text('${data.machines.length} machine(s)'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MachinesScreen())),
-              ),
-            ]),
-          ),
+          if (session.admin) ...[
+            const SizedBox(height: 14),
+            AppCard(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+              child: Column(children: [
+                ListTile(
+                  leading: const Icon(Icons.manage_accounts_rounded, color: AppColors.gold),
+                  title: const Text('Employés et accès', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: const Text('Créer des comptes et choisir leurs espaces'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmployesScreen())),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.business_rounded),
+                  title: const Text('Entreprise (en-tête des factures)', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text(session.atelier?.nom ?? ''),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocieteScreen())),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 14),
+            const _TypesCard(),
+          ],
+          if (session.peut(Espace.broderie)) ...[
+            const SizedBox(height: 14),
+            AppCard(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+              child: Column(children: [
+                ListTile(
+                  leading: const Icon(Icons.precision_manufacturing_outlined),
+                  title: const Text('Machines'),
+                  subtitle: Text('${data.machines.length} machine(s)'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MachinesScreen())),
+                ),
+              ]),
+            ),
+          ],
           const SizedBox(height: 14),
           AppCard(
             padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
             child: Column(children: [
               ListTile(
                 leading: const Icon(Icons.account_circle_outlined),
-                title: const Text('Compte'),
-                subtitle: Text(email),
+                title: Text(session.membre?.nom.isNotEmpty == true ? session.membre!.nom : 'Compte'),
+                subtitle: Text('${session.membre?.identifiantCourt ?? email}\n${session.membre?.droitsTexte ?? ''}'),
+                isThreeLine: true,
               ),
               const Divider(height: 1),
               ListTile(
@@ -66,6 +95,8 @@ class SettingsScreen extends StatelessWidget {
                 title: Text('Se déconnecter', style: TextStyle(color: context.cs.error)),
                 onTap: () async {
                   data.clear();
+                  stock.clear();
+                  session.clear();
                   Navigator.of(context).popUntil((r) => r.isFirst);
                   await Supabase.instance.client.auth.signOut();
                 },
@@ -73,7 +104,7 @@ class SettingsScreen extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 24),
-          Center(child: Text('Atelier Broderie · v2.0', style: TextStyle(color: context.pal.muted, fontSize: 12))),
+          Center(child: Text('Atelier Broderie · v5.0', style: TextStyle(color: context.pal.muted, fontSize: 12))),
         ],
       ),
     );

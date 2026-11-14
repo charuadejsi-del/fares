@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../utils.dart';
+import 'session.dart';
 import 'models.dart';
 
 /// Source unique des données de l'application (Supabase).
@@ -64,7 +65,7 @@ class AppData extends ChangeNotifier {
     machines = res[2].map(Machine.fromMap).toList();
     types = res[3].map(TypeTravail.fromMap).toList();
     // Premier lancement : types par défaut
-    if (types.isEmpty) {
+    if (types.isEmpty && Session.instance.admin) {
       final rows = await _db.from('broderie_types').insert([
         TypeTravail.toRow(nom: 'Passé plat', tarif1000: 10, ordre: 0),
         TypeTravail.toRow(nom: 'Cordon', tarif1000: 15, ordre: 1),
@@ -238,7 +239,7 @@ class AppData extends ChangeNotifier {
   }
 
   Future<String> uploadPhoto(String dessinId, Uint8List bytes, String ext) async {
-    final uid = _db.auth.currentUser!.id;
+    final uid = Session.instance.atelierId ?? _db.auth.currentUser!.id;
     final e = ext.toLowerCase().replaceAll('.', '');
     final clean = (e == 'jpeg' || e == 'jpg') ? 'jpg' : (e == 'png' || e == 'webp' ? e : 'jpg');
     final mime = clean == 'jpg' ? 'image/jpeg' : 'image/$clean';

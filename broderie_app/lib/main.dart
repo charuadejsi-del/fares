@@ -7,7 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
 import 'screens/home_shell.dart';
 import 'screens/login_screen.dart';
+import 'data/session.dart';
 import 'theme.dart';
+import 'utils.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,7 +55,68 @@ class AuthGate extends StatelessWidget {
     final auth = Supabase.instance.client.auth;
     return StreamBuilder<AuthState>(
       stream: auth.onAuthStateChange,
-      builder: (context, _) => auth.currentSession == null ? const LoginScreen() : const HomeShell(),
+      builder: (context, _) {
+        final user = auth.currentSession?.user;
+        return user == null ? const LoginScreen() : SessionGate(key: ValueKey(user.id));
+      },
     );
   }
+}
+
+/// Charge le compte (atelier, rôle, droits) avant d'ouvrir l'application.
+class SessionGate extends StatefulWidget {
+  const SessionGate({super.key});
+
+  @override
+  State<SessionGate> createState() => _SessionGateState();
+}
+
+class _SessionGateState extends State<SessionGate> {
+  late Future<void> _f = session.load();
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<void>(
+        future: _f,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          }
+          final m = session.membre;
+          if (snap.hasError || m == null || !m.actif) {
+            return Scaffold(
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(snap.hasError ? Icons.cloud_off_rounded : Icons.lock_outline_rounded, size: 48),
+                    const SizedBox(height: 12),
+                    Text(
+                      snap.hasError ? errorMessage(snap.error!) : 'Ce compte est désactivé. Contactez l\'administrateur de l\'atelier.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Wrap(spacing: 10, children: [
+                      if (snap.hasError)
+                        FilledButton.icon(
+                          onPressed: () => setState(() => _f = session.load()),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Réessayer'),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          session.clear();
+                          await Supabase.instance.client.auth.signOut();
+                        },
+                        icon: const Icon(Icons.logout),
+                        label: const Text('Se déconnecter'),
+                      ),
+                    ]),
+                  ]),
+                ),
+              ),
+            );
+          }
+          return const HomeShell();
+        },
+      );
 }

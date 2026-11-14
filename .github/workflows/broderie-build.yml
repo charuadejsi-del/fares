@@ -44,6 +44,7 @@ jobs:
         run: |
           M=android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.INTERNET' $M || sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' $M
+          grep -q 'android.permission.CAMERA' $M || sed -i 's|<application|<uses-permission android:name="android.permission.CAMERA"/>\n    <application|' $M
           sed -i 's|android:label="[^"]*"|android:label="Atelier Broderie"|' $M
       - name: Désactiver lintVital (plante sur les plugins tiers, ex. url_launcher)
         run: |

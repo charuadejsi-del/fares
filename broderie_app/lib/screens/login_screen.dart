@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/session.dart';
 import '../theme.dart';
 import '../utils.dart';
 
@@ -32,13 +33,13 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = Supabase.instance.client.auth;
     try {
       if (_signup) {
-        final res = await auth.signUp(email: _email.text.trim(), password: _pass.text);
+        final res = await auth.signUp(email: _email.text.trim().toLowerCase(), password: _pass.text);
         if (res.session == null && mounted) {
           showSnack(context, 'Compte créé. Confirmez votre adresse via l\'email reçu, puis connectez-vous.');
           setState(() => _signup = false);
         }
       } else {
-        await auth.signInWithPassword(email: _email.text.trim(), password: _pass.text);
+        await auth.signInWithPassword(email: emailDeConnexion(_email.text), password: _pass.text);
       }
     } catch (e) {
       if (mounted) {
@@ -85,15 +86,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text('Atelier Broderie', textAlign: TextAlign.center, style: t.textTheme.headlineSmall),
-                    Text(_signup ? 'Créer le compte de l\'atelier' : 'Connexion',
+                    Text(_signup ? 'Créer le compte administrateur de l\'atelier' : 'Connexion',
                         textAlign: TextAlign.center, style: t.textTheme.bodyMedium),
                     const SizedBox(height: 24),
                     TextFormField(
                       controller: _email,
                       keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.email],
-                      decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.mail_outline)),
-                      validator: (v) => (v == null || !v.contains('@')) ? 'Email invalide' : null,
+                      autofillHints: const [AutofillHints.username],
+                      decoration: InputDecoration(
+                        labelText: _signup ? 'Email' : 'Email ou identifiant employé',
+                        prefixIcon: const Icon(Icons.person_outline),
+                      ),
+                      validator: (v) {
+                        final s = (v ?? '').trim();
+                        if (_signup) return s.contains('@') ? null : 'Email invalide';
+                        return s.length < 3 ? 'Identifiant trop court' : null;
+                      },
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
