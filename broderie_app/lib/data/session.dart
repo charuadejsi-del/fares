@@ -127,9 +127,9 @@ String emailDeConnexion(String saisie) {
 }
 
 /// Session : compte connecté, son atelier et ses droits.
-class Session extends ChangeNotifier {
-  Session._();
-  static final Session instance = Session._();
+class AtelierSession extends ChangeNotifier {
+  AtelierSession._();
+  static final AtelierSession instance = AtelierSession._();
 
   SupabaseClient get _db => Supabase.instance.client;
 
@@ -192,4 +192,4 @@ class Session extends ChangeNotifier {
   }
 }
 
-final session = Session.instance;
+final session = AtelierSession.instance;
