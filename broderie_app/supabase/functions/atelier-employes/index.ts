@@ -97,6 +97,11 @@ Deno.serve(async (req: Request) => {
     const { data: membre } = await admin.from("atelier_membres").select("*").eq("user_id", cible).maybeSingle();
     if (!membre || membre.atelier_id !== me.atelier_id) return json({ error: "Employé introuvable" }, 404);
     const soiMeme = cible === caller.id;
+    // Administrateur principal = créateur de l'atelier (id du compte = id de l'atelier) : intouchable par les autres
+    const principal = membre.user_id === membre.atelier_id;
+    if (principal && !soiMeme && (action === "supprimer" || action === "modifier")) {
+      return json({ error: "L'administrateur principal ne peut être modifié que par lui-même" }, 403);
+    }
 
     // ------------------------------------------------------------------ modifier
     if (action === "modifier") {
