@@ -14,6 +14,8 @@ final _weekday = DateFormat('E', 'fr_FR');
 final _shortMonth = DateFormat('MMM', 'fr_FR');
 
 String fmtInt(num n) => _int.format(n.round());
+final _dec = NumberFormat('#,##0.##', 'fr_FR');
+String fmtNum(num n) => n == n.roundToDouble() ? fmtInt(n) : _dec.format(n);
 String fmtDA(num n) => '${_money.format(n)} DA';
 String dateKey(DateTime d) => _dateKey.format(d);
 String fmtDate(DateTime d) => _dateFr.format(d);

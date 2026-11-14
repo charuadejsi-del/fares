@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
 import 'ouvrier_detail_screen.dart';
+import 'paie_forms.dart';
 
 /// Barre de recherche + filtre « inactifs ».
 class _ListHeader extends StatelessWidget {
@@ -59,79 +60,78 @@ class OuvriersScreen extends StatefulWidget {
 class _OuvriersScreenState extends State<OuvriersScreen> {
   String _q = '';
   bool _inactive = false;
+  String? _dept;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
         listenable: data,
         builder: (context, _) {
           final all = data.ouvriers;
+          final depts = all.map((o) => o.departement).toSet().toList()..sort();
           final list = all
               .where((o) => _inactive || o.actif)
+              .where((o) => _dept == null || o.departement == _dept)
               .where((o) => _q.isEmpty || o.nom.toLowerCase().contains(_q.toLowerCase()))
               .toList();
           return Scaffold(
             floatingActionButton: FloatingActionButton.extended(
               heroTag: 'fab-ouv',
-              onPressed: () => showDialog<bool>(context: context, builder: (_) => const OuvrierForm(null)),
+              onPressed: () => showDialog<bool>(context: context, builder: (_) => OuvrierForm(null, departement: _dept)),
               icon: const Icon(Icons.person_add_alt_1_rounded),
               label: const Text('Ajouter un ouvrier'),
             ),
             body: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
               children: [
+                AutoGrid(minItemWidth: 200, children: [
+                  StatTile(
+                    label: 'Reste à payer (tous)',
+                    value: fmtDA(data.totalResteAPayer),
+                    icon: Icons.account_balance_wallet_rounded,
+                    color: AppColors.green,
+                  ),
+                  StatTile(
+                    label: 'Avances non couvertes',
+                    value: fmtDA(data.totalAvancesNonCouvertes),
+                    icon: Icons.north_east_rounded,
+                    color: AppColors.rose,
+                  ),
+                ]),
+                const SizedBox(height: 14),
                 _ListHeader(
                   onSearch: (v) => setState(() => _q = v),
                   nbInactive: all.where((o) => !o.actif).length,
                   showInactive: _inactive,
                   onShowInactive: (v) => setState(() => _inactive = v),
                 ),
+                if (depts.length > 1) ...[
+                  const SizedBox(height: 10),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(label: Text('Tous (${all.length})'), selected: _dept == null, onSelected: (_) => setState(() => _dept = null)),
+                      ),
+                      for (final d in depts)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text('$d (${all.where((o) => o.departement == d).length})'),
+                            selected: _dept == d,
+                            onSelected: (_) => setState(() => _dept = d),
+                          ),
+                        ),
+                    ]),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 if (list.isEmpty)
                   EmptyState(all.isEmpty ? 'Aucun ouvrier.\nAjoutez les ouvriers de l\'atelier.' : 'Aucun résultat.',
                       icon: Icons.people_outline)
                 else
-                  AutoGrid(minItemWidth: 300, children: [
-                    for (final o in list)
-                      AppCard(
-                        padding: const EdgeInsets.all(14),
-                        onTap: () => Navigator.of(context)
-                            .push(MaterialPageRoute(builder: (_) => OuvrierDetailScreen(ouvrierId: o.id))),
-                        child: Row(children: [
-                          Opacity(opacity: o.actif ? 1 : 0.45, child: NameAvatar(o.nom, size: 50)),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text(o.nom, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16), overflow: TextOverflow.ellipsis),
-                              const SizedBox(height: 2),
-                              Text(
-                                [
-                                  o.telephone ?? 'Pas de téléphone',
-                                  if (!o.actif) 'Inactif',
-                                ].join(' · '),
-                                style: context.tt.bodySmall?.copyWith(color: context.pal.muted),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ]),
-                          ),
-                          PopupMenuButton<String>(
-                            icon: Icon(Icons.more_vert, color: context.pal.muted),
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'fiche', child: Text('Fiche et paie')),
-                              PopupMenuItem(value: 'edit', child: Text('Modifier')),
-                              PopupMenuItem(value: 'del', child: Text('Supprimer')),
-                            ],
-                            onSelected: (v) {
-                              if (v == 'fiche') {
-                                Navigator.of(context).push(MaterialPageRoute(builder: (_) => OuvrierDetailScreen(ouvrierId: o.id)));
-                              } else if (v == 'edit') {
-                                showDialog<bool>(context: context, builder: (_) => OuvrierForm(o));
-                              } else {
-                                _deleteRef(context, 'broderie_ouvriers', o.id, o.nom);
-                              }
-                            },
-                          ),
-                        ]),
-                      ),
+                  AutoGrid(minItemWidth: 320, children: [
+                    for (final o in list) _OuvrierCard(o),
                   ]),
               ],
             ),
@@ -140,9 +140,86 @@ class _OuvriersScreenState extends State<OuvriersScreen> {
       );
 }
 
+class _OuvrierCard extends StatelessWidget {
+  final Ouvrier o;
+  const _OuvrierCard(this.o);
+
+  @override
+  Widget build(BuildContext context) {
+    final solde = data.solde(o.id).solde;
+    final c = soldeColor(solde);
+    return AppCard(
+      padding: const EdgeInsets.all(14),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => OuvrierDetailScreen(ouvrierId: o.id))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Opacity(opacity: o.actif ? 1 : 0.45, child: NameAvatar(o.nom, size: 50)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(o.nom, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16), overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 4),
+              Wrap(spacing: 6, runSpacing: 4, children: [
+                _pill(context, o.departement, AppColors.forName(o.departement)),
+                _pill(context, _modeText(o), context.pal.muted),
+                if (!o.actif) _pill(context, 'Inactif', AppColors.rose),
+              ]),
+            ]),
+          ),
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, color: context.pal.muted),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'avance', child: Text('Donner une avance')),
+              PopupMenuItem(value: 'payer', child: Text('Payer')),
+              PopupMenuItem(value: 'edit', child: Text('Modifier')),
+              PopupMenuItem(value: 'del', child: Text('Supprimer')),
+            ],
+            onSelected: (v) {
+              switch (v) {
+                case 'avance':
+                  openMouvementForm(context, o, TypeMvt.avance);
+                case 'payer':
+                  openMouvementForm(context, o, TypeMvt.paiement, montant: solde > 0 ? solde : null);
+                case 'edit':
+                  showDialog<bool>(context: context, builder: (_) => OuvrierForm(o));
+                default:
+                  _deleteRef(context, 'broderie_ouvriers', o.id, o.nom);
+              }
+            },
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(color: c.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+          child: Row(children: [
+            Icon(solde < -0.005 ? Icons.north_east_rounded : Icons.account_balance_wallet_rounded, size: 18, color: c),
+            const SizedBox(width: 8),
+            Expanded(child: Text(solde < -0.005 ? 'Avance non couverte' : 'Reste à payer', style: TextStyle(color: c, fontWeight: FontWeight.w600))),
+            Text(fmtDA(solde.abs()), style: TextStyle(color: c, fontWeight: FontWeight.w900)),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  static String _modeText(Ouvrier o) => switch (o.modePaie) {
+        ModePaie.points => 'Points broderie',
+        ModePaie.mois => 'Mois · ${fmtDA(o.salaireMensuel)}',
+        ModePaie.piece => 'Pièce · ${fmtDA(o.prixPiece)}',
+      };
+
+  static Widget _pill(BuildContext context, String t, Color c) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(color: c.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(20)),
+        child: Text(t, style: TextStyle(color: c, fontSize: 11.5, fontWeight: FontWeight.w700)),
+      );
+}
+
 class OuvrierForm extends StatefulWidget {
   final Ouvrier? o;
-  const OuvrierForm(this.o, {super.key});
+  final String? departement;
+  const OuvrierForm(this.o, {super.key, this.departement});
 
   @override
   State<OuvrierForm> createState() => _OuvrierFormState();
@@ -152,13 +229,22 @@ class _OuvrierFormState extends State<OuvrierForm> {
   final _form = GlobalKey<FormState>();
   late final _nom = TextEditingController(text: widget.o?.nom);
   late final _tel = TextEditingController(text: widget.o?.telephone);
+  late final _dept = TextEditingController(text: widget.o?.departement ?? widget.departement ?? 'Broderie');
+  late ModePaie _mode = widget.o?.modePaie ?? ((widget.departement ?? 'Broderie') == 'Broderie' ? ModePaie.points : ModePaie.mois);
+  late final _salaire = TextEditingController(text: _fmt(widget.o?.salaireMensuel ?? 0));
+  late final _prix = TextEditingController(text: _fmt(widget.o?.prixPiece ?? 0));
   late bool _actif = widget.o?.actif ?? true;
   bool _busy = false;
+
+  static String _fmt(double v) => v == 0 ? '' : (v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString());
 
   @override
   void dispose() {
     _nom.dispose();
     _tel.dispose();
+    _dept.dispose();
+    _salaire.dispose();
+    _prix.dispose();
     super.dispose();
   }
 
@@ -168,7 +254,16 @@ class _OuvrierFormState extends State<OuvrierForm> {
     try {
       await data.saveRef(
         'broderie_ouvriers',
-        Ouvrier.toRow(nom: _nom.text, telephone: _tel.text, tarif1000: widget.o?.tarif1000 ?? 0, actif: _actif),
+        Ouvrier.toRow(
+          nom: _nom.text,
+          telephone: _tel.text,
+          tarif1000: widget.o?.tarif1000 ?? 0,
+          actif: _actif,
+          departement: _dept.text,
+          modePaie: _mode,
+          salaireMensuel: parseNum(_salaire.text) ?? 0,
+          prixPiece: parseNum(_prix.text) ?? 0,
+        ),
         id: widget.o?.id,
       );
       if (mounted) {
@@ -192,7 +287,7 @@ class _OuvrierFormState extends State<OuvrierForm> {
         children: [
           TextFormField(
             controller: _nom,
-            autofocus: true,
+            autofocus: widget.o == null,
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(labelText: 'Nom et prénom', prefixIcon: Icon(Icons.person_outline)),
             validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
@@ -202,6 +297,57 @@ class _OuvrierFormState extends State<OuvrierForm> {
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(labelText: 'Téléphone (facultatif)', prefixIcon: Icon(Icons.phone_outlined)),
           ),
+          TextFormField(
+            controller: _dept,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Département / poste', prefixIcon: Icon(Icons.apartment_rounded)),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+          ),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final d in data.departements)
+              ChoiceChip(
+                label: Text(d),
+                selected: _dept.text.trim() == d,
+                onSelected: (_) => setState(() {
+                  _dept.text = d;
+                  if (widget.o == null) _mode = d == 'Broderie' ? ModePaie.points : (_mode == ModePaie.points ? ModePaie.mois : _mode);
+                }),
+              ),
+          ]),
+          Text('Mode de paie', style: context.tt.labelLarge),
+          SegmentedButton<ModePaie>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: ModePaie.points, icon: Icon(Icons.blur_on_rounded), label: Text('Points')),
+              ButtonSegment(value: ModePaie.mois, icon: Icon(Icons.calendar_month_rounded), label: Text('Mois')),
+              ButtonSegment(value: ModePaie.piece, icon: Icon(Icons.checkroom_rounded), label: Text('Pièce')),
+            ],
+            selected: {_mode},
+            onSelectionChanged: (s) => setState(() => _mode = s.first),
+          ),
+          if (_mode == ModePaie.points)
+            Text('Payé selon les points du compteur et le type de broderie (Réglages → tarifs).',
+                style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+          if (_mode == ModePaie.mois)
+            TextFormField(
+              controller: _salaire,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Salaire mensuel', suffixText: 'DA', prefixIcon: Icon(Icons.payments_outlined)),
+              validator: (v) {
+                final n = parseNum(v ?? '');
+                return (n == null || n <= 0) ? 'Indiquez le salaire' : null;
+              },
+            ),
+          if (_mode == ModePaie.piece)
+            TextFormField(
+              controller: _prix,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Prix par pièce (par défaut)', suffixText: 'DA', prefixIcon: Icon(Icons.sell_outlined)),
+              validator: (v) {
+                final n = parseNum(v ?? '');
+                return (n == null || n <= 0) ? 'Indiquez le prix' : null;
+              },
+            ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Actif'),

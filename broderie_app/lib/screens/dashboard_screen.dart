@@ -37,6 +37,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   DateTimeRange? _custom;
   String? _ouvrierId;
   List<Production> _rows = [];
+  List<Mouvement> _mvts = [];
+  List<Piece> _pieces = [];
   int? _prevPoints;
   bool _loading = true;
   String? _error;
@@ -93,10 +95,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         data.fetchProduction(r.start, r.end, ouvrierId: _ouvrierId),
         if (prev != null) data.fetchProduction(prev.start, prev.end, ouvrierId: _ouvrierId),
       ]);
+      final money = await Future.wait<Object>([
+        data.fetchMouvements(r.start, r.end, ouvrierId: _ouvrierId),
+        data.fetchPieces(r.start, r.end, ouvrierId: _ouvrierId),
+      ]);
       if (mounted) {
         setState(() {
           _rows = res[0];
           _prevPoints = prev == null ? null : res[1].fold<int>(0, (s, p) => s + p.totalPoints);
+          _mvts = money[0] as List<Mouvement>;
+          _pieces = money[1] as List<Piece>;
         });
       }
     } catch (e) {
@@ -294,6 +302,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ]),
     );
 
+    double sumMvt(TypeMvt t) => _mvts.where((m) => m.type == t).fold<double>(0, (s, m) => s + m.montant);
+    final gainsAutres = _pieces.fold<double>(0, (s, p) => s + p.montant) + sumMvt(TypeMvt.salaire) + sumMvt(TypeMvt.prime);
+    final paieCard = AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const SectionTitle('Paie et avances', subtitle: 'Tous départements'),
+        AutoGrid(minItemWidth: 150, children: [
+          _MiniStat('Reste à payer (total)', fmtDA(data.totalResteAPayer), AppColors.green, Icons.account_balance_wallet_rounded),
+          _MiniStat('Avances (période)', fmtDA(sumMvt(TypeMvt.avance)), AppColors.rose, Icons.north_east_rounded),
+          _MiniStat('Payé (période)', fmtDA(sumMvt(TypeMvt.paiement)), AppColors.sky, Icons.payments_rounded),
+          _MiniStat('Autres gains (pièces, salaires)', fmtDA(gainsAutres), AppColors.teal, Icons.checkroom_rounded),
+        ]),
+        if (data.totalAvancesNonCouvertes > 0) ...[
+          const SizedBox(height: 10),
+          Text('Avances non encore couvertes par le travail : ${fmtDA(data.totalAvancesNonCouvertes)}',
+              style: TextStyle(color: AppColors.rose, fontWeight: FontWeight.w600, fontSize: 12.5)),
+        ],
+      ]),
+    );
+
     return RefreshIndicator(
       onRefresh: _load,
       child: LayoutBuilder(builder: (context, c) {
@@ -342,6 +369,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 12),
               stats,
             ],
+            const SizedBox(height: 16),
+            paieCard,
             const SizedBox(height: 16),
             chart,
             const SizedBox(height: 16),
@@ -485,4 +514,32 @@ class _RankRow extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MiniStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final IconData icon;
+  const _MiniStat(this.label, this.value, this.color, this.icon);
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(14)),
+        child: Row(children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(value, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: color)),
+              ),
+              Text(label, style: context.tt.bodySmall?.copyWith(color: context.pal.muted), maxLines: 2),
+            ]),
+          ),
+        ]),
+      );
 }

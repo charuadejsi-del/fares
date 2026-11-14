@@ -12,14 +12,42 @@ int _toI(dynamic v) {
 
 String? _nullIfEmpty(String? s) => (s == null || s.trim().isEmpty) ? null : s.trim();
 
+/// Mode de paie d'un ouvrier.
+enum ModePaie { points, mois, piece }
+
+extension ModePaieX on ModePaie {
+  String get label => switch (this) {
+        ModePaie.points => 'Points broderie',
+        ModePaie.mois => 'Au mois',
+        ModePaie.piece => 'À la pièce',
+      };
+  static ModePaie parse(String? s) => ModePaie.values.firstWhere((m) => m.name == s, orElse: () => ModePaie.points);
+}
+
 class Ouvrier {
   final String id;
   final String nom;
   final String? telephone;
   final double tarif1000;
   final bool actif;
+  final String departement;
+  final ModePaie modePaie;
+  final double salaireMensuel;
+  final double prixPiece;
 
-  const Ouvrier({required this.id, required this.nom, this.telephone, this.tarif1000 = 0, this.actif = true});
+  const Ouvrier({
+    required this.id,
+    required this.nom,
+    this.telephone,
+    this.tarif1000 = 0,
+    this.actif = true,
+    this.departement = 'Broderie',
+    this.modePaie = ModePaie.points,
+    this.salaireMensuel = 0,
+    this.prixPiece = 0,
+  });
+
+  bool get brodeur => modePaie == ModePaie.points;
 
   factory Ouvrier.fromMap(Map<String, dynamic> m) => Ouvrier(
         id: m['id'] as String,
@@ -27,14 +55,195 @@ class Ouvrier {
         telephone: m['telephone'] as String?,
         tarif1000: _toD(m['tarif_1000']),
         actif: (m['actif'] ?? true) as bool,
+        departement: ((m['departement'] ?? 'Broderie') as String).trim().isEmpty ? 'Broderie' : (m['departement'] as String).trim(),
+        modePaie: ModePaieX.parse(m['mode_paie'] as String?),
+        salaireMensuel: _toD(m['salaire_mensuel']),
+        prixPiece: _toD(m['prix_piece']),
       );
 
-  static Map<String, dynamic> toRow({required String nom, String? telephone, double tarif1000 = 0, bool actif = true}) => {
+  static Map<String, dynamic> toRow({
+    required String nom,
+    String? telephone,
+    double tarif1000 = 0,
+    bool actif = true,
+    String departement = 'Broderie',
+    ModePaie modePaie = ModePaie.points,
+    double salaireMensuel = 0,
+    double prixPiece = 0,
+  }) =>
+      {
         'nom': nom.trim(),
         'telephone': _nullIfEmpty(telephone),
         'tarif_1000': tarif1000,
         'actif': actif,
+        'departement': departement.trim().isEmpty ? 'Broderie' : departement.trim(),
+        'mode_paie': modePaie.name,
+        'salaire_mensuel': salaireMensuel,
+        'prix_piece': prixPiece,
       };
+}
+
+/// Travail payé à la pièce.
+class Piece {
+  final String id;
+  final String ouvrierId;
+  final DateTime date;
+  final String libelle;
+  final double quantite;
+  final double prixUnitaire;
+  final double montant;
+  final String? note;
+
+  const Piece({
+    required this.id,
+    required this.ouvrierId,
+    required this.date,
+    required this.libelle,
+    required this.quantite,
+    required this.prixUnitaire,
+    required this.montant,
+    this.note,
+  });
+
+  factory Piece.fromMap(Map<String, dynamic> m) => Piece(
+        id: m['id'] as String,
+        ouvrierId: m['ouvrier_id'] as String,
+        date: DateTime.parse(m['date_travail'] as String),
+        libelle: (m['libelle'] ?? '') as String,
+        quantite: _toD(m['quantite']),
+        prixUnitaire: _toD(m['prix_unitaire']),
+        montant: _toD(m['montant']),
+        note: m['note'] as String?,
+      );
+
+  static Map<String, dynamic> toRow({
+    required String ouvrierId,
+    required String dateKey,
+    required String libelle,
+    required double quantite,
+    required double prixUnitaire,
+    String? note,
+  }) =>
+      {
+        'ouvrier_id': ouvrierId,
+        'date_travail': dateKey,
+        'libelle': libelle.trim(),
+        'quantite': quantite,
+        'prix_unitaire': prixUnitaire,
+        'note': _nullIfEmpty(note),
+      };
+}
+
+/// Types de mouvements d'argent.
+enum TypeMvt { avance, paiement, salaire, prime, retenue }
+
+extension TypeMvtX on TypeMvt {
+  String get label => switch (this) {
+        TypeMvt.avance => 'Avance',
+        TypeMvt.paiement => 'Paiement',
+        TypeMvt.salaire => 'Salaire',
+        TypeMvt.prime => 'Prime',
+        TypeMvt.retenue => 'Retenue',
+      };
+
+  /// +1 : ajoute au montant dû à l'ouvrier ; −1 : le diminue.
+  int get signe => (this == TypeMvt.salaire || this == TypeMvt.prime) ? 1 : -1;
+
+  static TypeMvt parse(String? s) => TypeMvt.values.firstWhere((t) => t.name == s, orElse: () => TypeMvt.avance);
+}
+
+/// Mouvement d'argent (avance, paiement, salaire, prime, retenue).
+class Mouvement {
+  final String id;
+  final String ouvrierId;
+  final DateTime date;
+  final TypeMvt type;
+  final double montant;
+  final String? note;
+
+  const Mouvement({required this.id, required this.ouvrierId, required this.date, required this.type, required this.montant, this.note});
+
+  factory Mouvement.fromMap(Map<String, dynamic> m) => Mouvement(
+        id: m['id'] as String,
+        ouvrierId: m['ouvrier_id'] as String,
+        date: DateTime.parse(m['date_mvt'] as String),
+        type: TypeMvtX.parse(m['type'] as String?),
+        montant: _toD(m['montant']),
+        note: m['note'] as String?,
+      );
+
+  static Map<String, dynamic> toRow({
+    required String ouvrierId,
+    required String dateKey,
+    required TypeMvt type,
+    required double montant,
+    String? note,
+  }) =>
+      {
+        'ouvrier_id': ouvrierId,
+        'date_mvt': dateKey,
+        'type': type.name,
+        'montant': montant,
+        'note': _nullIfEmpty(note),
+      };
+}
+
+/// Solde global d'un ouvrier (toutes dates). solde > 0 : reste à payer ; < 0 : avance non couverte.
+class Solde {
+  final double gains;
+  final double avances;
+  final double paiements;
+  final double retenues;
+  final double solde;
+  const Solde({this.gains = 0, this.avances = 0, this.paiements = 0, this.retenues = 0, this.solde = 0});
+
+  factory Solde.fromMap(Map<String, dynamic> m) => Solde(
+        gains: _toD(m['gains_broderie']) + _toD(m['gains_pieces']) + _toD(m['salaires']) + _toD(m['primes']),
+        avances: _toD(m['avances']),
+        paiements: _toD(m['paiements']),
+        retenues: _toD(m['retenues']),
+        solde: _toD(m['solde']),
+      );
+}
+
+/// Bilan d'un ouvrier sur une période.
+class Bilan {
+  final double anterieur;
+  final double broderie;
+  final double pieces;
+  final double salaires;
+  final double primes;
+  final double avances;
+  final double paiements;
+  final double retenues;
+  final double reste;
+
+  const Bilan({
+    this.anterieur = 0,
+    this.broderie = 0,
+    this.pieces = 0,
+    this.salaires = 0,
+    this.primes = 0,
+    this.avances = 0,
+    this.paiements = 0,
+    this.retenues = 0,
+    this.reste = 0,
+  });
+
+  double get gains => broderie + pieces + salaires + primes;
+  double get deductions => avances + paiements + retenues;
+
+  factory Bilan.fromMap(Map<String, dynamic> m) => Bilan(
+        anterieur: _toD(m['anterieur']),
+        broderie: _toD(m['gains_broderie']),
+        pieces: _toD(m['gains_pieces']),
+        salaires: _toD(m['salaires']),
+        primes: _toD(m['primes']),
+        avances: _toD(m['avances']),
+        paiements: _toD(m['paiements']),
+        retenues: _toD(m['retenues']),
+        reste: _toD(m['reste']),
+      );
 }
 
 class Dessin {

@@ -16,7 +16,20 @@ class AppData extends ChangeNotifier {
   List<Dessin> dessins = [];
   List<Machine> machines = [];
   List<TypeTravail> types = [];
+  Map<String, Solde> soldes = {};
   bool refsLoaded = false;
+
+  static const departementsParDefaut = ['Broderie', 'Couture', 'Coupe', 'Repassage', 'Finition', 'Emballage'];
+
+  /// Départements utilisés + ceux par défaut.
+  List<String> get departements {
+    final set = <String>{...departementsParDefaut, ...ouvriers.map((o) => o.departement)};
+    return set.toList();
+  }
+
+  Solde solde(String ouvrierId) => soldes[ouvrierId] ?? const Solde();
+  double get totalResteAPayer => soldes.values.fold<double>(0, (s, v) => s + (v.solde > 0 ? v.solde : 0));
+  double get totalAvancesNonCouvertes => soldes.values.fold<double>(0, (s, v) => s + (v.solde < 0 ? -v.solde : 0));
 
   /// Incrémenté à chaque modification de la production, pour que les écrans rechargent.
   int productionVersion = 0;
@@ -58,7 +71,20 @@ class AppData extends ChangeNotifier {
       ]).select();
       types = rows.map(TypeTravail.fromMap).toList()..sort((a, b) => a.ordre.compareTo(b.ordre));
     }
+    await _loadSoldes();
     refsLoaded = true;
+    notifyListeners();
+  }
+
+  Future<void> _loadSoldes() async {
+    try {
+      final rows = await _db.from('broderie_soldes').select();
+      soldes = {for (final r in rows) r['ouvrier_id'] as String: Solde.fromMap(r)};
+    } catch (_) {}
+  }
+
+  Future<void> refreshSoldes() async {
+    await _loadSoldes();
     notifyListeners();
   }
 
@@ -67,6 +93,7 @@ class AppData extends ChangeNotifier {
     dessins = [];
     machines = [];
     types = [];
+    soldes = {};
     refsLoaded = false;
     productionVersion = 0;
   }
@@ -111,7 +138,63 @@ class AppData extends ChangeNotifier {
 
   void _productionChanged() {
     productionVersion++;
+    _loadSoldes().whenComplete(notifyListeners);
     notifyListeners();
+  }
+
+  // ---------------- Pièces & argent ----------------
+
+  Future<List<Piece>> fetchPieces(DateTime from, DateTime to, {String? ouvrierId}) async {
+    var q = _db.from('broderie_pieces').select().gte('date_travail', dateKey(from)).lte('date_travail', dateKey(to));
+    if (ouvrierId != null) q = q.eq('ouvrier_id', ouvrierId);
+    final rows = await q.order('date_travail', ascending: false).order('created_at', ascending: false).limit(5000);
+    return rows.map(Piece.fromMap).toList();
+  }
+
+  Future<List<Mouvement>> fetchMouvements(DateTime from, DateTime to, {String? ouvrierId}) async {
+    var q = _db.from('broderie_mouvements').select().gte('date_mvt', dateKey(from)).lte('date_mvt', dateKey(to));
+    if (ouvrierId != null) q = q.eq('ouvrier_id', ouvrierId);
+    final rows = await q.order('date_mvt', ascending: false).order('created_at', ascending: false).limit(5000);
+    return rows.map(Mouvement.fromMap).toList();
+  }
+
+  Future<void> savePiece(Map<String, dynamic> row, {String? id}) async {
+    if (id == null) {
+      await _db.from('broderie_pieces').insert(row);
+    } else {
+      await _db.from('broderie_pieces').update(row).eq('id', id);
+    }
+    _productionChanged();
+  }
+
+  Future<void> deletePiece(String id) async {
+    await _db.from('broderie_pieces').delete().eq('id', id);
+    _productionChanged();
+  }
+
+  Future<void> saveMouvement(Map<String, dynamic> row, {String? id}) async {
+    if (id == null) {
+      await _db.from('broderie_mouvements').insert(row);
+    } else {
+      await _db.from('broderie_mouvements').update(row).eq('id', id);
+    }
+    _productionChanged();
+  }
+
+  Future<void> deleteMouvement(String id) async {
+    await _db.from('broderie_mouvements').delete().eq('id', id);
+    _productionChanged();
+  }
+
+  Future<Bilan> bilan(String ouvrierId, DateTime from, DateTime to) async {
+    final rows = await _db.rpc('broderie_bilan', params: {
+      'p_ouvrier': ouvrierId,
+      'p_debut': dateKey(from),
+      'p_fin': dateKey(to),
+    });
+    final list = rows as List;
+    if (list.isEmpty) return const Bilan();
+    return Bilan.fromMap(Map<String, dynamic>.from(list.first as Map));
   }
 
   // ---------------- Référentiels ----------------

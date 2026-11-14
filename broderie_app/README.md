@@ -4,6 +4,15 @@ Application native (Flutter) pour **PC Windows** et **Android** qui suit la prod
 points brodés par ouvrier, nombre de robes, points par dessin et montant à payer.
 Les données sont dans **Supabase** : le PC de l'atelier et les téléphones partagent les mêmes chiffres.
 
+## Paie, avances et autres départements (v4)
+- Chaque ouvrier a un **département** (Broderie, Couture, Coupe, Repassage, Finition, Emballage… ou libre) et un **mode de paie** :
+  **Points** (broderie, compteur), **Au mois** (salaire fixe, bouton « Salaire du mois »), **À la pièce** (quantité × prix).
+- **Mouvements d'argent** : avance, paiement, salaire, prime, retenue.
+- **Reste à payer = gains (broderie + pièces + salaires + primes) − (avances + paiements + retenues)**.
+  Un solde négatif signale une avance non encore couverte par le travail.
+- **Fiche ouvrier** : solde global, boutons Avance / Payer / Salaire / Pièces / Prime / Retenue, bilan de la période avec solde reporté, journal complet, fiche de paie PDF.
+- Base : tables `broderie_pieces`, `broderie_mouvements`, vue `broderie_soldes`, fonction `broderie_bilan()` (voir `supabase/v4_paie_avances.sql`).
+
 ## Principe de calcul (v3)
 On relève le **compteur de points** de la machine (ex. machine 15 têtes) à la fin de chaque équipe
 (**jour 8 h–20 h** ou **nuit 20 h–8 h**). Le montant dépend du **type de broderie** :

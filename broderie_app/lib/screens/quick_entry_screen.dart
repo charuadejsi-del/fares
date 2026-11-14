@@ -127,13 +127,13 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ouvriers = data.ouvriers.where((o) => o.actif).toList();
+    final ouvriers = data.ouvriers.where((o) => o.actif && o.brodeur).toList();
     final types = data.types.where((t) => t.actif).toList();
 
     if (ouvriers.isEmpty) {
       return ListView(padding: const EdgeInsets.all(16), children: [
         EmptyState(
-          'Pour commencer, ajoutez vos ouvriers.',
+          'Aucun brodeur actif.\nAjoutez un ouvrier avec le mode de paie « Points ».',
           icon: Icons.rocket_launch_outlined,
           action: widget.onGoToRefs == null
               ? null

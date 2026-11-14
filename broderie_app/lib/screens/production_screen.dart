@@ -146,8 +146,8 @@ class _ProductionScreenState extends State<ProductionScreen> {
 
 /// Ouvre le formulaire détaillé (ajout ou modification).
 Future<void> openProductionForm(BuildContext context, [Production? p]) async {
-  if (data.ouvriers.where((o) => o.actif).isEmpty) {
-    showSnack(context, 'Ajoutez d\'abord au moins un ouvrier.', error: true);
+  if (p == null && data.ouvriers.where((o) => o.actif && o.brodeur).isEmpty) {
+    showSnack(context, 'Ajoutez d\'abord un brodeur (mode de paie « Points »).', error: true);
     return;
   }
   final saved = await showDialog<bool>(context: context, builder: (_) => ProductionForm(existing: p));
@@ -321,7 +321,7 @@ class _ProductionFormState extends State<ProductionForm> {
 
   @override
   Widget build(BuildContext context) {
-    final ouvriers = data.ouvriers.where((o) => o.actif || o.id == _ex?.ouvrierId).toList();
+    final ouvriers = data.ouvriers.where((o) => (o.actif && o.brodeur) || o.id == _ex?.ouvrierId).toList();
     final types = data.types.where((t) => t.actif || t.id == _ex?.typeId).toList();
     final machines = data.machines.where((m) => m.actif || m.id == _ex?.machineId).toList();
     final pts = parseInt(_points.text) ?? 0;
