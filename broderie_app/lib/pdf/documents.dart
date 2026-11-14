@@ -399,10 +399,14 @@ Future<Uint8List> buildReleveClient({
 
 // ============================================================== étiquettes QR
 
-enum FormatEtiquette { a4, thermique }
+enum FormatEtiquette { a4Grand, a4, thermique }
 
 extension FormatEtiquetteX on FormatEtiquette {
-  String get label => this == FormatEtiquette.a4 ? 'Feuille A4 (24 étiquettes 70 × 37 mm)' : 'Imprimante d\'étiquettes (50 × 30 mm)';
+  String get label => switch (this) {
+        FormatEtiquette.a4Grand => 'Grand QR : 1 par feuille A4',
+        FormatEtiquette.a4 => 'Feuille A4 (24 étiquettes 70 × 37 mm)',
+        FormatEtiquette.thermique => 'Imprimante d\'étiquettes (50 × 30 mm)',
+      };
 }
 
 Future<Uint8List> buildEtiquettes(List<(Produit, int)> items, {FormatEtiquette format = FormatEtiquette.a4, bool prix = true}) async {
@@ -431,7 +435,30 @@ Future<Uint8List> buildEtiquettes(List<(Produit, int)> items, {FormatEtiquette f
     );
   }
 
-  if (format == FormatEtiquette.thermique) {
+  if (format == FormatEtiquette.a4Grand) {
+    for (final p in etiquettes) {
+      doc.addPage(pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(28),
+        build: (_) => pw.Column(
+          mainAxisAlignment: pw.MainAxisAlignment.center,
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: [
+            pw.Text(p.reference, style: pw.TextStyle(fontSize: 54, fontWeight: pw.FontWeight.bold, letterSpacing: 2)),
+            pw.SizedBox(height: 18),
+            pw.BarcodeWidget(barcode: qr, data: p.reference, width: 165 * PdfPageFormat.mm, height: 165 * PdfPageFormat.mm, drawText: false),
+            pw.SizedBox(height: 22),
+            pw.Text(p.designation, textAlign: pw.TextAlign.center, style: pw.TextStyle(fontSize: 26, fontWeight: pw.FontWeight.bold)),
+            if (p.variante.isNotEmpty) pw.Text(p.variante, textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 20, color: _grey)),
+            if (prix && p.prixGros > 0) ...[
+              pw.SizedBox(height: 10),
+              pw.Text('Prix de gros : ${fmtDA(p.prixGros)}', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: _violet)),
+            ],
+          ],
+        ),
+      ));
+    }
+  } else if (format == FormatEtiquette.thermique) {
     const w = 50 * PdfPageFormat.mm, h = 30 * PdfPageFormat.mm;
     for (final p in etiquettes) {
       doc.addPage(pw.Page(pageFormat: const PdfPageFormat(w, h), margin: pw.EdgeInsets.zero, build: (_) => etiquette(p, w, h)));

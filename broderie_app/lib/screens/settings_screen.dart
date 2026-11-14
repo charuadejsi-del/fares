@@ -46,8 +46,8 @@ class SettingsScreen extends StatelessWidget {
               child: Column(children: [
                 ListTile(
                   leading: const Icon(Icons.manage_accounts_rounded, color: AppColors.gold),
-                  title: const Text('Employés et accès', style: TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: const Text('Créer des comptes et choisir leurs espaces'),
+                  title: const Text('Comptes et accès au logiciel', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: const Text('Pour ceux qui utilisent l\'application (pas les ouvriers)'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmployesScreen())),
                 ),

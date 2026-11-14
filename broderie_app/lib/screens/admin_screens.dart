@@ -279,8 +279,9 @@ class _EmployesScreenState extends State<EmployesScreen> {
                 Icon(Icons.info_outline_rounded, color: context.cs.primary),
                 const SizedBox(width: 12),
                 const Expanded(
-                  child: Text('Chaque employé se connecte avec son identifiant et son mot de passe. '
-                      'Il ne voit que les espaces que vous cochez : Broderie, Paie & avances, Stock & ventes.'),
+                  child: Text('Comptes de connexion au logiciel (gérant, magasinier, caissier…). '
+                      'Chacun ne voit que les espaces cochés.\n'
+                      'Les ouvriers sans accès (brodeurs, ouvriers au mois) s\'ajoutent dans l\'onglet « Ouvriers ».'),
                 ),
               ]),
             ),

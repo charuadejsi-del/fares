@@ -97,6 +97,18 @@ class _OuvriersScreenState extends State<OuvriersScreen> {
                     color: AppColors.rose,
                   ),
                 ]),
+                const SizedBox(height: 12),
+                AppCard(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(children: [
+                    Icon(Icons.info_outline_rounded, color: context.cs.primary),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text('Ici : les ouvriers de l\'atelier, sans compte ni accès au logiciel. '
+                          'Brodeurs sur les machines → mode « Points ». Autres ouvriers → « Mois » (salaire fixe) ou « Pièce ».'),
+                    ),
+                  ]),
+                ),
                 const SizedBox(height: 14),
                 _ListHeader(
                   onSearch: (v) => setState(() => _q = v),

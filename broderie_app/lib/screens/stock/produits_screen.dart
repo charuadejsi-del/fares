@@ -374,8 +374,49 @@ class _MouvementStockSheetState extends State<MouvementStockSheet> {
 
 // ======================================================================= formulaire produit
 
-Future<String?> ouvrirProduitForm(BuildContext context, {Produit? produit, String? reference}) =>
-    showDialog<String>(context: context, builder: (_) => ProduitForm(produit: produit, reference: reference));
+Future<String?> ouvrirProduitForm(BuildContext context, {Produit? produit, String? reference}) async {
+  final id = await showDialog<String>(context: context, builder: (_) => ProduitForm(produit: produit, reference: reference));
+  if (produit == null && id != null && context.mounted) {
+    final p = stock.produit(id);
+    if (p == null) return id;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Imprimer le QR code ?'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+            child: BarcodeWidget(barcode: Barcode.qrCode(), data: p.reference, width: 160, height: 160, drawText: false),
+          ),
+          const SizedBox(height: 12),
+          Text(p.reference, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          Text(p.libelle),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Plus tard')),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(c, true),
+            icon: const Icon(Icons.print_rounded),
+            label: const Text('Imprimer en grand (A4)'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await imprimerQrGrand(context, p);
+  }
+  return id;
+}
+
+/// Imprime le QR code d'un produit en grand sur une feuille A4.
+Future<void> imprimerQrGrand(BuildContext context, Produit p) async {
+  try {
+    final bytes = await buildEtiquettes([(p, 1)], format: FormatEtiquette.a4Grand);
+    await imprimer(bytes, 'QR_${p.reference}.pdf');
+  } catch (e) {
+    if (context.mounted) showSnack(context, errorMessage(e), error: true);
+  }
+}
 
 class ProduitForm extends StatefulWidget {
   final Produit? produit;
@@ -557,9 +598,9 @@ class EtiquettesDialog extends StatefulWidget {
 class _EtiquettesDialogState extends State<EtiquettesDialog> {
   late final Map<String, TextEditingController> _qte = {
     for (final p in widget.produits)
-      p.id: TextEditingController(text: '${widget.quantiteParStock ? (p.stock > 0 ? p.stock : 1) : 1}'),
+      p.id: TextEditingController(text: '${widget.quantiteParStock && widget.produits.length > 1 ? (p.stock > 0 ? p.stock : 1) : 1}'),
   };
-  FormatEtiquette _format = FormatEtiquette.a4;
+  late FormatEtiquette _format = widget.produits.length == 1 ? FormatEtiquette.a4Grand : FormatEtiquette.a4;
   bool _prix = true;
   bool _busy = false;
 
@@ -762,10 +803,15 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
                   icon: const Icon(Icons.indeterminate_check_box_rounded),
                   label: const Text('Retirer / inventaire'),
                 ),
+                FilledButton.tonalIcon(
+                  onPressed: () => imprimerQrGrand(context, p),
+                  icon: const Icon(Icons.qr_code_2_rounded),
+                  label: const Text('QR en grand (A4)'),
+                ),
                 OutlinedButton.icon(
                   onPressed: () => showDialog<void>(context: context, builder: (_) => EtiquettesDialog(produits: [p])),
                   icon: const Icon(Icons.print_rounded),
-                  label: const Text('Imprimer étiquettes'),
+                  label: const Text('Petites étiquettes'),
                 ),
               ]),
               const SizedBox(height: 16),

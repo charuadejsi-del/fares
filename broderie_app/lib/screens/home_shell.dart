@@ -38,7 +38,7 @@ class _HomeShellState extends State<HomeShell> {
         if (session.peut(Espace.broderie))
           const _Dest(_Cle.broderie, 'Broderie', 'Broderie', Icons.blur_on_outlined, Icons.blur_on_rounded),
         if (session.peut(Espace.paie))
-          const _Dest(_Cle.paie, 'Paie', 'Ouvriers · paie & avances', Icons.account_balance_wallet_outlined, Icons.account_balance_wallet_rounded),
+          const _Dest(_Cle.paie, 'Ouvriers', 'Ouvriers · salaires & avances', Icons.groups_outlined, Icons.groups_rounded),
         if (session.peut(Espace.stock))
           const _Dest(_Cle.stock, 'Stock', 'Stock & ventes', Icons.inventory_2_outlined, Icons.inventory_2_rounded),
       ];
