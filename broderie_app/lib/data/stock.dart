@@ -443,13 +443,18 @@ class InfoModele {
   final List<String> photos;
   final bool publie;
   final bool vedette;
-  const InfoModele({required this.modele, this.description, this.photos = const [], this.publie = true, this.vedette = false});
+  /// chemin de photo -> couleur
+  final Map<String, String> photosCouleurs;
+  const InfoModele({required this.modele, this.description, this.photos = const [], this.publie = true, this.vedette = false, this.photosCouleurs = const {}});
   factory InfoModele.fromMap(Map<String, dynamic> m) => InfoModele(
         modele: m['modele'] as String,
         description: _s(m['description']),
         photos: [for (final x in (m['photos'] as List? ?? const [])) x.toString()],
         publie: (m['publie'] ?? true) as bool,
         vedette: (m['vedette'] ?? false) as bool,
+        photosCouleurs: {
+          for (final e in ((m['photos_couleurs'] as Map?) ?? const {}).entries) e.key.toString(): e.value.toString(),
+        },
       );
 }
 
@@ -505,7 +510,7 @@ class StockData extends ChangeNotifier {
       _db.from('stock_etat').select().order('reference'),
       _db.from('stock_clients_soldes').select().order('nom'),
       _db.from('stock_prix_clients').select('client_id, produit_id, prix'),
-      _db.from('stock_modeles_info').select('modele, description, photos, publie, vedette'),
+      _db.from('stock_modeles_info').select('modele, description, photos, publie, vedette, photos_couleurs'),
     ]);
     infos = {for (final r in res[3]) r['modele'] as String: InfoModele.fromMap(r)};
     produits = res[0].map(Produit.fromMap).toList();
@@ -528,7 +533,7 @@ class StockData extends ChangeNotifier {
   Future<String> envoyerPhotoVitrine(Uint8List bytes, {String ext = 'jpg', String dossier = 'modeles'}) async {
     final path = '${session.atelierId}/$dossier/${DateTime.now().millisecondsSinceEpoch}.$ext';
     await _db.storage.from('vitrine').uploadBinary(path, bytes,
-        fileOptions: FileOptions(contentType: ext == 'png' ? 'image/png' : 'image/jpeg', upsert: true, cacheControl: '31536000'));
+        fileOptions: FileOptions(contentType: ext == 'png' ? 'image/png' : 'image/jpeg', cacheControl: '31536000'));
     return path;
   }
 
@@ -538,12 +543,15 @@ class StockData extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> saveInfo(String cle, {String? description, List<String>? photos, bool? publie, bool? vedette}) async {
+  Future<void> saveInfo(String cle, {String? description, List<String>? photos, bool? publie, bool? vedette, Map<String, String>? photosCouleurs}) async {
     final cur = info(cle);
+    final liste = photos ?? cur.photos;
+    final pc = {for (final e in (photosCouleurs ?? cur.photosCouleurs).entries) if (liste.contains(e.key)) e.key: e.value};
     final row = {
+      'photos_couleurs': pc,
       'modele': cle,
       'description': description ?? cur.description,
-      'photos': photos ?? cur.photos,
+      'photos': liste,
       'publie': publie ?? cur.publie,
       'vedette': vedette ?? cur.vedette,
       'updated_at': DateTime.now().toUtc().toIso8601String(),

@@ -72,3 +72,10 @@ returns jsonb language sql stable security definer set search_path = '' as $$
 $$;
 revoke execute on function public.vitrine_catalogue(uuid) from public;
 grant execute on function public.vitrine_catalogue(uuid) to anon, authenticated;
+
+-- v8c : l'envoi en mode "upsert" exige aussi le droit de lecture
+create policy vitrine_select on storage.objects for select to authenticated
+  using (bucket_id = 'vitrine' and (storage.foldername(name))[1] = (select public.atelier_courant())::text);
+
+-- v9 : photos associées à une couleur (chemin -> couleur) ; vitrine_catalogue renvoie aussi photos_couleurs et cree
+alter table public.stock_modeles_info add column if not exists photos_couleurs jsonb not null default '{}';

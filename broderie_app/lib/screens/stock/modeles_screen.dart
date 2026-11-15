@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -249,7 +250,21 @@ class _ModeleFormState extends State<ModeleForm> {
   late List<String> _couleurs = [...?m?.couleurs.whereType<String>()];
   late List<String> _tailles = [...?m?.tailles.whereType<String>()];
   final _qte = <String, TextEditingController>{};
+  final List<(Uint8List, String)> _photos = [];
+  final _desc = TextEditingController();
   bool _busy = false;
+
+  Future<void> _choisirPhotos() async {
+    try {
+      final files = await ImagePicker().pickMultiImage(maxWidth: 1600, maxHeight: 2000, imageQuality: 85);
+      for (final f in files.take(12 - _photos.length)) {
+        _photos.add((await f.readAsBytes(), f.name.toLowerCase().endsWith('.png') ? 'png' : 'jpg'));
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) showSnack(context, errorMessage(e), error: true);
+    }
+  }
 
   static String _n(double? v) => v == null || v == 0 ? '' : (v == v.roundToDouble() ? v.toInt().toString() : v.toString());
 
@@ -303,6 +318,13 @@ class _ModeleFormState extends State<ModeleForm> {
         quantites: lireGrille(_qte),
         existant: m,
       );
+      if (_photos.isNotEmpty || _desc.text.trim().isNotEmpty) {
+        final chemins = <String>[];
+        for (final (b, ext) in _photos) {
+          chemins.add(await stock.envoyerPhotoVitrine(b, ext: ext));
+        }
+        await stock.saveInfo(cle, photos: [...stock.info(cle).photos, ...chemins], description: _desc.text.trim().isEmpty ? null : _desc.text.trim());
+      }
       if (!mounted) return;
       final cree = stock.modeleParCle(cle);
       Navigator.pop(context, cle);
@@ -371,7 +393,61 @@ class _ModeleFormState extends State<ModeleForm> {
               ]),
             ]),
           ),
-          const SizedBox(height: 12),
+          if (m == null) ...[
+            const SizedBox(height: 12),
+            AppCard(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                SectionTitle('Photos pour le site', subtitle: '${_photos.length}/12 · la première est la photo principale'),
+                SizedBox(
+                  height: 130,
+                  child: ListView(scrollDirection: Axis.horizontal, children: [
+                    for (final (k, (b, _)) in _photos.indexed)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Stack(children: [
+                          ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.memory(b, width: 100, height: 130, fit: BoxFit.cover)),
+                          Positioned(
+                            right: 2,
+                            top: 2,
+                            child: IconButton.filled(
+                              style: IconButton.styleFrom(backgroundColor: Colors.black54, minimumSize: const Size(28, 28), padding: EdgeInsets.zero),
+                              iconSize: 16,
+                              onPressed: () => setState(() => _photos.removeAt(k)),
+                              icon: const Icon(Icons.close, color: Colors.white),
+                            ),
+                          ),
+                        ]),
+                      ),
+                    if (_photos.length < 12)
+                      InkWell(
+                        onTap: _choisirPhotos,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 100,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.gold.withValues(alpha: 0.6), width: 1.4),
+                            color: AppColors.gold.withValues(alpha: 0.06),
+                          ),
+                          child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                            Icon(Icons.add_photo_alternate_rounded, color: AppColors.gold, size: 30),
+                            SizedBox(height: 4),
+                            Text('Ajouter', style: TextStyle(fontWeight: FontWeight.w700)),
+                          ]),
+                        ),
+                      ),
+                  ]),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _desc,
+                  maxLines: 3,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(labelText: 'Description sur le site (facultatif)', prefixIcon: Icon(Icons.notes_rounded)),
+                ),
+              ]),
+            ),
+          ],          const SizedBox(height: 12),
           AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               SectionTitle('Couleurs', subtitle: _couleurs.isEmpty ? 'Aucune couleur choisie : modèle sans couleur' : '${_couleurs.length} couleur(s)'),
@@ -846,6 +922,36 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
     await stock.saveInfo(_cle, photos: photos);
   }
 
+  Future<void> _couleurPhoto(String path) async {
+    final cur = stock.info(_cle).photosCouleurs[path];
+    final choix = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Couleur de cette photo'),
+        children: [
+          for (final c in widget.m.couleurs.whereType<String>())
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, c),
+              child: Row(children: [
+                Pastille(c),
+                const SizedBox(width: 10),
+                Text(c, style: TextStyle(fontWeight: c == cur ? FontWeight.w900 : FontWeight.w500)),
+              ]),
+            ),
+          SimpleDialogOption(onPressed: () => Navigator.pop(ctx, ''), child: const Text('Aucune couleur')),
+        ],
+      ),
+    );
+    if (choix == null) return;
+    final pc = {...stock.info(_cle).photosCouleurs};
+    if (choix.isEmpty) {
+      pc.remove(path);
+    } else {
+      pc[path] = choix;
+    }
+    await stock.saveInfo(_cle, photosCouleurs: pc);
+  }
+
   Future<void> _description() async {
     final c = TextEditingController(text: stock.info(_cle).description);
     final ok = await showDialog<bool>(
@@ -892,6 +998,20 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
                           child: Image.network(stock.urlPublique(p), width: 116, height: 150, fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => Container(width: 116, color: context.pal.surface2, child: const Icon(Icons.broken_image_outlined))),
                         ),
+                        if (i.photosCouleurs[p] != null)
+                          Positioned(
+                            left: 6,
+                            bottom: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                Pastille(i.photosCouleurs[p], size: 12),
+                                const SizedBox(width: 4),
+                                Text(i.photosCouleurs[p]!, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                              ]),
+                            ),
+                          ),
                         if (k == 0)
                           Positioned(
                             left: 6,
@@ -913,9 +1033,15 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
                             ),
                             itemBuilder: (_) => [
                               if (k > 0) const PopupMenuItem(value: 'main', child: Text('Mettre en photo principale')),
+                              if (widget.m.couleurs.whereType<String>().isNotEmpty)
+                                const PopupMenuItem(value: 'col', child: Text('Associer à une couleur')),
                               const PopupMenuItem(value: 'del', child: Text('Retirer')),
                             ],
-                            onSelected: (v) => v == 'main' ? _principale(p) : _retirer(p),
+                            onSelected: (v) => switch (v) {
+                              'main' => _principale(p),
+                              'col' => _couleurPhoto(p),
+                              _ => _retirer(p),
+                            },
                           ),
                         ),
                       ]),
