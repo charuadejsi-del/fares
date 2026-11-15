@@ -15,7 +15,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Intl.defaultLocale = 'fr_FR';
   await initializeDateFormatting('fr_FR');
-  await ThemeController.instance.load();
+  await Future.wait([ThemeController.instance.load(), UiPrefs.instance.load()]);
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
   runApp(const AtelierApp());
 }

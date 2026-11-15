@@ -53,45 +53,50 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Widget _marque({bool grand = false}) => Column(crossAxisAlignment: grand ? CrossAxisAlignment.start : CrossAxisAlignment.center, children: [
+        Container(
+          padding: EdgeInsets.all(grand ? 18 : 14),
+          decoration: BoxDecoration(
+            gradient: AppColors.goldGradient,
+            borderRadius: BorderRadius.circular(grand ? 26 : 20),
+            boxShadow: [BoxShadow(color: AppColors.gold.withValues(alpha: 0.45), blurRadius: 34)],
+          ),
+          child: Icon(Icons.diamond_rounded, size: grand ? 46 : 36, color: AppColors.ink),
+        ),
+        SizedBox(height: grand ? 26 : 14),
+        Text('Atelier', style: TextStyle(color: Colors.white, fontSize: grand ? 44 : 30, fontWeight: FontWeight.w900, letterSpacing: -1, height: 1)),
+        Text('Broderie · Couture · Gros',
+            style: TextStyle(color: AppColors.gold, fontSize: grand ? 15 : 12.5, fontWeight: FontWeight.w800, letterSpacing: 2.4)),
+      ]);
+
+  static const _atouts = [
+    (Icons.blur_on_rounded, 'Production broderie', 'Points, robes et paie des brodeurs'),
+    (Icons.groups_rounded, 'Ouvriers & paie', 'Avances, salaires, clôture du mois'),
+    (Icons.point_of_sale_rounded, 'Stock & ventes en gros', 'Factures, clients, versements'),
+    (Icons.shield_moon_rounded, 'Contrôle total', 'Accès par employé et journal des actions'),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return Scaffold(
-      body: Container(
+    final large = MediaQuery.sizeOf(context).width >= 900;
+    final carte = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.violetDeep, t.scaffoldBackgroundColor, t.scaffoldBackgroundColor],
-            stops: const [0, 0.55, 1],
-          ),
+          color: t.colorScheme.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 40, offset: const Offset(0, 18))],
         ),
-        child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Form(
+        padding: const EdgeInsets.all(28),
+        child: Form(
                   key: _form,
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          gradient: AppColors.goldGradient,
-                          borderRadius: BorderRadius.circular(22),
-                          boxShadow: [BoxShadow(color: AppColors.gold.withValues(alpha: 0.4), blurRadius: 24)],
-                        ),
-                        child: const Icon(Icons.diamond_rounded, size: 40, color: AppColors.ink),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text('Atelier Broderie', textAlign: TextAlign.center, style: t.textTheme.headlineSmall),
-                    Text(_signup ? 'Créer le compte administrateur de l\'atelier' : 'Connexion',
-                        textAlign: TextAlign.center, style: t.textTheme.bodyMedium),
+                    Text(_signup ? 'Nouvel atelier' : 'Bienvenue', style: t.textTheme.headlineSmall),
+                    const SizedBox(height: 4),
+                    Text(_signup ? 'Créer le compte administrateur de l\'atelier' : 'Connectez-vous pour ouvrir votre atelier',
+                        style: t.textTheme.bodyMedium?.copyWith(color: t.extension<AppPalette>()?.muted)),
                     const SizedBox(height: 24),
                     TextFormField(
                       controller: _email,
@@ -140,11 +145,76 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ]),
                 ),
-              ),
+      ),
+    );
+    const fond = BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF07090E), Color(0xFF141B2E), Color(0xFF3A2C0C)],
+        stops: [0, 0.6, 1],
+      ),
+    );
+    if (large) {
+      return Scaffold(
+        body: Row(children: [
+          Expanded(
+            flex: 5,
+            child: Container(
+              decoration: fond,
+              padding: const EdgeInsets.fromLTRB(64, 56, 48, 40),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _marque(grand: true),
+                const Spacer(),
+                for (final a in _atouts)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 18),
+                    child: Row(children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.gold.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
+                        ),
+                        child: Icon(a.$1, color: AppColors.gold, size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(a.$2, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                        Text(a.$3, style: const TextStyle(color: Color(0xFFB7BDCB), fontSize: 13)),
+                      ]),
+                    ]),
+                  ),
+                const Spacer(),
+                const Text('© Gestion d\'atelier — application native Windows & Android',
+                    style: TextStyle(color: Color(0xFF6B7286), fontSize: 12)),
+              ]),
+            ),
+          ),
+          Container(width: 2, decoration: const BoxDecoration(gradient: AppColors.goldGradient)),
+          Expanded(
+            flex: 4,
+            child: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(32), child: carte)),
+          ),
+        ]),
+      );
+    }
+    return Scaffold(
+      body: Container(
+        decoration: fond,
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(22),
+              child: Column(children: [
+                _marque(),
+                const SizedBox(height: 26),
+                carte,
+              ]),
             ),
           ),
         ),
-      ),
       ),
     );
   }

@@ -6,7 +6,8 @@ import 'theme.dart';
 import 'utils.dart';
 
 /// Carte de base : surface, bordure fine, coins arrondis.
-class AppCard extends StatelessWidget {
+/// Sur PC, une carte cliquable se soulève et s'illumine d'or au survol.
+class AppCard extends StatefulWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
@@ -14,26 +15,50 @@ class AppCard extends StatelessWidget {
   const AppCard({super.key, required this.child, this.padding = const EdgeInsets.all(18), this.onTap, this.gradient});
 
   @override
+  State<AppCard> createState() => _AppCardState();
+}
+
+class _AppCardState extends State<AppCard> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
     final r = BorderRadius.circular(18);
-    return Material(
-      color: Colors.transparent,
-      child: Ink(
+    final actif = _hover && widget.onTap != null;
+    final dark = context.isDark;
+    return MouseRegion(
+      onEnter: widget.onTap == null ? null : (_) => setState(() => _hover = true),
+      onExit: widget.onTap == null ? null : (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        transform: Matrix4.translationValues(0, actif ? -2 : 0, 0),
         decoration: BoxDecoration(
-          color: gradient == null ? context.cs.surface : null,
-          gradient: gradient,
           borderRadius: r,
-          border: gradient == null
-              ? Border.all(color: context.pal.line)
-              : Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
-          boxShadow: context.isDark
-              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 22, offset: const Offset(0, 10))]
-              : [BoxShadow(color: const Color(0xFF6E5216).withValues(alpha: 0.07), blurRadius: 20, offset: const Offset(0, 8))],
+          boxShadow: [
+            if (actif) BoxShadow(color: AppColors.gold.withValues(alpha: dark ? 0.16 : 0.18), blurRadius: 26, offset: const Offset(0, 10)),
+            dark
+                ? BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 22, offset: const Offset(0, 10))
+                : BoxShadow(color: const Color(0xFF6E5216).withValues(alpha: 0.07), blurRadius: 20, offset: const Offset(0, 8)),
+          ],
         ),
-        child: InkWell(
-          borderRadius: r,
-          onTap: onTap,
-          child: Padding(padding: padding, child: child),
+        child: Material(
+          color: Colors.transparent,
+          child: Ink(
+            decoration: BoxDecoration(
+              color: widget.gradient == null ? context.cs.surface : null,
+              gradient: widget.gradient,
+              borderRadius: r,
+              border: Border.all(
+                color: widget.gradient != null || actif ? AppColors.gold.withValues(alpha: actif ? 0.6 : 0.35) : context.pal.line,
+              ),
+            ),
+            child: InkWell(
+              borderRadius: r,
+              onTap: widget.onTap,
+              child: Padding(padding: widget.padding, child: widget.child),
+            ),
+          ),
         ),
       ),
     );
@@ -50,6 +75,12 @@ class SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 14),
         child: Row(children: [
+          Container(
+            width: 4,
+            height: subtitle == null ? 20 : 34,
+            margin: const EdgeInsets.only(right: 10),
+            decoration: BoxDecoration(gradient: AppColors.goldGradient, borderRadius: BorderRadius.circular(3)),
+          ),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(title, style: context.tt.titleMedium),

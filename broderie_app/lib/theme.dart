@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,10 +14,15 @@ class AppColors {
   static const ink = Color(0xFF0E1320);
 
   // Sombre
-  static const darkBg = Color(0xFF07090E);
-  static const darkSurface = Color(0xFF10141D);
-  static const darkSurface2 = Color(0xFF181D29);
-  static const darkLine = Color(0xFF242A39);
+  static const darkBg = Color(0xFF0A0C11);
+  static const darkSurface = Color(0xFF12151D);
+  static const darkSurface2 = Color(0xFF1A1E29);
+  static const darkLine = Color(0xFF262B38);
+
+  // Barre latérale (obsidienne)
+  static const sidebar = Color(0xFF080A0F);
+  static const sidebarHover = Color(0xFF141824);
+  static const champagne = Color(0xFFF3DC8C);
 
   // Clair (ivoire)
   static const lightBg = Color(0xFFF6F3EC);
@@ -79,6 +85,23 @@ extension PaletteX on BuildContext {
   bool get isDark => Theme.of(this).brightness == Brightness.dark;
 }
 
+/// PC (Windows, macOS, Linux) : souris, clavier, écran large.
+bool get estBureau =>
+    !kIsWeb && (defaultTargetPlatform == TargetPlatform.windows || defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.linux);
+
+/// Transition PC : fondu + léger glissement, rapide et sobre (style Windows 11).
+class _TransitionBureau extends PageTransitionsBuilder {
+  const _TransitionBureau();
+  @override
+  Widget buildTransitions<T>(PageRoute<T> route, BuildContext context, Animation<double> a, Animation<double> b, Widget child) {
+    final c = CurvedAnimation(parent: a, curve: Curves.easeOutCubic);
+    return FadeTransition(
+      opacity: c,
+      child: SlideTransition(position: Tween(begin: const Offset(0, 0.025), end: Offset.zero).animate(c), child: child),
+    );
+  }
+}
+
 ThemeData buildTheme(Brightness b) {
   final dark = b == Brightness.dark;
   final bg = dark ? AppColors.darkBg : AppColors.lightBg;
@@ -96,7 +119,23 @@ ThemeData buildTheme(Brightness b) {
     surfaceContainerHigh: dark ? AppColors.darkSurface2 : AppColors.lightSurface2,
     outlineVariant: line,
   );
-  final base = ThemeData(useMaterial3: true, colorScheme: cs, brightness: b);
+  final base = ThemeData(
+    useMaterial3: true,
+    colorScheme: cs,
+    brightness: b,
+    // Police du système : Segoe UI Variable sur Windows, Roboto sur Android → 100 % natif
+    fontFamily: defaultTargetPlatform == TargetPlatform.windows ? 'Segoe UI Variable Text' : null,
+    fontFamilyFallback: const ['Segoe UI', 'Roboto'],
+    visualDensity: estBureau ? VisualDensity.compact : VisualDensity.standard,
+    materialTapTargetSize: estBureau ? MaterialTapTargetSize.shrinkWrap : MaterialTapTargetSize.padded,
+    pageTransitionsTheme: const PageTransitionsTheme(builders: {
+      TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
+      TargetPlatform.windows: _TransitionBureau(),
+      TargetPlatform.linux: _TransitionBureau(),
+      TargetPlatform.macOS: _TransitionBureau(),
+    }),
+    splashFactory: estBureau ? InkRipple.splashFactory : InkSparkle.splashFactory,
+  );
   final radius = BorderRadius.circular(12);
   return base.copyWith(
     scaffoldBackgroundColor: bg,
@@ -186,7 +225,117 @@ ThemeData buildTheme(Brightness b) {
       foregroundColor: dark ? AppColors.ink : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
     ),
+    cardTheme: CardThemeData(
+      color: surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: line)),
+    ),
+    listTileTheme: ListTileThemeData(
+      shape: RoundedRectangleBorder(borderRadius: radius),
+      selectedColor: dark ? AppColors.gold : AppColors.violetDeep,
+      selectedTileColor: AppColors.gold.withValues(alpha: 0.12),
+      iconColor: dark ? const Color(0xFFB7BDCB) : const Color(0xFF6F6858),
+    ),
+    scrollbarTheme: ScrollbarThemeData(
+      thumbVisibility: WidgetStateProperty.all(estBureau),
+      thickness: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.hovered) ? 9 : 6),
+      radius: const Radius.circular(8),
+      thumbColor: WidgetStateProperty.resolveWith(
+          (s) => AppColors.gold.withValues(alpha: s.contains(WidgetState.hovered) || s.contains(WidgetState.dragged) ? 0.75 : 0.35)),
+    ),
+    tooltipTheme: TooltipThemeData(
+      waitDuration: const Duration(milliseconds: 450),
+      decoration: BoxDecoration(
+        color: AppColors.sidebar,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
+      ),
+      textStyle: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: line)),
+    ),
+    menuTheme: MenuThemeData(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(surface),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: line))),
+      ),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: surface,
+      surfaceTintColor: Colors.transparent,
+      showDragHandle: true,
+      dragHandleColor: AppColors.gold.withValues(alpha: 0.6),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.ink : null),
+      trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.gold : null),
+      trackOutlineColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.gold : null),
+    ),
+    checkboxTheme: CheckboxThemeData(
+      fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.gold : null),
+      checkColor: const WidgetStatePropertyAll(AppColors.ink),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+    ),
+    radioTheme: RadioThemeData(
+      fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.gold : null),
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: AppColors.gold,
+      linearTrackColor: line,
+      circularTrackColor: Colors.transparent,
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: radius)),
+        side: WidgetStatePropertyAll(BorderSide(color: line)),
+        backgroundColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? AppColors.gold.withValues(alpha: dark ? 0.22 : 0.28) : Colors.transparent),
+        foregroundColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? (dark ? AppColors.gold : AppColors.violetDeep) : null),
+        textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w700)),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: dark ? AppColors.gold : AppColors.violetDeep,
+        shape: RoundedRectangleBorder(borderRadius: radius),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+    ),
+    badgeTheme: const BadgeThemeData(backgroundColor: AppColors.rose, textColor: Colors.white),
+    drawerTheme: const DrawerThemeData(backgroundColor: AppColors.sidebar, surfaceTintColor: Colors.transparent),
   );
+}
+
+/// Préférences d'interface mémorisées sur l'appareil (barre latérale réduite…).
+class UiPrefs extends ChangeNotifier {
+  UiPrefs._();
+  static final instance = UiPrefs._();
+  bool sidebarReduite = false;
+
+  Future<void> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      sidebarReduite = p.getBool('sidebar_reduite') ?? false;
+    } catch (_) {}
+  }
+
+  Future<void> basculerSidebar() async {
+    sidebarReduite = !sidebarReduite;
+    notifyListeners();
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setBool('sidebar_reduite', sidebarReduite);
+    } catch (_) {}
+  }
 }
 
 /// Thème choisi (clair / sombre / système), mémorisé sur l'appareil.
