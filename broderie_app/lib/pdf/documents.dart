@@ -258,89 +258,82 @@ _L _ligne(String reference, String designation, int q, double prix, double monta
   return _L(p?.modele ?? reference, p?.designation ?? designation, p?.couleur, q, prix, montant);
 }
 
-/// Une ligne par modèle (et par prix) : couleurs avec la quantité de chacune, tailles regroupées.
+/// Un bloc par modèle : titre du modèle, puis une ligne par couleur (tailles regroupées).
 class _Groupe {
   final String modele;
   final String designation;
   final double prix;
-  final Map<String, int> couleurs = {};
+  final Map<String, (int, double)> couleurs = {};
   int quantite = 0;
   double montant = 0;
   _Groupe(this.modele, this.designation, this.prix);
 }
 
-pw.Widget _tableLignes(List<_L> l, {bool prix = true}) {
+List<pw.Widget> _tableLignes(List<_L> l, {bool prix = true}) {
   final groupes = <String, _Groupe>{};
   for (final x in l) {
     final g = groupes.putIfAbsent('${x.modele}|${x.prix}', () => _Groupe(x.modele, x.designation, x.prix));
-    if (x.couleur != null) g.couleurs[x.couleur!] = (g.couleurs[x.couleur!] ?? 0) + x.quantite;
+    final c = x.couleur ?? '—';
+    final prev = g.couleurs[c] ?? (0, 0.0);
+    g.couleurs[c] = (prev.$1 + x.quantite, prev.$2 + x.montant);
     g.quantite += x.quantite;
     g.montant += x.montant;
   }
   final gs = groupes.values.toList();
-  final avecCouleurs = gs.any((g) => g.couleurs.isNotEmpty);
 
-  pw.Widget cell(pw.Widget w, {pw.Alignment al = pw.Alignment.centerLeft}) =>
-      pw.Container(alignment: al, padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 7), child: w);
-  pw.Widget head(String t, {pw.Alignment al = pw.Alignment.centerLeft}) => pw.Container(
+  final widths = <int, pw.TableColumnWidth>{
+    0: const pw.FlexColumnWidth(),
+    1: const pw.FixedColumnWidth(70),
+    if (prix) 2: const pw.FixedColumnWidth(90),
+    if (prix) 3: const pw.FixedColumnWidth(100),
+  };
+  pw.Widget c(String t, {pw.Alignment al = pw.Alignment.centerLeft, pw.TextStyle? st}) => pw.Container(
         alignment: al,
-        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        child: pw.Text(t.toUpperCase(), style: pw.TextStyle(color: PdfColors.white, fontSize: 7.5, fontWeight: pw.FontWeight.bold, letterSpacing: 0.8)),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: pw.Text(t, style: st ?? const pw.TextStyle(fontSize: 9.5)),
       );
-  const n = pw.TextStyle(fontSize: 9);
-  final b = pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold);
+  pw.TextStyle h() => pw.TextStyle(color: PdfColors.white, fontSize: 7.5, fontWeight: pw.FontWeight.bold, letterSpacing: 0.8);
+  final bold = pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: _ink);
 
-  pw.Widget couleurs(_Groupe g) => g.couleurs.isEmpty
-      ? pw.Text('—', style: n)
-      : pw.Wrap(spacing: 4, runSpacing: 3, children: [
-          for (final e in g.couleurs.entries)
-            pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-              decoration: pw.BoxDecoration(color: _goldLight, borderRadius: pw.BorderRadius.circular(8)),
-              child: pw.RichText(
-                text: pw.TextSpan(children: [
-                  pw.TextSpan(text: '${e.key} ', style: const pw.TextStyle(fontSize: 8.5)),
-                  pw.TextSpan(text: '× ${fmtInt(e.value)}', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: _ink)),
-                ]),
-              ),
-            ),
-        ]);
-
-  final widths = <int, pw.TableColumnWidth>{0: const pw.FixedColumnWidth(22), 1: const pw.FixedColumnWidth(70), 2: const pw.FixedColumnWidth(90)};
-  var k = 3;
-  if (avecCouleurs) widths[k++] = const pw.FlexColumnWidth();
-  final iQte = k;
-  widths[k++] = const pw.FixedColumnWidth(38);
-  if (prix) {
-    widths[k++] = const pw.FixedColumnWidth(66);
-    widths[k++] = const pw.FixedColumnWidth(80);
-  }
-  if (!avecCouleurs) widths[2] = const pw.FlexColumnWidth();
-
-  return pw.Table(columnWidths: widths, defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle, children: [
-    pw.TableRow(decoration: const pw.BoxDecoration(color: _ink), children: [
-      head('N°', al: pw.Alignment.center),
-      head('Modèle'),
-      head('Désignation'),
-      if (avecCouleurs) head('Couleurs et quantités'),
-      head('Qté', al: pw.Alignment.center),
-      if (prix) head('Prix unit.', al: pw.Alignment.centerRight),
-      if (prix) head('Montant', al: pw.Alignment.centerRight),
+  return [
+    pw.Table(columnWidths: widths, children: [
+      pw.TableRow(decoration: const pw.BoxDecoration(color: _ink), children: [
+        c('MODÈLE / COULEUR', st: h()),
+        c('QUANTITÉ', al: pw.Alignment.center, st: h()),
+        if (prix) c('PRIX UNIT.', al: pw.Alignment.centerRight, st: h()),
+        if (prix) c('MONTANT', al: pw.Alignment.centerRight, st: h()),
+      ]),
     ]),
-    for (var r = 0; r < gs.length; r++)
-      pw.TableRow(
-        decoration: pw.BoxDecoration(color: r.isOdd ? _zebra : null, border: const pw.Border(bottom: pw.BorderSide(color: _line, width: 0.6))),
-        children: [
-          cell(pw.Text('${r + 1}', style: n), al: pw.Alignment.center),
-          cell(pw.Text(gs[r].modele, style: b)),
-          cell(pw.Text(gs[r].designation, style: n)),
-          if (avecCouleurs) cell(couleurs(gs[r])),
-          cell(pw.Text(fmtInt(gs[r].quantite), style: b), al: pw.Alignment.center),
-          if (prix) cell(pw.Text(fmtDA(gs[r].prix), style: n), al: pw.Alignment.centerRight),
-          if (prix) cell(pw.Text(fmtDA(gs[r].montant), style: b), al: pw.Alignment.centerRight),
-        ],
+    for (final g in gs) ...[
+      pw.Container(
+        margin: const pw.EdgeInsets.only(top: 8),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: const pw.BoxDecoration(color: _goldLight, border: pw.Border(left: pw.BorderSide(color: _gold, width: 3))),
+        child: pw.Row(children: [
+          pw.Text(g.modele, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: _ink)),
+          pw.Text('   ${g.designation}', style: const pw.TextStyle(fontSize: 10, color: _grey)),
+        ]),
       ),
-  ]);
+      pw.Table(columnWidths: widths, children: [
+        for (final e in g.couleurs.entries)
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: _line, width: 0.6))),
+            children: [
+              c('      ${e.key}'),
+              c('x ${fmtInt(e.value.$1)}', al: pw.Alignment.center, st: bold),
+              if (prix) c(fmtDA(g.prix), al: pw.Alignment.centerRight),
+              if (prix) c(fmtDA(e.value.$2), al: pw.Alignment.centerRight),
+            ],
+          ),
+        pw.TableRow(children: [
+          c('Total ${g.modele}', st: bold),
+          c(fmtInt(g.quantite), al: pw.Alignment.center, st: bold),
+          if (prix) pw.SizedBox(),
+          if (prix) c(fmtDA(g.montant), al: pw.Alignment.centerRight, st: bold),
+        ]),
+      ]),
+    ],
+  ];
 }
 
 pw.Widget _totaux(List<(String, double, bool)> lignes, {(String, double)? net, List<(String, double, PdfColor)> apres = const []}) => pw.Container(
@@ -484,7 +477,7 @@ Future<Uint8List> buildFacture({required Atelier atelier, required Vente vente, 
       pw.SizedBox(height: 18),
       _parties('Facturé à', client, infos, extra: vente.adresseLivraison == null ? null : 'Livraison : ${vente.adresseLivraison}'),
       pw.SizedBox(height: 16),
-      _tableLignes(ls),
+      ..._tableLignes(ls),
       pw.SizedBox(height: 14),
       pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         pw.Expanded(
@@ -539,7 +532,7 @@ Future<Uint8List> buildBonLivraison({required Atelier atelier, required Vente ve
       pw.SizedBox(height: 18),
       _parties('Destinataire', client, infos, extra: vente.adresseLivraison == null ? null : 'Livraison : ${vente.adresseLivraison}'),
       pw.SizedBox(height: 16),
-      _tableLignes(ls, prix: false),
+      ..._tableLignes(ls, prix: false),
       pw.Container(
         margin: const pw.EdgeInsets.only(top: 8),
         padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -644,7 +637,7 @@ Future<Uint8List> buildDocumentCommercial({
       pw.SizedBox(height: 18),
       _parties(titreClient, client, infosPlus),
       pw.SizedBox(height: 16),
-      _tableLignes(ls),
+      ..._tableLignes(ls),
       pw.SizedBox(height: 14),
       pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         pw.Expanded(
