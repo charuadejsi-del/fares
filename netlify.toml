@@ -1,0 +1,10 @@
+# Site vitrine (Netlify) : publie le dossier vitrine/, sans étape de build
+[build]
+  publish = "vitrine"
+  command = ""
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
