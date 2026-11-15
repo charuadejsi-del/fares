@@ -49,6 +49,13 @@ class Ouvrier {
 
   bool get brodeur => modePaie == ModePaie.points;
 
+  /// Travaille sur la machine de broderie : payé aux points, ou au mois / à la pièce
+  /// dans le département Broderie (ses points sont comptés sans montant).
+  bool get enBroderie => brodeur || departement.toLowerCase() == 'broderie';
+
+  /// Tarif appliqué à ses points : 0 s'il n'est pas payé aux points.
+  double tarifPour(double tarifType) => brodeur ? tarifType : 0;
+
   factory Ouvrier.fromMap(Map<String, dynamic> m) => Ouvrier(
         id: m['id'] as String,
         nom: (m['nom'] ?? '') as String,

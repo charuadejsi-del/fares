@@ -174,7 +174,7 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
     final nbJour = _prod.where((p) => p.equipe == Equipe.jour).length;
     final nbNuit = _prod.length - nbJour;
     final journal = _journal(o);
-    final showBroderie = o.brodeur || _prod.isNotEmpty;
+    final showBroderie = o.enBroderie || _prod.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(

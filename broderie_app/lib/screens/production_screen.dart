@@ -287,7 +287,9 @@ class _ProductionFormState extends State<ProductionForm> {
   /// Tarif : on garde celui de la saisie si le type n'a pas changé.
   double get _tarif {
     final e = _ex;
-    if (e != null && e.typeId == _typeId) return e.tarif1000;
+    final o = data.ouvrier(_ouvrierId);
+    if (o != null && !o.brodeur) return 0;
+    if (e != null && e.typeId == _typeId && e.tarif1000 > 0) return e.tarif1000;
     return data.type(_typeId)?.tarif1000 ?? 0;
   }
 
@@ -321,7 +323,7 @@ class _ProductionFormState extends State<ProductionForm> {
 
   @override
   Widget build(BuildContext context) {
-    final ouvriers = data.ouvriers.where((o) => (o.actif && o.brodeur) || o.id == _ex?.ouvrierId).toList();
+    final ouvriers = data.ouvriers.where((o) => (o.actif && o.enBroderie) || o.id == _ex?.ouvrierId).toList();
     final types = data.types.where((t) => t.actif || t.id == _ex?.typeId).toList();
     final machines = data.machines.where((m) => m.actif || m.id == _ex?.machineId).toList();
     final pts = parseInt(_points.text) ?? 0;
@@ -428,9 +430,15 @@ class _ProductionFormState extends State<ProductionForm> {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(gradient: AppColors.heroGradient, borderRadius: BorderRadius.circular(14)),
                 child: Column(children: [
-                  Text('${fmtInt(pts)} pts × ${fmtDA(_tarif)} / 1000', style: const TextStyle(color: Colors.white70)),
-                  Text(fmtDA(pts * _tarif / 1000),
-                      style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
+                  if (data.ouvrier(_ouvrierId) case final o? when !o.brodeur) ...[
+                    Text('${fmtInt(pts)} points', style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
+                    Text('${o.nom} est payé ${o.modePaie == ModePaie.mois ? 'au mois' : 'à la pièce'} : points comptés, sans montant',
+                        textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+                  ] else ...[
+                    Text('${fmtInt(pts)} pts × ${fmtDA(_tarif)} / 1000', style: const TextStyle(color: Colors.white70)),
+                    Text(fmtDA(pts * _tarif / 1000),
+                        style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
+                  ],
                 ]),
               ),
             ]),

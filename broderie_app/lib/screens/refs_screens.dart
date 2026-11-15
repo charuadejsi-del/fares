@@ -338,7 +338,7 @@ class _OuvrierFormState extends State<OuvrierForm> {
                 selected: _dept.text.trim() == d,
                 onSelected: (_) => setState(() {
                   _dept.text = d;
-                  if (widget.o == null) _mode = d == 'Broderie' ? ModePaie.points : (_mode == ModePaie.points ? ModePaie.mois : _mode);
+                  if (widget.o == null && d != 'Broderie' && _mode == ModePaie.points) _mode = ModePaie.mois;
                 }),
               ),
           ]),
@@ -365,6 +365,12 @@ class _OuvrierFormState extends State<OuvrierForm> {
                 final n = parseNum(v ?? '');
                 return (n == null || n <= 0) ? 'Indiquez le salaire' : null;
               },
+            ),
+          if (_mode != ModePaie.points && _dept.text.trim().toLowerCase() == 'broderie')
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('Département Broderie : vous pourrez saisir ses points (production suivie), sans montant ajouté à sa paie.',
+                  style: TextStyle(fontSize: 12, color: context.cs.primary)),
             ),
           if (_mode == ModePaie.piece)
             TextFormField(

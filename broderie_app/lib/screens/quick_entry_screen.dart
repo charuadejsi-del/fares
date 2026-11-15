@@ -103,12 +103,12 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
         dessinId: _dessinId,
         nbRobes: parseInt(_robes.text),
         totalPoints: _pts,
-        tarif1000: t.tarif1000,
+        tarif1000: o.tarifPour(t.tarif1000),
         note: _note.text,
       ));
       HapticFeedback.mediumImpact();
       if (mounted) {
-        showSnack(context, '✓ ${o.nom} · ${t.nom} : ${fmtInt(_pts)} points = ${fmtDA(_pts * t.tarif1000 / 1000)}');
+        showSnack(context, '✓ ${o.nom} · ${t.nom} : ${fmtInt(_pts)} points${o.brodeur ? ' = ${fmtDA(_pts * t.tarif1000 / 1000)}' : ' (payé au mois, sans montant)'}');
         setState(() {
           _points.clear();
           _robes.clear();
@@ -127,13 +127,13 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ouvriers = data.ouvriers.where((o) => o.actif && o.brodeur).toList();
+    final ouvriers = data.ouvriers.where((o) => o.actif && o.enBroderie).toList();
     final types = data.types.where((t) => t.actif).toList();
 
     if (ouvriers.isEmpty) {
       return ListView(padding: const EdgeInsets.all(16), children: [
         EmptyState(
-          'Aucun brodeur actif.\nAjoutez un ouvrier avec le mode de paie « Points ».',
+          'Aucun brodeur actif.\nAjoutez un ouvrier payé aux points, ou au mois dans le département « Broderie ».',
           icon: Icons.rocket_launch_outlined,
           action: widget.onGoToRefs == null
               ? null
@@ -265,7 +265,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
                   onSubmitted: (_) => _save(),
                 ),
                 const SizedBox(height: 14),
-                _CalcBox(points: _pts, tarif: data.type(_typeId)?.tarif1000 ?? 0),
+                _CalcBox(points: _pts, tarif: data.ouvrier(_ouvrierId)?.tarifPour(data.type(_typeId)?.tarif1000 ?? 0) ?? 0, sansMontant: !(data.ouvrier(_ouvrierId)?.brodeur ?? true)),
                 const SizedBox(height: 6),
                 Theme(
                   data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -309,7 +309,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
                     : const Icon(Icons.check_rounded),
                 label: Text(_pts <= 0
                     ? 'Tapez les points du compteur'
-                    : 'Enregistrer · ${fmtDA(_pts * (data.type(_typeId)?.tarif1000 ?? 0) / 1000)}'),
+                    : (data.ouvrier(_ouvrierId)?.brodeur ?? true) ? 'Enregistrer · ${fmtDA(_pts * (data.type(_typeId)?.tarif1000 ?? 0) / 1000)}' : 'Enregistrer ${fmtInt(_pts)} points'),
               ),
             ),
           ],
@@ -340,7 +340,8 @@ class ThousandsFormatter extends TextInputFormatter {
 class _CalcBox extends StatelessWidget {
   final int points;
   final double tarif;
-  const _CalcBox({required this.points, required this.tarif});
+  final bool sansMontant;
+  const _CalcBox({required this.points, required this.tarif, this.sansMontant = false});
 
   @override
   Widget build(BuildContext context) {
@@ -349,13 +350,15 @@ class _CalcBox extends StatelessWidget {
       gradient: AppColors.heroGradient,
       padding: const EdgeInsets.all(16),
       child: Column(children: [
-        Text('${fmtInt(points)} pts × ${fmtDA(tarif)} / 1000', style: const TextStyle(color: Colors.white70)),
+        if (!sansMontant) Text('${fmtInt(points)} pts × ${fmtDA(tarif)} / 1000', style: const TextStyle(color: Colors.white70)),
         const SizedBox(height: 4),
         FittedBox(
           fit: BoxFit.scaleDown,
-          child: Text(fmtDA(montant), style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w900)),
+          child: Text(sansMontant ? '${fmtInt(points)} pts' : fmtDA(montant),
+              style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w900)),
         ),
-        const Text('à payer pour ce relevé', style: TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(sansMontant ? 'ouvrier payé au mois : points comptés, sans montant' : 'à payer pour ce relevé',
+            textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 12)),
       ]),
     );
   }
