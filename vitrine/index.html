@@ -332,15 +332,20 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
 /* ---------- barre d'application (mobile) */
 .tabbar{display:none}
 @media(max-width:760px){
-  .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:90;background:rgba(231,224,213,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:22px;padding:6px;box-shadow:0 14px 34px -12px rgba(60,45,25,.35)}
-  .tabbar a,.tabbar button{display:grid;justify-items:center;gap:2px;padding:6px 0;font-size:10.5px;font-weight:700;color:var(--muted);border-radius:16px;position:relative}
-  .tabbar svg{width:22px;height:22px}
-  .tabbar .on{color:var(--gold);background:rgba(139,106,47,.1)}
-  .tabbar i{position:absolute;top:0;right:22%;min-width:18px;height:18px;border-radius:9px;background:#A3243F;color:#fff;font-style:normal;font-size:10px;display:none;place-items:center;padding:0 4px}
-  .fab,.bag{display:none!important}
-  body{padding-bottom:86px}
+  .fab,.bag,.tabbar{display:none!important}
   .nav-wa{display:none}
+  .navicons{display:flex}
+  nav .wrap{gap:10px;height:64px}
+  .brand .logo{width:38px;height:38px;border-radius:11px}
+  .brand b{font-size:19px}
+  .lang{padding:7px 10px;font-size:12px}
+  .install.show{display:none}
 }
+.navicons{display:none;gap:6px;align-items:center}
+.navicons a,.navicons button{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;border:1px solid var(--line);background:rgba(231,224,213,.7);color:var(--txt);position:relative}
+.navicons svg{width:20px;height:20px}
+.navicons .wa{background:linear-gradient(135deg,var(--gold3),var(--gold),var(--gold2));color:#fff;border:0}
+.navicons i{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;border-radius:9px;background:#A3243F;color:#fff;font-style:normal;font-size:10px;font-weight:800;display:none;place-items:center;padding:0 4px;border:2px solid var(--bg)}
 .install{display:none;align-items:center;gap:10px;font-size:13px;font-weight:700;color:var(--gold);border:1px solid rgba(139,106,47,.45);border-radius:999px;padding:8px 14px}
 .install.show{display:inline-flex}
 .install svg{width:16px;height:16px}
@@ -360,6 +365,11 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
       <a href="#contact" data-t="nav_contact">Contact</a>
     </div>
     <button class="install" id="installBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg><span data-t="install">Installer l'appli</span></button>
+    <div class="navicons">
+      <a href="#collection" aria-label="Catalogue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></a>
+      <button id="navSel" aria-label="Ma sélection"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg><i id="navN">0</i></button>
+      <a class="wa" id="navWa2" href="#contact" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.3 0 .5l-.3.5-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.2.5.1.6 0l.9-1c.2-.3.4-.2.6-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg></a>
+    </div>
     <button class="lang" id="langBtn">العربية</button>
     <a class="btn btn-gold nav-wa" id="navWa" href="#contact"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.3 0 .5l-.3.5-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.2.5.1.6 0l.9-1c.2-.3.4-.2.6-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg><span data-t="order">Commander</span></a>
   </div>
@@ -746,7 +756,7 @@ function contact(a){
   if(a.adresse) items.push(`<div class="citem"><span class="ic">${I.pin}</span><span><small>${t('address')}</small><b>${esc(a.adresse)}</b></span></div>`);
   $('#clist').innerHTML = items.join('');
   const fab = $('#fab'), nw = $('#navWa');
-  if(wa){ fab.href = wa; fab.target='_blank'; fab.style.display='grid'; nw.href = wa; nw.target='_blank'; }
+  if(wa){ const w2=$('#navWa2'); w2.href=wa; w2.target='_blank'; fab.href = wa; fab.target='_blank'; fab.style.display='grid'; nw.href = wa; nw.target='_blank'; }
   $('#foot').textContent = `© ${new Date().getFullYear()} ${a.nom}`;
 }
 
@@ -840,6 +850,7 @@ function majBag(){
   const n = SEL.reduce((s,x)=>s+x.q,0);
   $('#bagN').textContent = n; $('#bag').classList.toggle('show', n>0);
   const tn=$('#tabN'); tn.textContent=n; tn.style.display = n>0?'grid':'none';
+  const nn=$('#navN'); nn.textContent=n; nn.style.display = n>0?'grid':'none';
 }
 function ouvrirSel(){
   const list = $('#dList');
@@ -871,6 +882,7 @@ function ouvrirSel(){
 function fermerSel(){ $('#drawer').classList.remove('open'); $('#shade').classList.remove('open'); }
 $('#bag').onclick = ouvrirSel;
 $('#tabSel').onclick = ouvrirSel;
+$('#navSel').onclick = ouvrirSel;
 const secs = ['top','collection','contact'];
 addEventListener('scroll', ()=>{
   let cur='top'; for(const id of secs){ const el=document.getElementById(id); if(el && el.getBoundingClientRect().top < innerHeight*.4) cur=id; }
