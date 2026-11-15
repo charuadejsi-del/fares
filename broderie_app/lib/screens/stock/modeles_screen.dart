@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../data/stock.dart';
 import '../../theme.dart';
@@ -444,12 +445,21 @@ class ModeleCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ModeleDetailScreen(cle: m.cle))),
       child: Row(children: [
-        Container(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(gradient: AppColors.heroGradient, borderRadius: BorderRadius.circular(16)),
-          child: const Icon(Icons.checkroom_rounded, color: Colors.white, size: 28),
-        ),
+        Builder(builder: (context) {
+          final photos = stock.info(m.cle).photos;
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: 58,
+              height: 72,
+              decoration: const BoxDecoration(gradient: AppColors.heroGradient),
+              child: photos.isEmpty
+                  ? const Icon(Icons.checkroom_rounded, color: Colors.white, size: 28)
+                  : Image.network(stock.urlPublique(photos.first), fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.checkroom_rounded, color: Colors.white)),
+            ),
+          );
+        }),
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -587,6 +597,7 @@ class ModeleDetailScreen extends StatelessWidget {
                 ),
               ]),
               const SizedBox(height: 12),
+              VitrineModeleCard(m: m),              const SizedBox(height: 12),
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   const SectionTitle('Stock par couleur et taille', subtitle: 'Touchez une case pour la fiche, le QR et l\'historique'),
@@ -783,4 +794,173 @@ class _ChoixModeleDialogState extends State<_ChoixModeleDialog> {
       actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer'))],
     );
   }
+}
+
+// ======================================================================= site vitrine
+
+class VitrineModeleCard extends StatefulWidget {
+  final Modele m;
+  const VitrineModeleCard({super.key, required this.m});
+
+  @override
+  State<VitrineModeleCard> createState() => _VitrineModeleCardState();
+}
+
+class _VitrineModeleCardState extends State<VitrineModeleCard> {
+  bool _busy = false;
+
+  String get _cle => widget.m.cle;
+
+  Future<void> _ajouter() async {
+    try {
+      final files = await ImagePicker().pickMultiImage(maxWidth: 1600, maxHeight: 2000, imageQuality: 85);
+      if (files.isEmpty) return;
+      setState(() => _busy = true);
+      final photos = [...stock.info(_cle).photos];
+      for (final f in files.take(12 - photos.length)) {
+        final ext = f.name.toLowerCase().endsWith('.png') ? 'png' : 'jpg';
+        photos.add(await stock.envoyerPhotoVitrine(await f.readAsBytes(), ext: ext));
+      }
+      await stock.saveInfo(_cle, photos: photos);
+      if (mounted) showSnack(context, 'Photo(s) publiée(s) sur le site');
+    } catch (e) {
+      if (mounted) showSnack(context, errorMessage(e), error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _retirer(String path) async {
+    if (!await confirmDialog(context, 'Retirer la photo', 'Retirer cette photo du site ?')) return;
+    final photos = stock.info(_cle).photos.where((p) => p != path).toList();
+    try {
+      await stock.saveInfo(_cle, photos: photos);
+      await stock.retirerPhotoVitrine(path);
+    } catch (e) {
+      if (mounted) showSnack(context, errorMessage(e), error: true);
+    }
+  }
+
+  Future<void> _principale(String path) async {
+    final photos = [path, ...stock.info(_cle).photos.where((p) => p != path)];
+    await stock.saveInfo(_cle, photos: photos);
+  }
+
+  Future<void> _description() async {
+    final c = TextEditingController(text: stock.info(_cle).description);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Description sur le site'),
+        content: SizedBox(
+          width: 480,
+          child: TextField(
+            controller: c,
+            maxLines: 6,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(hintText: 'Tissu, broderie, finitions, conseils…'),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enregistrer')),
+        ],
+      ),
+    );
+    if (ok == true) await stock.saveInfo(_cle, description: c.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: stock,
+        builder: (context, _) {
+          final i = stock.info(_cle);
+          return AppCard(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              SectionTitle('Site vitrine',
+                  subtitle: i.publie ? 'Visible par vos clients, mis à jour automatiquement' : 'Masqué du site',
+                  trailing: Switch(value: i.publie, onChanged: (v) => stock.saveInfo(_cle, publie: v))),
+              SizedBox(
+                height: 150,
+                child: ListView(scrollDirection: Axis.horizontal, children: [
+                  for (final (k, p) in i.photos.indexed)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: Stack(children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Image.network(stock.urlPublique(p), width: 116, height: 150, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(width: 116, color: context.pal.surface2, child: const Icon(Icons.broken_image_outlined))),
+                        ),
+                        if (k == 0)
+                          Positioned(
+                            left: 6,
+                            top: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(8)),
+                              child: const Text('Principale', style: TextStyle(color: AppColors.ink, fontSize: 10, fontWeight: FontWeight.w800)),
+                            ),
+                          ),
+                        Positioned(
+                          right: 2,
+                          top: 2,
+                          child: PopupMenuButton<String>(
+                            icon: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                              child: const Icon(Icons.more_vert, color: Colors.white, size: 18),
+                            ),
+                            itemBuilder: (_) => [
+                              if (k > 0) const PopupMenuItem(value: 'main', child: Text('Mettre en photo principale')),
+                              const PopupMenuItem(value: 'del', child: Text('Retirer')),
+                            ],
+                            onSelected: (v) => v == 'main' ? _principale(p) : _retirer(p),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  if (i.photos.length < 12)
+                    InkWell(
+                      onTap: _busy ? null : _ajouter,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: 116,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.gold.withValues(alpha: 0.6), width: 1.4),
+                          color: AppColors.gold.withValues(alpha: 0.06),
+                        ),
+                        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          _busy
+                              ? const CircularProgressIndicator(strokeWidth: 2)
+                              : const Icon(Icons.add_photo_alternate_rounded, color: AppColors.gold, size: 34),
+                          const SizedBox(height: 6),
+                          const Text('Ajouter\ndes photos', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700)),
+                        ]),
+                      ),
+                    ),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.notes_rounded),
+                title: Text(i.description == null || i.description!.isEmpty ? 'Ajouter une description' : i.description!,
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                trailing: const Icon(Icons.edit_outlined),
+                onTap: _description,
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.star_rounded, color: AppColors.gold),
+                title: const Text('Mettre en vedette'),
+                subtitle: const Text('Affiché en premier sur le site'),
+                value: i.vedette,
+                onChanged: (v) => stock.saveInfo(_cle, vedette: v),
+              ),
+            ]),
+          );
+        },
+      );
 }

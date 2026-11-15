@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../utils.dart';
+import 'session.dart';
 
 double _d(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
 int _i(dynamic v) => v == null ? 0 : (v is num ? v.toInt() : int.tryParse(v.toString()) ?? 0);
@@ -435,6 +436,23 @@ class LignePanier {
   double get montant => quantite * prix;
 }
 
+/// Informations du site vitrine pour un modèle (photos, description, publication).
+class InfoModele {
+  final String modele;
+  final String? description;
+  final List<String> photos;
+  final bool publie;
+  final bool vedette;
+  const InfoModele({required this.modele, this.description, this.photos = const [], this.publie = true, this.vedette = false});
+  factory InfoModele.fromMap(Map<String, dynamic> m) => InfoModele(
+        modele: m['modele'] as String,
+        description: _s(m['description']),
+        photos: [for (final x in (m['photos'] as List? ?? const [])) x.toString()],
+        publie: (m['publie'] ?? true) as bool,
+        vedette: (m['vedette'] ?? false) as bool,
+      );
+}
+
 String cleGrille(String? couleur, String? taille) => '${couleur ?? ''}|${taille ?? ''}';
 
 // =================================================================== données
@@ -487,7 +505,9 @@ class StockData extends ChangeNotifier {
       _db.from('stock_etat').select().order('reference'),
       _db.from('stock_clients_soldes').select().order('nom'),
       _db.from('stock_prix_clients').select('client_id, produit_id, prix'),
+      _db.from('stock_modeles_info').select('modele, description, photos, publie, vedette'),
     ]);
+    infos = {for (final r in res[3]) r['modele'] as String: InfoModele.fromMap(r)};
     produits = res[0].map(Produit.fromMap).toList();
     clients = res[1].map(Client.fromMap).toList();
     final pc = <String, Map<String, double>>{};
@@ -499,7 +519,42 @@ class StockData extends ChangeNotifier {
     notifyListeners();
   }
 
+  Map<String, InfoModele> infos = {};
+  InfoModele info(String cle) => infos[cle] ?? InfoModele(modele: cle);
+
+  /// Adresse publique d'une photo du site.
+  String urlPublique(String path) => _db.storage.from('vitrine').getPublicUrl(path);
+
+  Future<String> envoyerPhotoVitrine(Uint8List bytes, {String ext = 'jpg', String dossier = 'modeles'}) async {
+    final path = '${session.atelierId}/$dossier/${DateTime.now().millisecondsSinceEpoch}.$ext';
+    await _db.storage.from('vitrine').uploadBinary(path, bytes,
+        fileOptions: FileOptions(contentType: ext == 'png' ? 'image/png' : 'image/jpeg', upsert: true, cacheControl: '31536000'));
+    return path;
+  }
+
+  Future<void> retirerPhotoVitrine(String path) async {
+    try {
+      await _db.storage.from('vitrine').remove([path]);
+    } catch (_) {}
+  }
+
+  Future<void> saveInfo(String cle, {String? description, List<String>? photos, bool? publie, bool? vedette}) async {
+    final cur = info(cle);
+    final row = {
+      'modele': cle,
+      'description': description ?? cur.description,
+      'photos': photos ?? cur.photos,
+      'publie': publie ?? cur.publie,
+      'vedette': vedette ?? cur.vedette,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    await _db.from('stock_modeles_info').upsert(row, onConflict: 'atelier_id,modele');
+    infos[cle] = InfoModele.fromMap(row);
+    notifyListeners();
+  }
+
   void clear() {
+    infos = {};
     produits = [];
     clients = [];
     loaded = false;

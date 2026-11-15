@@ -5,6 +5,7 @@ on:
     branches: [broderie-flutter]
     paths:
       - 'broderie_app/**'
+      - 'vitrine/**'
       - '.github/workflows/broderie-build.yml'
   workflow_dispatch:
 
@@ -24,6 +25,10 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - run: flutter test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site-vitrine
+          path: vitrine/
 
   android:
     needs: analyse

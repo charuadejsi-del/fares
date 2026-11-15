@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -525,6 +526,11 @@ class _SocieteScreenState extends State<SocieteScreen> {
   late final _ment = TextEditingController(text: a.mentions);
   late final _qrLien = TextEditingController(text: a.qrLien);
   late final _qrLib = TextEditingController(text: a.qrLibelle ?? 'Suivez-nous sur Facebook');
+  late final _vUrl = TextEditingController(text: a.vitrineUrl);
+  late final _vSlogan = TextEditingController(text: a.vitrineSlogan);
+  late final _wa = TextEditingController(text: a.whatsapp);
+  late bool _vActive = a.vitrineActive;
+  late bool _vPrix = a.vitrinePrix;
   bool _busy = false;
 
   String? _n(TextEditingController c) => c.text.trim().isEmpty ? null : c.text.trim();
@@ -548,6 +554,11 @@ class _SocieteScreenState extends State<SocieteScreen> {
         'mentions': _n(_ment),
         'qr_lien': _n(_qrLien),
         'qr_libelle': _n(_qrLien) == null ? null : _n(_qrLib),
+        'vitrine_active': _vActive,
+        'vitrine_prix': _vPrix,
+        'vitrine_url': _n(_vUrl),
+        'vitrine_slogan': _n(_vSlogan),
+        'whatsapp': _n(_wa),
       });
       if (mounted) showSnack(context, 'Informations enregistrées');
     } catch (e) {
@@ -602,6 +613,57 @@ class _SocieteScreenState extends State<SocieteScreen> {
               ]),
             ),
             const SizedBox(height: 12),
+            AppCard(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                const SectionTitle('Site vitrine de la collection',
+                    subtitle: 'Vos modèles en stock et leurs photos sont publiés automatiquement. Les clients voient les couleurs et tailles, jamais les quantités.'),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Site en ligne'),
+                  value: _vActive,
+                  onChanged: (v) => setState(() => _vActive = v),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Afficher le prix de gros'),
+                  value: _vPrix,
+                  onChanged: (v) => setState(() => _vPrix = v),
+                ),
+                _f(_vSlogan, 'Phrase d\'accueil du site', Icons.auto_awesome_outlined, helper: 'ex. L\'élégance algérienne, brodée à la main'),
+                _f(_wa, 'Numéro WhatsApp pour les commandes', Icons.chat_outlined, k: TextInputType.phone, helper: 'ex. 213559013738 (indicatif sans +)'),
+                _f(_vUrl, 'Adresse du site (après mise en ligne)', Icons.language_rounded, k: TextInputType.url),
+                if ((_vUrl.text).trim().startsWith('http'))
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                      child: BarcodeWidget(barcode: Barcode.qrCode(), data: _vUrl.text.trim(), width: 110, height: 110, drawText: false),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(_vUrl.text.trim(), style: const TextStyle(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 8),
+                        Wrap(spacing: 8, children: [
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: _vUrl.text.trim()));
+                              showSnack(context, 'Lien copié');
+                            },
+                            icon: const Icon(Icons.copy_rounded),
+                            label: const Text('Copier le lien'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => setState(() => _qrLien.text = _vUrl.text.trim()),
+                            icon: const Icon(Icons.qr_code_2_rounded),
+                            label: const Text('Mettre ce QR sur les factures'),
+                          ),
+                        ]),
+                      ]),
+                    ),
+                  ]),
+              ]),
+            ),            const SizedBox(height: 12),
             AppCard(
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 const SectionTitle('QR code sur les documents',
@@ -878,7 +940,11 @@ class _LogoEditorState extends State<LogoEditor> {
           .from('broderie-dessins')
           .uploadBinary(path, bytes, fileOptions: FileOptions(contentType: ext == 'png' ? 'image/png' : 'image/jpeg', upsert: true));
       final ancien = session.atelier?.logoPath;
-      await session.saveAtelier({'logo_path': path});
+      String? public;
+      try {
+        public = await stock.envoyerPhotoVitrine(bytes, ext: ext, dossier: 'logo');
+      } catch (_) {}
+      await session.saveAtelier({'logo_path': path, if (public != null) 'logo_public': public});
       if (ancien != null) {
         try {
           await Supabase.instance.client.storage.from('broderie-dessins').remove([ancien]);
@@ -897,7 +963,7 @@ class _LogoEditorState extends State<LogoEditor> {
     final ancien = session.atelier?.logoPath;
     setState(() => _busy = true);
     try {
-      await session.saveAtelier({'logo_path': null});
+      await session.saveAtelier({'logo_path': null, 'logo_public': null});
       if (ancien != null) await Supabase.instance.client.storage.from('broderie-dessins').remove([ancien]);
       oublierLogo();
       setState(() => _apercu = null);

@@ -33,6 +33,12 @@ class Atelier {
   final String? logoPath;
   final String? qrLien;
   final String? qrLibelle;
+  final bool vitrineActive;
+  final bool vitrinePrix;
+  final String? vitrineUrl;
+  final String? vitrineSlogan;
+  final String? logoPublic;
+  final String? whatsapp;
 
   const Atelier({
     required this.id,
@@ -51,6 +57,12 @@ class Atelier {
     this.logoPath,
     this.qrLien,
     this.qrLibelle,
+    this.vitrineActive = true,
+    this.vitrinePrix = false,
+    this.vitrineUrl,
+    this.vitrineSlogan,
+    this.logoPublic,
+    this.whatsapp,
   });
 
   factory Atelier.fromMap(Map<String, dynamic> m) => Atelier(
@@ -70,6 +82,12 @@ class Atelier {
         logoPath: _s(m['logo_path']),
         qrLien: _s(m['qr_lien']),
         qrLibelle: _s(m['qr_libelle']),
+        vitrineActive: (m['vitrine_active'] ?? true) as bool,
+        vitrinePrix: (m['vitrine_prix'] ?? false) as bool,
+        vitrineUrl: _s(m['vitrine_url']),
+        vitrineSlogan: _s(m['vitrine_slogan']),
+        logoPublic: _s(m['logo_public']),
+        whatsapp: _s(m['whatsapp']),
       );
 }
 
