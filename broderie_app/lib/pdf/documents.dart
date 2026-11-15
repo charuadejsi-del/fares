@@ -244,56 +244,103 @@ pw.Widget _tableau(List<String> headers, List<List<String>> rows, {required Map<
 }
 
 class _L {
-  final String reference;
+  final String modele;
   final String designation;
   final String? couleur;
-  final String? taille;
   final int quantite;
   final double prix;
   final double montant;
-  _L(this.reference, this.designation, this.couleur, this.taille, this.quantite, this.prix, this.montant);
+  _L(this.modele, this.designation, this.couleur, this.quantite, this.prix, this.montant);
 }
 
 _L _ligne(String reference, String designation, int q, double prix, double montant, {String? produitId}) {
   final p = (produitId != null ? stock.produit(produitId) : null) ?? stock.parReference(reference);
-  return _L(reference, p?.designation ?? designation, p?.couleur, p?.taille, q, prix, montant);
+  return _L(p?.modele ?? reference, p?.designation ?? designation, p?.couleur, q, prix, montant);
+}
+
+/// Une ligne par modèle (et par prix) : couleurs avec la quantité de chacune, tailles regroupées.
+class _Groupe {
+  final String modele;
+  final String designation;
+  final double prix;
+  final Map<String, int> couleurs = {};
+  int quantite = 0;
+  double montant = 0;
+  _Groupe(this.modele, this.designation, this.prix);
 }
 
 pw.Widget _tableLignes(List<_L> l, {bool prix = true}) {
-  final var_ = l.any((x) => x.couleur != null || x.taille != null);
-  final headers = ['N°', 'Référence', 'Désignation', if (var_) 'Couleur', if (var_) 'Taille', 'Qté', if (prix) 'Prix unit.', if (prix) 'Montant'];
-  final rows = [
-    for (var i = 0; i < l.length; i++)
-      [
-        '${i + 1}',
-        l[i].reference,
-        l[i].designation,
-        if (var_) l[i].couleur ?? '—',
-        if (var_) l[i].taille ?? '—',
-        fmtInt(l[i].quantite),
-        if (prix) fmtDA(l[i].prix),
-        if (prix) fmtDA(l[i].montant),
-      ],
-  ];
-  var k = 0;
-  final w = <int, pw.TableColumnWidth>{};
-  w[k++] = const pw.FixedColumnWidth(24);
-  w[k++] = const pw.FixedColumnWidth(78);
-  w[k++] = const pw.FlexColumnWidth();
-  if (var_) {
-    w[k++] = const pw.FixedColumnWidth(58);
-    w[k++] = const pw.FixedColumnWidth(40);
+  final groupes = <String, _Groupe>{};
+  for (final x in l) {
+    final g = groupes.putIfAbsent('${x.modele}|${x.prix}', () => _Groupe(x.modele, x.designation, x.prix));
+    if (x.couleur != null) g.couleurs[x.couleur!] = (g.couleurs[x.couleur!] ?? 0) + x.quantite;
+    g.quantite += x.quantite;
+    g.montant += x.montant;
   }
+  final gs = groupes.values.toList();
+  final avecCouleurs = gs.any((g) => g.couleurs.isNotEmpty);
+
+  pw.Widget cell(pw.Widget w, {pw.Alignment al = pw.Alignment.centerLeft}) =>
+      pw.Container(alignment: al, padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 7), child: w);
+  pw.Widget head(String t, {pw.Alignment al = pw.Alignment.centerLeft}) => pw.Container(
+        alignment: al,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        child: pw.Text(t.toUpperCase(), style: pw.TextStyle(color: PdfColors.white, fontSize: 7.5, fontWeight: pw.FontWeight.bold, letterSpacing: 0.8)),
+      );
+  const n = pw.TextStyle(fontSize: 9);
+  final b = pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold);
+
+  pw.Widget couleurs(_Groupe g) => g.couleurs.isEmpty
+      ? pw.Text('—', style: n)
+      : pw.Wrap(spacing: 4, runSpacing: 3, children: [
+          for (final e in g.couleurs.entries)
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+              decoration: pw.BoxDecoration(color: _goldLight, borderRadius: pw.BorderRadius.circular(8)),
+              child: pw.RichText(
+                text: pw.TextSpan(children: [
+                  pw.TextSpan(text: '${e.key} ', style: const pw.TextStyle(fontSize: 8.5)),
+                  pw.TextSpan(text: '× ${fmtInt(e.value)}', style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: _ink)),
+                ]),
+              ),
+            ),
+        ]);
+
+  final widths = <int, pw.TableColumnWidth>{0: const pw.FixedColumnWidth(22), 1: const pw.FixedColumnWidth(70), 2: const pw.FixedColumnWidth(90)};
+  var k = 3;
+  if (avecCouleurs) widths[k++] = const pw.FlexColumnWidth();
   final iQte = k;
-  w[k++] = const pw.FixedColumnWidth(34);
-  final droite = <int>{};
+  widths[k++] = const pw.FixedColumnWidth(38);
   if (prix) {
-    droite.add(k);
-    w[k++] = const pw.FixedColumnWidth(66);
-    droite.add(k);
-    w[k++] = const pw.FixedColumnWidth(78);
+    widths[k++] = const pw.FixedColumnWidth(66);
+    widths[k++] = const pw.FixedColumnWidth(80);
   }
-  return _tableau(headers, rows, widths: w, centre: {0, iQte, if (var_) iQte - 1}, droite: droite);
+  if (!avecCouleurs) widths[2] = const pw.FlexColumnWidth();
+
+  return pw.Table(columnWidths: widths, defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle, children: [
+    pw.TableRow(decoration: const pw.BoxDecoration(color: _ink), children: [
+      head('N°', al: pw.Alignment.center),
+      head('Modèle'),
+      head('Désignation'),
+      if (avecCouleurs) head('Couleurs et quantités'),
+      head('Qté', al: pw.Alignment.center),
+      if (prix) head('Prix unit.', al: pw.Alignment.centerRight),
+      if (prix) head('Montant', al: pw.Alignment.centerRight),
+    ]),
+    for (var r = 0; r < gs.length; r++)
+      pw.TableRow(
+        decoration: pw.BoxDecoration(color: r.isOdd ? _zebra : null, border: const pw.Border(bottom: pw.BorderSide(color: _line, width: 0.6))),
+        children: [
+          cell(pw.Text('${r + 1}', style: n), al: pw.Alignment.center),
+          cell(pw.Text(gs[r].modele, style: b)),
+          cell(pw.Text(gs[r].designation, style: n)),
+          if (avecCouleurs) cell(couleurs(gs[r])),
+          cell(pw.Text(fmtInt(gs[r].quantite), style: b), al: pw.Alignment.center),
+          if (prix) cell(pw.Text(fmtDA(gs[r].prix), style: n), al: pw.Alignment.centerRight),
+          if (prix) cell(pw.Text(fmtDA(gs[r].montant), style: b), al: pw.Alignment.centerRight),
+        ],
+      ),
+  ]);
 }
 
 pw.Widget _totaux(List<(String, double, bool)> lignes, {(String, double)? net, List<(String, double, PdfColor)> apres = const []}) => pw.Container(
