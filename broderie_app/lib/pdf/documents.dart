@@ -5,6 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/gestion.dart' show LignePaie;
 import '../data/session.dart';
 import '../data/stock.dart';
 import '../utils.dart';
@@ -748,3 +749,144 @@ Future<Uint8List> buildEtiquettes(List<(Produit, int)> items, {FormatEtiquette f
 Future<void> imprimer(Uint8List bytes, String nom) => Printing.layoutPdf(onLayout: (_) async => bytes, name: nom);
 
 Future<void> partager(Uint8List bytes, String nom) => Printing.sharePdf(bytes: bytes, filename: nom);
+
+// ============================================================== clôture de paie
+
+String _modePaie(String m) => switch (m) {
+      'points' => 'Payé aux points',
+      'mois' => 'Salaire mensuel',
+      'piece' => 'Payé à la pièce',
+      _ => '',
+    };
+
+/// État global de la paie du mois + une fiche de paie par ouvrier, dans un seul PDF.
+Future<Uint8List> buildCloturePaie({required Atelier atelier, required DateTime mois, required List<LignePaie> lignes}) async {
+  final libMois = fmtMonthYear(mois);
+  final doc = await _nouveau(atelier, 'Paie $libMois');
+  final theme = await _pdfTheme();
+  double tot(double Function(LignePaie) f) => lignes.fold<double>(0, (s, l) => s + f(l));
+
+  doc.addPage(pw.MultiPage(
+    pageTheme: _page(theme),
+    footer: (ctx) => _footer(ctx, atelier),
+    build: (ctx) => [
+      _entete(atelier, 'ÉTAT DE PAIE', [
+        ['Mois', libMois],
+        ['Ouvriers', '${lignes.length}'],
+        ['Édité le', fmtDate(DateTime.now())],
+      ]),
+      pw.SizedBox(height: 18),
+      _tableau(
+        ['Ouvrier', 'Report', 'Gains', 'Avances', 'Retenues', 'Payé (mois)', 'Net', 'Réglé', 'Reste'],
+        [
+          for (final l in lignes)
+            [
+              l.departement.isEmpty ? l.nom : '${l.nom}\n${l.departement}',
+              l.anterieur == 0 ? '' : fmtDA(l.anterieur),
+              fmtDA(l.gains),
+              l.avances == 0 ? '' : fmtDA(l.avances),
+              l.retenues == 0 ? '' : fmtDA(l.retenues),
+              l.paiements == 0 ? '' : fmtDA(l.paiements),
+              fmtDA(l.net),
+              l.paye == 0 ? '' : fmtDA(l.paye),
+              fmtDA(l.reste),
+            ],
+        ],
+        widths: const {0: pw.FlexColumnWidth(1.6), 1: pw.FlexColumnWidth(), 2: pw.FlexColumnWidth(), 3: pw.FlexColumnWidth(), 4: pw.FlexColumnWidth(), 5: pw.FlexColumnWidth(), 6: pw.FlexColumnWidth(), 7: pw.FlexColumnWidth(), 8: pw.FlexColumnWidth()},
+        droite: {1, 2, 3, 4, 5, 6, 7, 8},
+      ),
+      pw.SizedBox(height: 14),
+      pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Spacer(),
+        _totaux(
+          [
+            ('Total des gains', tot((l) => l.gains), false),
+            ('Avances', tot((l) => l.avances), false),
+            ('Retenues', tot((l) => l.retenues), false),
+            ('Déjà payé dans le mois', tot((l) => l.paiements), false),
+          ],
+          net: ('Net à payer', tot((l) => l.net)),
+          apres: [
+            if (tot((l) => l.paye) > 0) ('Réglé à la clôture', tot((l) => l.paye), _green),
+            ('Reste dû', tot((l) => l.reste), _red),
+          ],
+        ),
+      ]),
+      pw.SizedBox(height: 24),
+      _signatures(['Établi par', 'Visa de la direction']),
+    ],
+  ));
+
+  for (final l in lignes) {
+    pw.Widget ligne(String t, double v, {bool gras = false, String signe = ''}) => pw.Container(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: _line, width: 0.6))),
+          child: pw.Row(children: [
+            pw.Expanded(child: pw.Text(t, style: pw.TextStyle(fontSize: 10, fontWeight: gras ? pw.FontWeight.bold : null))),
+            pw.Text('$signe${fmtDA(v)}', style: pw.TextStyle(fontSize: 10, fontWeight: gras ? pw.FontWeight.bold : null)),
+          ]),
+        );
+    pw.Widget bloc(String titre, List<pw.Widget> c) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.stretch, children: [
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            color: _goldLight,
+            child: pw.Text(titre.toUpperCase(), style: _label()),
+          ),
+          ...c,
+        ]);
+    final regle = l.paye > 0 && l.reste.abs() < 0.5;
+    doc.addPage(pw.Page(
+      pageTheme: _page(theme),
+      build: (ctx) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.stretch, children: [
+        _entete(atelier, 'FICHE DE PAIE', [
+          ['Mois', libMois],
+          ['Ouvrier', l.nom],
+          if (l.departement.isNotEmpty) ['Département', l.departement],
+          if (_modePaie(l.mode).isNotEmpty) ['Mode', _modePaie(l.mode)],
+        ]),
+        pw.SizedBox(height: 20),
+        bloc('Gains du mois', [
+          if (l.broderie != 0) ligne('Broderie (points)', l.broderie),
+          if (l.pieces != 0) ligne('Travaux à la pièce', l.pieces),
+          if (l.salaires != 0) ligne('Salaire', l.salaires),
+          if (l.primes != 0) ligne('Primes', l.primes),
+          ligne('Total des gains', l.gains, gras: true),
+        ]),
+        pw.SizedBox(height: 12),
+        bloc('Déductions du mois', [
+          if (l.avances != 0) ligne('Avances', l.avances, signe: '− '),
+          if (l.retenues != 0) ligne('Retenues', l.retenues, signe: '− '),
+          if (l.paiements != 0) ligne('Déjà payé dans le mois', l.paiements, signe: '− '),
+          ligne('Total des déductions', l.deductions, gras: true, signe: '− '),
+        ]),
+        if (l.anterieur != 0) ...[
+          pw.SizedBox(height: 12),
+          bloc('Report', [ligne(l.anterieur > 0 ? 'Reste dû des mois précédents' : 'Avance non couverte des mois précédents', l.anterieur)]),
+        ],
+        pw.SizedBox(height: 16),
+        pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.Expanded(
+            child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+              if (l.net > 0) _lettres('Net à payer :', l.net),
+              if (regle) ...[pw.SizedBox(height: 16), pw.Padding(padding: const pw.EdgeInsets.only(left: 30), child: _tampon('PAYÉE', _green))],
+            ]),
+          ),
+          pw.SizedBox(width: 16),
+          _totaux(
+            [],
+            net: (l.net >= 0 ? 'Net à payer' : 'Avance à reporter', l.net.abs()),
+            apres: [
+              if (l.paye > 0) ('Réglé', l.paye, _green),
+              if (l.paye > 0) ('Reste dû', l.reste, l.reste.abs() < 0.5 ? _grey : _red),
+            ],
+          ),
+        ]),
+        pw.Spacer(),
+        _signatures(['Signature de l\'ouvrier', 'L\'employeur']),
+        pw.SizedBox(height: 10),
+        _footer(ctx, atelier),
+      ]),
+    ));
+  }
+  return doc.save();
+}

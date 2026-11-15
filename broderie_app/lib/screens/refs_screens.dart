@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'gestion_screens.dart';
 import '../data/app_data.dart';
 import '../data/models.dart';
 import '../theme.dart';
@@ -97,6 +98,21 @@ class _OuvriersScreenState extends State<OuvriersScreen> {
                     color: AppColors.rose,
                   ),
                 ]),
+                const SizedBox(height: 12),
+                AppCard(
+                  padding: EdgeInsets.zero,
+                  child: ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(gradient: AppColors.goldGradient, borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.lock_clock_rounded, color: AppColors.ink),
+                    ),
+                    title: const Text('Clôture de la paie du mois', style: TextStyle(fontWeight: FontWeight.w800)),
+                    subtitle: const Text('Salaires, avances, net à payer · toutes les fiches de paie en un clic'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CloturePaieScreen())),
+                  ),
+                ),
                 const SizedBox(height: 12),
                 AppCard(
                   padding: const EdgeInsets.all(14),

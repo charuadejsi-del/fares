@@ -11,6 +11,7 @@ import '../utils.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'admin_screens.dart';
+import 'gestion_screens.dart';
 import 'refs_screens.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -60,6 +61,14 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: Text(session.atelier?.nom ?? ''),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocieteScreen())),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.history_rounded, color: AppColors.gold),
+                  title: const Text('Journal des actions', style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: const Text('Qui a ajouté, modifié ou supprimé quoi, et quand'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const JournalScreen())),
                 ),
               ]),
             ),
