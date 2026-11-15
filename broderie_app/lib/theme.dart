@@ -1,30 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Palette de l'application.
+/// Palette « Maison de couture » : noir profond, or et pierres précieuses.
 class AppColors {
-  static const violet = Color(0xFF8B5CF6);
-  static const violetDeep = Color(0xFF5B21B6);
-  static const gold = Color(0xFFE2B04A);
-  static const teal = Color(0xFF14B8A6);
-  static const rose = Color(0xFFF43F5E);
-  static const sky = Color(0xFF38BDF8);
-  static const green = Color(0xFF22C55E);
+  static const violet = Color(0xFF7C6CF6); // améthyste
+  static const violetDeep = Color(0xFF1B2440); // encre
+  static const gold = Color(0xFFD4AF37);
+  static const teal = Color(0xFF19B3A6); // émeraude claire
+  static const rose = Color(0xFFE5486B); // rubis
+  static const sky = Color(0xFF4FA3F7); // saphir
+  static const green = Color(0xFF2EBD7A); // émeraude
+  static const ink = Color(0xFF0E1320);
 
   // Sombre
-  static const darkBg = Color(0xFF0E1015);
-  static const darkSurface = Color(0xFF171A22);
-  static const darkSurface2 = Color(0xFF1F2330);
-  static const darkLine = Color(0xFF2A2F3D);
+  static const darkBg = Color(0xFF07090E);
+  static const darkSurface = Color(0xFF10141D);
+  static const darkSurface2 = Color(0xFF181D29);
+  static const darkLine = Color(0xFF242A39);
 
-  // Clair
-  static const lightBg = Color(0xFFF4F5FA);
+  // Clair (ivoire)
+  static const lightBg = Color(0xFFF6F3EC);
   static const lightSurface = Colors.white;
-  static const lightSurface2 = Color(0xFFF0EEFB);
-  static const lightLine = Color(0xFFE6E4F0);
+  static const lightSurface2 = Color(0xFFF1ECE1);
+  static const lightLine = Color(0xFFE6DFD0);
 
   /// Couleurs des séries (graphiques, avatars).
-  static const series = [violet, gold, teal, rose, sky, green, Color(0xFFF97316), Color(0xFFA3E635)];
+  static const series = [gold, violet, teal, rose, sky, green, Color(0xFFF59E0B), Color(0xFFB794F4)];
 
   static Color forName(String s) {
     var h = 0;
@@ -37,13 +38,14 @@ class AppColors {
   static const heroGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF6D28D9), Color(0xFF8B5CF6), Color(0xFFC084FC)],
+    colors: [Color(0xFF0E1320), Color(0xFF1C2541), Color(0xFF6E5216)],
+    stops: [0, 0.55, 1],
   );
 
   static const goldGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFB7791F), Color(0xFFE2B04A), Color(0xFFF6D98B)],
+    colors: [Color(0xFF9C7A1E), Color(0xFFD4AF37), Color(0xFFF3DC8C)],
   );
 }
 
@@ -82,9 +84,11 @@ ThemeData buildTheme(Brightness b) {
   final bg = dark ? AppColors.darkBg : AppColors.lightBg;
   final surface = dark ? AppColors.darkSurface : AppColors.lightSurface;
   final line = dark ? AppColors.darkLine : AppColors.lightLine;
-  final cs = ColorScheme.fromSeed(seedColor: AppColors.violet, brightness: b).copyWith(
-    primary: dark ? const Color(0xFFA78BFA) : AppColors.violetDeep,
+  final cs = ColorScheme.fromSeed(seedColor: AppColors.gold, brightness: b).copyWith(
+    primary: dark ? AppColors.gold : AppColors.violetDeep,
+    onPrimary: dark ? AppColors.ink : Colors.white,
     secondary: AppColors.gold,
+    onSecondary: AppColors.ink,
     surface: surface,
     surfaceContainerLowest: bg,
     surfaceContainerLow: surface,
@@ -93,20 +97,20 @@ ThemeData buildTheme(Brightness b) {
     outlineVariant: line,
   );
   final base = ThemeData(useMaterial3: true, colorScheme: cs, brightness: b);
-  final radius = BorderRadius.circular(14);
+  final radius = BorderRadius.circular(12);
   return base.copyWith(
     scaffoldBackgroundColor: bg,
     extensions: [
       AppPalette(
         surface2: dark ? AppColors.darkSurface2 : AppColors.lightSurface2,
         line: line,
-        muted: dark ? const Color(0xFF9AA0B4) : const Color(0xFF6B6F80),
+        muted: dark ? const Color(0xFF8F97AB) : const Color(0xFF6F6858),
       ),
     ],
     textTheme: base.textTheme.copyWith(
-      headlineMedium: base.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5),
-      headlineSmall: base.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.3),
-      titleLarge: base.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+      headlineMedium: base.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.6),
+      headlineSmall: base.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.4),
+      titleLarge: base.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.2),
       titleMedium: base.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
     ),
     appBarTheme: AppBarTheme(
@@ -150,16 +154,27 @@ ThemeData buildTheme(Brightness b) {
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
     ),
+    tabBarTheme: TabBarThemeData(
+      indicatorColor: AppColors.gold,
+      labelColor: dark ? AppColors.gold : AppColors.violetDeep,
+      unselectedLabelColor: dark ? const Color(0xFF8F97AB) : const Color(0xFF6F6858),
+      labelStyle: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.2),
+      dividerColor: line,
+    ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: surface,
       surfaceTintColor: Colors.transparent,
-      indicatorColor: cs.primary.withValues(alpha: 0.18),
+      indicatorColor: AppColors.gold.withValues(alpha: 0.22),
       height: 68,
       labelTextStyle: WidgetStateProperty.all(const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
     ),
     navigationRailTheme: NavigationRailThemeData(
-      backgroundColor: surface,
-      indicatorColor: cs.primary.withValues(alpha: 0.18),
+      backgroundColor: dark ? const Color(0xFF0A0D14) : AppColors.ink,
+      indicatorColor: AppColors.gold.withValues(alpha: 0.22),
+      selectedIconTheme: const IconThemeData(color: AppColors.gold),
+      unselectedIconTheme: const IconThemeData(color: Color(0xFF8F97AB)),
+      selectedLabelTextStyle: const TextStyle(color: AppColors.gold, fontWeight: FontWeight.w800),
+      unselectedLabelTextStyle: const TextStyle(color: Color(0xFFB7BDCB), fontWeight: FontWeight.w600),
     ),
     dividerTheme: DividerThemeData(color: line, space: 1),
     snackBarTheme: SnackBarThemeData(
@@ -167,8 +182,8 @@ ThemeData buildTheme(Brightness b) {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: cs.primary,
-      foregroundColor: cs.onPrimary,
+      backgroundColor: dark ? AppColors.gold : AppColors.violetDeep,
+      foregroundColor: dark ? AppColors.ink : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
     ),
   );

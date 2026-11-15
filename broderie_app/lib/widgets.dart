@@ -15,7 +15,7 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final r = BorderRadius.circular(20);
+    final r = BorderRadius.circular(18);
     return Material(
       color: Colors.transparent,
       child: Ink(
@@ -23,10 +23,12 @@ class AppCard extends StatelessWidget {
           color: gradient == null ? context.cs.surface : null,
           gradient: gradient,
           borderRadius: r,
-          border: gradient == null ? Border.all(color: context.pal.line) : null,
+          border: gradient == null
+              ? Border.all(color: context.pal.line)
+              : Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
           boxShadow: context.isDark
-              ? null
-              : [BoxShadow(color: const Color(0xFF5B21B6).withValues(alpha: 0.06), blurRadius: 18, offset: const Offset(0, 6))],
+              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 22, offset: const Offset(0, 10))]
+              : [BoxShadow(color: const Color(0xFF6E5216).withValues(alpha: 0.07), blurRadius: 20, offset: const Offset(0, 8))],
         ),
         child: InkWell(
           borderRadius: r,
@@ -159,7 +161,11 @@ class StatTile extends StatelessWidget {
           Row(children: [
             Container(
               padding: const EdgeInsets.all(9),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [color.withValues(alpha: 0.28), color.withValues(alpha: 0.10)]),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withValues(alpha: 0.35)),
+              ),
               child: Icon(icon, color: color, size: 20),
             ),
             const Spacer(),
@@ -175,7 +181,9 @@ class StatTile extends StatelessWidget {
             child: Text(value, style: context.tt.headlineSmall),
           ),
           const SizedBox(height: 2),
-          Text(label, style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+          Text(label.toUpperCase(), style: context.tt.labelSmall?.copyWith(color: context.pal.muted, letterSpacing: 0.8, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 10),
+          Container(height: 2.5, width: 34, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
         ]),
       );
 }

@@ -8,6 +8,7 @@ import '../../theme.dart';
 import '../../utils.dart';
 import '../../widgets.dart';
 import 'clients_screen.dart';
+import 'modeles_screen.dart' show choisirArticles;
 import 'scan_screen.dart';
 import 'ventes_screen.dart';
 
@@ -241,12 +242,12 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
   double get _brut => _panier.fold<double>(0, (s, l) => s + l.montant);
   double get _total => (_brut - (parseNum(_remise.text) ?? 0)).clamp(0, double.infinity).toDouble();
 
-  void _ajouter(Produit p) => setState(() {
+  void _ajouter(Produit p, [int n = 1]) => setState(() {
         final i = _panier.indexWhere((l) => l.produit.id == p.id);
         if (i >= 0) {
-          _panier[i].quantite++;
+          _panier[i].quantite += n;
         } else {
-          _panier.add(LignePanier(p, prix: stock.prixPour(p, _clientId)));
+          _panier.add(LignePanier(p, quantite: n, prix: stock.prixPour(p, _clientId)));
         }
       });
 
@@ -380,8 +381,11 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
               ),
               OutlinedButton.icon(
                 onPressed: () async {
-                  final p = await showDialog<Produit>(context: context, builder: (_) => const ChoixProduitDialog());
-                  if (p != null) _ajouter(p);
+                  final r = await choisirArticles(context);
+                  if (r == null) return;
+                  for (final (p, n) in r) {
+                    _ajouter(p, n);
+                  }
                 },
                 icon: const Icon(Icons.search_rounded),
                 label: const Text('Chercher'),

@@ -11,6 +11,7 @@ import '../../data/commerce.dart';
 import 'avoirs_screen.dart';
 import 'clients_screen.dart';
 import 'produits_screen.dart' show stockColor;
+import 'modeles_screen.dart' show choisirArticles;
 import 'scan_screen.dart';
 
 Color venteColor(Vente v) {
@@ -213,8 +214,6 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
   final List<LignePanier> _panier = [];
   final _remise = TextEditingController();
   final _versement = TextEditingController();
-  final _chauffeur = TextEditingController();
-  final _vehicule = TextEditingController();
   final _adresse = TextEditingController();
   final _note = TextEditingController();
   String _mode = 'especes';
@@ -230,7 +229,7 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
 
   @override
   void dispose() {
-    for (final c in [_remise, _versement, _chauffeur, _vehicule, _adresse, _note]) {
+    for (final c in [_remise, _versement, _adresse, _note]) {
       c.dispose();
     }
     super.dispose();
@@ -275,8 +274,11 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
       ));
 
   Future<void> _chercher() async {
-    final p = await showDialog<Produit>(context: context, builder: (_) => const ChoixProduitDialog());
-    if (p != null) _ajouter(p);
+    final r = await choisirArticles(context);
+    if (r == null) return;
+    for (final (p, n) in r) {
+      _ajouter(p, n);
+    }
   }
 
   Future<void> _valider() async {
@@ -310,8 +312,6 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
         remise: _remiseV,
         versement: verse,
         mode: _mode,
-        chauffeur: _chauffeur.text,
-        vehicule: _vehicule.text,
         adresse: _adresse.text,
         note: _note.text,
         autoriserNegatif: negatif,
@@ -434,13 +434,9 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            title: const Text('Livraison (bon de livraison)'),
-            subtitle: Text('Chauffeur, véhicule, adresse', style: TextStyle(color: context.pal.muted, fontSize: 12)),
+            title: const Text('Livraison et remarque'),
+            subtitle: Text('Adresse de livraison, remarque', style: TextStyle(color: context.pal.muted, fontSize: 12)),
             children: [
-              TextField(controller: _chauffeur, decoration: const InputDecoration(labelText: 'Chauffeur', prefixIcon: Icon(Icons.person_pin_outlined))),
-              const SizedBox(height: 8),
-              TextField(controller: _vehicule, decoration: const InputDecoration(labelText: 'Véhicule / matricule', prefixIcon: Icon(Icons.local_shipping_outlined))),
-              const SizedBox(height: 8),
               TextField(controller: _adresse, decoration: const InputDecoration(labelText: 'Adresse de livraison', prefixIcon: Icon(Icons.place_outlined))),
               const SizedBox(height: 8),
               TextField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque', prefixIcon: Icon(Icons.notes))),

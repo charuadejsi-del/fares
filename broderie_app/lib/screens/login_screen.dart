@@ -80,8 +80,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     Center(
                       child: Container(
                         padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(gradient: AppColors.heroGradient, borderRadius: BorderRadius.circular(22)),
-                        child: const Icon(Icons.auto_awesome_rounded, size: 40, color: Colors.white),
+                        decoration: BoxDecoration(
+                          gradient: AppColors.goldGradient,
+                          borderRadius: BorderRadius.circular(22),
+                          boxShadow: [BoxShadow(color: AppColors.gold.withValues(alpha: 0.4), blurRadius: 24)],
+                        ),
+                        child: const Icon(Icons.diamond_rounded, size: 40, color: AppColors.ink),
                       ),
                     ),
                     const SizedBox(height: 12),

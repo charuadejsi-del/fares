@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -522,6 +523,8 @@ class _SocieteScreenState extends State<SocieteScreen> {
   late final _rib = TextEditingController(text: a.rib);
   late final _tva = TextEditingController(text: fmtNum(a.tva));
   late final _ment = TextEditingController(text: a.mentions);
+  late final _qrLien = TextEditingController(text: a.qrLien);
+  late final _qrLib = TextEditingController(text: a.qrLibelle ?? 'Suivez-nous sur Facebook');
   bool _busy = false;
 
   String? _n(TextEditingController c) => c.text.trim().isEmpty ? null : c.text.trim();
@@ -543,6 +546,8 @@ class _SocieteScreenState extends State<SocieteScreen> {
         'rib': _n(_rib),
         'tva': parseNum(_tva.text) ?? 0,
         'mentions': _n(_ment),
+        'qr_lien': _n(_qrLien),
+        'qr_libelle': _n(_qrLien) == null ? null : _n(_qrLib),
       });
       if (mounted) showSnack(context, 'Informations enregistrées');
     } catch (e) {
@@ -594,6 +599,40 @@ class _SocieteScreenState extends State<SocieteScreen> {
                 _f(_tva, 'TVA (%)', Icons.percent_rounded, k: const TextInputType.numberWithOptions(decimal: true),
                     helper: '0 si non assujetti. S\'applique aux nouvelles ventes.'),
                 _f(_ment, 'Mention en bas des documents', Icons.notes, helper: 'ex. Merci pour votre confiance'),
+              ]),
+            ),
+            const SizedBox(height: 12),
+            AppCard(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                const SectionTitle('QR code sur les documents',
+                    subtitle: 'Collez le lien de votre page Facebook (ou Instagram, site, WhatsApp) : un QR code est ajouté en bas à droite de chaque facture, BL, bon de commande, devis et avoir.'),
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(
+                    child: Column(children: [
+                      TextFormField(
+                        controller: _qrLien,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(labelText: 'Lien (ex. https://facebook.com/mapage)', prefixIcon: Icon(Icons.link_rounded)),
+                        onChanged: (_) => setState(() {}),
+                        validator: (v) {
+                          final t = (v ?? '').trim();
+                          if (t.isEmpty) return null;
+                          return t.startsWith('http://') || t.startsWith('https://') ? null : 'Le lien doit commencer par https://';
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(controller: _qrLib, decoration: const InputDecoration(labelText: 'Texte à côté du QR', prefixIcon: Icon(Icons.short_text_rounded))),
+                    ]),
+                  ),
+                  if (_qrLien.text.trim().startsWith('http')) ...[
+                    const SizedBox(width: 14),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                      child: BarcodeWidget(barcode: Barcode.qrCode(), data: _qrLien.text.trim(), width: 110, height: 110, drawText: false),
+                    ),
+                  ],
+                ]),
               ]),
             ),
             const SizedBox(height: 16),

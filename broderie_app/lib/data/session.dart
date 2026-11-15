@@ -31,6 +31,8 @@ class Atelier {
   final double tva;
   final String? mentions;
   final String? logoPath;
+  final String? qrLien;
+  final String? qrLibelle;
 
   const Atelier({
     required this.id,
@@ -47,6 +49,8 @@ class Atelier {
     this.tva = 0,
     this.mentions,
     this.logoPath,
+    this.qrLien,
+    this.qrLibelle,
   });
 
   factory Atelier.fromMap(Map<String, dynamic> m) => Atelier(
@@ -64,6 +68,8 @@ class Atelier {
         tva: _d(m['tva']),
         mentions: _s(m['mentions']),
         logoPath: _s(m['logo_path']),
+        qrLien: _s(m['qr_lien']),
+        qrLibelle: _s(m['qr_libelle']),
       );
 }
 

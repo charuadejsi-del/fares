@@ -26,6 +26,7 @@ class Produit {
   final int vendus;
   final int reserve;
   final double coutMatieres;
+  final String? modele;
 
   const Produit({
     required this.id,
@@ -43,6 +44,7 @@ class Produit {
     this.vendus = 0,
     this.reserve = 0,
     this.coutMatieres = 0,
+    this.modele,
   });
 
   factory Produit.fromMap(Map<String, dynamic> m) => Produit(
@@ -61,6 +63,7 @@ class Produit {
         vendus: _i(m['vendus']),
         reserve: _i(m['reserve']),
         coutMatieres: _d(m['cout_matieres']),
+        modele: _s(m['modele']),
       );
 
   static Map<String, dynamic> toRow({
@@ -88,7 +91,8 @@ class Produit {
         'actif': actif,
       };
 
-  String get variante => [if (taille != null) taille!, if (couleur != null) couleur!].join(' · ');
+  String get variante => [if (couleur != null) couleur!, if (taille != null) 'T. $taille'].join(' · ');
+  String get cleModele => modele ?? id;
   String get libelle => variante.isEmpty ? designation : '$designation ($variante)';
   int get disponible => stock - reserve;
   double get coutTotal => coutMatieres + coutRevient;
@@ -97,6 +101,84 @@ class Produit {
   bool get rupture => stock <= 0;
   double get valeurStock => (stock > 0 ? stock : 0) * prixGros;
 }
+
+/// Un modèle de robe = toutes ses variantes (couleur × taille), une référence/QR par variante.
+class Modele {
+  final String cle;
+  final List<Produit> variantes;
+  Modele(this.cle, this.variantes);
+
+  Produit get base => variantes.first;
+  String get reference => base.modele ?? base.reference;
+  String get designation => base.designation;
+  String? get categorie => base.categorie;
+  double get prixGros => base.prixGros;
+  bool get actif => variantes.any((v) => v.actif);
+  int get stock => variantes.fold<int>(0, (s, v) => s + v.stock);
+  int get disponible => variantes.fold<int>(0, (s, v) => s + v.disponible);
+  int get reserve => variantes.fold<int>(0, (s, v) => s + v.reserve);
+  int get vendus => variantes.fold<int>(0, (s, v) => s + v.vendus);
+  bool get enAlerte => variantes.any((v) => v.actif && v.enAlerte);
+  bool get rupture => stock <= 0;
+  double get valeurStock => variantes.fold<double>(0, (s, v) => s + v.valeurStock);
+
+  List<String?> get couleurs {
+    final out = <String?>[];
+    for (final v in variantes) {
+      if (!out.contains(v.couleur)) out.add(v.couleur);
+    }
+    return out;
+  }
+
+  List<String?> get tailles {
+    final out = <String?>[];
+    for (final v in variantes) {
+      if (!out.contains(v.taille)) out.add(v.taille);
+    }
+    out.sort((a, b) => ordreTaille(a).compareTo(ordreTaille(b)));
+    return out;
+  }
+
+  Produit? variante(String? couleur, String? taille) {
+    for (final v in variantes) {
+      if (v.couleur == couleur && v.taille == taille) return v;
+    }
+    return null;
+  }
+
+  bool contient(String q) {
+    final x = q.toLowerCase();
+    return designation.toLowerCase().contains(x) ||
+        reference.toLowerCase().contains(x) ||
+        variantes.any((v) => v.reference.toLowerCase().contains(x) || (v.couleur ?? '').toLowerCase().contains(x) || (v.taille ?? '').toLowerCase().contains(x));
+  }
+}
+
+const taillesStandard = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '36', '38', '40', '42', '44', '46', '48', '50', '52', '54', 'Standard'];
+
+int ordreTaille(String? t) {
+  if (t == null) return -1;
+  final i = taillesStandard.indexOf(t);
+  if (i >= 0) return i;
+  final n = int.tryParse(t);
+  return n != null ? 100 + n : 1000;
+}
+
+String _code(String? s) {
+  if (s == null) return '';
+  const a = 'àâäáãåçéèêëíìîïñóòôöõúùûüýÿ';
+  const b = 'aaaaaaceeeeiiiinooooouuuuyy';
+  final buf = StringBuffer();
+  for (final ch in s.toLowerCase().split('')) {
+    final i = a.indexOf(ch);
+    final c = i >= 0 ? b[i] : ch;
+    if (RegExp(r'[a-z0-9]').hasMatch(c)) buf.write(c);
+  }
+  return buf.toString().toUpperCase();
+}
+
+String referenceVariante(String base, String? couleur, String? taille) =>
+    [base.trim().toUpperCase(), if (couleur != null) _code(couleur), if (taille != null) _code(taille)].where((e) => e.isNotEmpty).join('-');
 
 enum TypeStock { entree, sortie, vente, retour, ajustement, annulation }
 
@@ -353,6 +435,8 @@ class LignePanier {
   double get montant => quantite * prix;
 }
 
+String cleGrille(String? couleur, String? taille) => '${couleur ?? ''}|${taille ?? ''}';
+
 // =================================================================== données
 
 class StockData extends ChangeNotifier {
@@ -429,6 +513,112 @@ class StockData extends ChangeNotifier {
   }
 
   // ---------------- produits
+
+  /// Modèles regroupant les variantes (ordre : référence).
+  List<Modele> get modeles {
+    final map = <String, List<Produit>>{};
+    for (final p in produits) {
+      (map[p.cleModele] ??= []).add(p);
+    }
+    final out = [
+      for (final e in map.entries)
+        Modele(e.key, e.value..sort((a, b) {
+          final c = (a.couleur ?? '').compareTo(b.couleur ?? '');
+          return c != 0 ? c : ordreTaille(a.taille).compareTo(ordreTaille(b.taille));
+        }))
+    ];
+    out.sort((a, b) => a.reference.compareTo(b.reference));
+    return out;
+  }
+
+  Modele? modeleDe(String? produitId) {
+    final p = produit(produitId);
+    if (p == null) return null;
+    return Modele(p.cleModele, produits.where((x) => x.cleModele == p.cleModele).toList());
+  }
+
+  Modele? modeleParCle(String cle) {
+    final v = produits.where((x) => x.cleModele == cle).toList();
+    return v.isEmpty ? null : Modele(cle, v);
+  }
+
+  /// Toutes les couleurs déjà utilisées (pour proposer la liste).
+  List<String> get couleursUtilisees => produits.map((p) => p.couleur).whereType<String>().toSet().toList()..sort();
+  List<String> get taillesUtilisees => produits.map((p) => p.taille).whereType<String>().toSet().toList()..sort((a, b) => ordreTaille(a).compareTo(ordreTaille(b)));
+
+  String _refLibre(String ref) {
+    var r = ref;
+    var i = 2;
+    while (parReference(r) != null) {
+      r = '$ref-${i++}';
+    }
+    return r;
+  }
+
+  /// Crée les variantes manquantes d'un modèle et ajoute les quantités initiales.
+  /// [quantites] : clé '$couleur|$taille' (vide si null) -> pièces.
+  Future<String> creerVariantes({
+    required String reference,
+    required Map<String, dynamic> champs,
+    required List<String?> couleurs,
+    required List<String?> tailles,
+    Map<String, int> quantites = const {},
+    Modele? existant,
+  }) async {
+    final cle = reference.trim().toUpperCase();
+    if (existant != null && existant.base.modele == null) {
+      await _db.from('stock_produits').update({'modele': cle}).eq('id', existant.base.id);
+    }
+    final rows = <Map<String, dynamic>>[];
+    final cs = couleurs.isEmpty ? <String?>[null] : couleurs;
+    final ts = tailles.isEmpty ? <String?>[null] : tailles;
+    final unique = cs.length == 1 && ts.length == 1 && cs.first == null && ts.first == null && existant == null;
+    final prises = <String>{};
+    for (final c in cs) {
+      for (final t in ts) {
+        if (existant?.variante(c, t) != null) continue;
+        var ref = unique ? cle : _refLibre(referenceVariante(cle, c, t));
+        while (prises.contains(ref)) {
+          ref = '$ref-X';
+        }
+        prises.add(ref);
+        rows.add({...champs, 'reference': ref, 'couleur': c, 'taille': t, 'modele': cle});
+      }
+    }
+    final mvts = <Map<String, dynamic>>[];
+    if (rows.isNotEmpty) {
+      final ins = await _db.from('stock_produits').insert(rows).select('id, couleur, taille');
+      for (final r in ins) {
+        final q = quantites[cleGrille(r['couleur'] as String?, r['taille'] as String?)] ?? 0;
+        if (q > 0) mvts.add({'produit_id': r['id'], 'type': 'entree', 'quantite': q, 'note': 'Stock initial'});
+      }
+    }
+    if (existant != null) {
+      for (final v in existant.variantes) {
+        final q = quantites[cleGrille(v.couleur, v.taille)] ?? 0;
+        if (q > 0) mvts.add({'produit_id': v.id, 'type': 'entree', 'quantite': q, 'note': 'Entrée de stock'});
+      }
+    }
+    if (mvts.isNotEmpty) await _db.from('stock_mouvements').insert(mvts);
+    await _changed();
+    return cle;
+  }
+
+  /// Entrées / sorties groupées : produitId -> quantité signée.
+  Future<void> mouvementsGroupes(Map<String, int> parProduit, TypeStock type, {String? note}) async {
+    final rows = [
+      for (final e in parProduit.entries)
+        if (e.value != 0) {'produit_id': e.key, 'type': type.name, 'quantite': e.value, 'note': _ne(note)},
+    ];
+    if (rows.isEmpty) return;
+    await _db.from('stock_mouvements').insert(rows);
+    await _changed();
+  }
+
+  Future<void> modifierModele(Modele m, Map<String, dynamic> champs) async {
+    await _db.from('stock_produits').update(champs).inFilter('id', [for (final v in m.variantes) v.id]);
+    await _changed();
+  }
 
   Future<String> prochaineReference([String prefixe = 'ROB']) async {
     final n = await _db.rpc('atelier_prochain_numero', params: {'p_cle': 'produit_$prefixe', 'p_annee': 0});

@@ -5,10 +5,8 @@ import 'dashboard_screen.dart';
 import 'production_screen.dart';
 import 'quick_entry_screen.dart';
 import 'refs_screens.dart';
-import 'stock/achats_screen.dart';
 import 'stock/clients_screen.dart';
 import 'stock/commandes_screen.dart';
-import 'stock/produits_screen.dart';
 import 'stock/ventes_screen.dart';
 
 /// Espace avec onglets en haut.
@@ -49,16 +47,14 @@ class BroderieModule extends StatelessWidget {
       ]);
 }
 
-/// Espace Stock & ventes.
-class StockModule extends StatelessWidget {
-  const StockModule({super.key});
+/// Espace Ventes : ventes, commandes/devis, clients.
+class VentesModule extends StatelessWidget {
+  const VentesModule({super.key});
 
   @override
   Widget build(BuildContext context) => const _Onglets([
-        ('Stock', Icons.inventory_2_outlined, ProduitsScreen()),
         ('Ventes', Icons.receipt_long_outlined, VentesScreen()),
-        ('Commandes', Icons.assignment_outlined, CommandesScreen()),
+        ('Commandes & devis', Icons.assignment_outlined, CommandesScreen()),
         ('Clients', Icons.storefront_outlined, ClientsScreen()),
-        ('Achats', Icons.shopping_basket_outlined, AchatsModule()),
       ]);
 }

@@ -9,6 +9,7 @@ import '../../theme.dart';
 import '../../utils.dart';
 import '../../widgets.dart';
 import '../refs_screens.dart' show FormDialog;
+import 'modeles_screen.dart';
 import 'scan_screen.dart';
 
 Color stockColor(Produit p) => p.rupture ? AppColors.rose : (p.enAlerte ? const Color(0xFFF97316) : AppColors.green);
@@ -47,17 +48,13 @@ class _ProduitsScreenState extends State<ProduitsScreen> {
           final all = stock.produits;
           final cats = all.map((p) => p.categorie).whereType<String>().toSet().toList()..sort();
           final q = _q.toLowerCase();
-          final list = all
-              .where((p) => _inactifs || p.actif)
-              .where((p) => _cat == null || p.categorie == _cat)
-              .where((p) => !_alertes || p.enAlerte)
-              .where((p) =>
-                  q.isEmpty ||
-                  p.reference.toLowerCase().contains(q) ||
-                  p.designation.toLowerCase().contains(q) ||
-                  (p.couleur ?? '').toLowerCase().contains(q) ||
-                  (p.taille ?? '').toLowerCase().contains(q))
+          final modeles = stock.modeles
+              .where((m) => _inactifs || m.actif)
+              .where((m) => _cat == null || m.categorie == _cat)
+              .where((m) => !_alertes || m.enAlerte)
+              .where((m) => q.isEmpty || m.contient(q))
               .toList();
+          final list = [for (final m in modeles) ...m.variantes];
           return Scaffold(
             floatingActionButton: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
               FloatingActionButton.extended(
@@ -71,9 +68,9 @@ class _ProduitsScreenState extends State<ProduitsScreen> {
               const SizedBox(height: 10),
               FloatingActionButton.extended(
                 heroTag: 'fab-new-prod',
-                onPressed: () => ouvrirProduitForm(context),
+                onPressed: () => ouvrirModeleForm(context),
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('Nouveau produit'),
+                label: const Text('Nouveau modèle'),
               ),
             ]),
             body: RefreshIndicator(
@@ -84,7 +81,7 @@ class _ProduitsScreenState extends State<ProduitsScreen> {
                   AutoGrid(minItemWidth: 170, children: [
                     StatTile(label: 'Pièces en stock', value: fmtInt(stock.totalPieces), icon: Icons.inventory_2_rounded, color: AppColors.violet),
                     StatTile(label: 'Valeur (prix gros)', value: fmtDA(stock.valeurStock), icon: Icons.savings_rounded, color: AppColors.green),
-                    StatTile(label: 'Références', value: '${all.where((p) => p.actif).length}', icon: Icons.qr_code_2_rounded, color: AppColors.sky),
+                    StatTile(label: 'Modèles', value: '${stock.modeles.where((m) => m.actif).length}', icon: Icons.checkroom_rounded, color: AppColors.sky),
                     StatTile(label: 'En alerte', value: '${stock.nbAlertes}', icon: Icons.warning_amber_rounded, color: AppColors.rose),
                   ]),
                   const SizedBox(height: 14),
@@ -130,56 +127,17 @@ class _ProduitsScreenState extends State<ProduitsScreen> {
                   const SizedBox(height: 14),
                   if (!stock.loaded)
                     const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator()))
-                  else if (list.isEmpty)
-                    EmptyState(all.isEmpty ? 'Aucun produit.\nAjoutez vos robes avec leur référence : un QR code est créé automatiquement.' : 'Aucun résultat.',
+                  else if (modeles.isEmpty)
+                    EmptyState(all.isEmpty ? 'Aucun modèle.\nCréez un modèle, choisissez ses couleurs et tailles : un QR code est créé pour chaque variante.' : 'Aucun résultat.',
                         icon: Icons.checkroom_outlined)
                   else
-                    AutoGrid(minItemWidth: 330, children: [for (final p in list) _ProduitCard(p)]),
+                    AutoGrid(minItemWidth: 340, children: [for (final m in modeles) ModeleCard(m)]),
                 ],
               ),
             ),
           );
         },
       );
-}
-
-class _ProduitCard extends StatelessWidget {
-  final Produit p;
-  const _ProduitCard(this.p);
-
-  @override
-  Widget build(BuildContext context) {
-    final c = stockColor(p);
-    return AppCard(
-      padding: const EdgeInsets.all(12),
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProduitDetailScreen(produitId: p.id))),
-      child: Row(children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-          child: BarcodeWidget(barcode: Barcode.qrCode(), data: p.reference, width: 54, height: 54, drawText: false),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(p.reference, style: TextStyle(fontWeight: FontWeight.w900, color: context.cs.primary, letterSpacing: 0.5)),
-            Text(p.designation, style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
-            Text([if (p.variante.isNotEmpty) p.variante, if (p.prixGros > 0) '${fmtDA(p.prixGros)} gros', if (p.reserve > 0) '${p.reserve} réservées', if (!p.actif) 'Inactif'].join(' · '),
-                style: context.tt.bodySmall?.copyWith(color: context.pal.muted), overflow: TextOverflow.ellipsis),
-          ]),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(color: c.withValues(alpha: 0.13), borderRadius: BorderRadius.circular(14)),
-          child: Column(children: [
-            Text(fmtInt(p.stock), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: c)),
-            Text(p.rupture ? 'rupture' : 'en stock', style: TextStyle(fontSize: 10.5, color: c, fontWeight: FontWeight.w600)),
-          ]),
-        ),
-      ]),
-    );
-  }
 }
 
 // ======================================================================= scan → stock

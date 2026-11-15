@@ -10,6 +10,8 @@ import 'admin_screens.dart';
 import 'modules.dart';
 import 'refs_screens.dart';
 import 'settings_screen.dart';
+import 'stock/achats_screen.dart' show AchatsModule;
+import 'stock/produits_screen.dart' show ProduitsScreen;
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -18,7 +20,7 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-enum _Cle { accueil, broderie, paie, stock }
+enum _Cle { accueil, broderie, paie, stock, ventes, achats }
 
 class _Dest {
   final _Cle cle;
@@ -41,7 +43,11 @@ class _HomeShellState extends State<HomeShell> {
         if (session.peut(Espace.paie))
           const _Dest(_Cle.paie, 'Ouvriers', 'Ouvriers · salaires & avances', Icons.groups_outlined, Icons.groups_rounded),
         if (session.peut(Espace.stock))
-          const _Dest(_Cle.stock, 'Stock', 'Stock & ventes', Icons.inventory_2_outlined, Icons.inventory_2_rounded),
+          const _Dest(_Cle.stock, 'Robes', 'Stock des robes terminées', Icons.checkroom_outlined, Icons.checkroom_rounded),
+        if (session.peut(Espace.stock))
+          const _Dest(_Cle.ventes, 'Ventes', 'Ventes · commandes · clients', Icons.point_of_sale_outlined, Icons.point_of_sale_rounded),
+        if (session.peut(Espace.stock))
+          const _Dest(_Cle.achats, 'Achats', 'Achats · matières · fournisseurs', Icons.shopping_basket_outlined, Icons.shopping_basket_rounded),
       ];
 
   @override
@@ -103,12 +109,14 @@ class _HomeShellState extends State<HomeShell> {
           onAller: (i) => _aller(switch (i) {
             1 => _Cle.broderie,
             2 => _Cle.paie,
-            _ => _Cle.stock,
+            _ => _Cle.ventes,
           }),
         ),
       _Cle.broderie => BroderieModule(onGoToOuvriers: session.peut(Espace.paie) ? () => _aller(_Cle.paie) : null),
       _Cle.paie => const OuvriersScreen(),
-      _Cle.stock => const StockModule(),
+      _Cle.stock => const ProduitsScreen(),
+      _Cle.ventes => const VentesModule(),
+      _Cle.achats => const AchatsModule(),
     };
   }
 
@@ -135,8 +143,8 @@ class _HomeShellState extends State<HomeShell> {
         if (!wide) ...[
           Container(
             padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(gradient: AppColors.heroGradient, borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 18),
+            decoration: BoxDecoration(gradient: AppColors.goldGradient, borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.diamond_rounded, color: AppColors.ink, size: 18),
           ),
           const SizedBox(width: 10),
         ],
@@ -183,8 +191,12 @@ class _HomeShellState extends State<HomeShell> {
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Container(
                   padding: const EdgeInsets.all(9),
-                  decoration: BoxDecoration(gradient: AppColors.heroGradient, borderRadius: BorderRadius.circular(14)),
-                  child: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.goldGradient,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [BoxShadow(color: AppColors.gold.withValues(alpha: 0.35), blurRadius: 14)],
+                  ),
+                  child: const Icon(Icons.diamond_rounded, color: AppColors.ink),
                 ),
                 if (extended) ...[
                   const SizedBox(width: 12),
@@ -192,8 +204,8 @@ class _HomeShellState extends State<HomeShell> {
                     constraints: const BoxConstraints(maxWidth: 150),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(session.atelier?.nom ?? 'Atelier',
-                          overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-                      Text(session.membre?.nom ?? '', overflow: TextOverflow.ellipsis, style: TextStyle(color: context.pal.muted, fontSize: 12)),
+                          overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white, letterSpacing: 0.3)),
+                      Text(session.membre?.nom ?? '', overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.gold, fontSize: 12, fontWeight: FontWeight.w600)),
                     ]),
                   ),
                 ],
@@ -203,7 +215,7 @@ class _HomeShellState extends State<HomeShell> {
               for (final x in dests) NavigationRailDestination(icon: Icon(x.icon), selectedIcon: Icon(x.selected), label: Text(x.label)),
             ],
           ),
-          VerticalDivider(width: 1, color: context.pal.line),
+          Container(width: 1.5, color: AppColors.gold.withValues(alpha: 0.35)),
           Expanded(child: Scaffold(appBar: appBar, body: _page(d))),
         ]),
       );

@@ -4,6 +4,13 @@ Application native (Flutter) pour **PC Windows** et **Android** qui suit la prod
 points brodés par ouvrier, nombre de robes, points par dessin et montant à payer.
 Les données sont dans **Supabase** : le PC de l'atelier et les téléphones partagent les mêmes chiffres.
 
+## Modèles couleurs × tailles, nouveau design (v7)
+
+- **Modèles** : on choisit les couleurs et les tailles, puis la quantité de chaque combinaison ; chaque variante a sa référence et son QR.
+- **Vente / commande** : choix du modèle puis grille couleur × taille avec le disponible ; le stock baisse automatiquement.
+- **Espaces séparés** : Robes (stock terminé), Ventes (ventes, commandes, clients), Achats (matières, achats, fournisseurs).
+- **Thème noir & or**, documents PDF redessinés (facture, BL sans transport, bon de commande, devis, avoir, relevé) avec QR (ex. page Facebook) en bas à droite.
+
 ## Commerce, matières et pilotage (v6)
 
 - **Commandes clients** avec réservation du stock, **devis / proforma** convertibles, livraison → facture automatique.
