@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/app_data.dart';
+import '../data/commerce.dart';
 import '../data/models.dart';
 import '../data/session.dart';
 import '../data/stock.dart';
+import '../pdf/documents.dart' show oublierLogo;
 import '../utils.dart';
 import '../theme.dart';
 import '../widgets.dart';
@@ -96,6 +98,8 @@ class SettingsScreen extends StatelessWidget {
                 onTap: () async {
                   data.clear();
                   stock.clear();
+                  commerce.clear();
+                  oublierLogo();
                   session.clear();
                   Navigator.of(context).popUntil((r) => r.isFirst);
                   await Supabase.instance.client.auth.signOut();

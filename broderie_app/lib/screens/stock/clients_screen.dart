@@ -7,6 +7,8 @@ import '../../theme.dart';
 import '../../utils.dart';
 import '../../widgets.dart';
 import '../refs_screens.dart' show FormDialog;
+import '../../data/commerce.dart';
+import 'avoirs_screen.dart';
 import 'ventes_screen.dart';
 
 Color soldeClientColor(double s) => s > 0.005 ? AppColors.rose : (s < -0.005 ? AppColors.green : const Color(0xFF9AA0B4));
@@ -310,6 +312,7 @@ class ClientDetailScreen extends StatefulWidget {
 class _ClientDetailScreenState extends State<ClientDetailScreen> {
   List<Vente> _ventes = [];
   List<Versement> _versements = [];
+  List<Avoir> _avoirs = [];
   bool _loading = true;
   bool _pdf = false;
   int _seen = -1;
@@ -334,11 +337,16 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
   Future<void> _load() async {
     _seen = stock.version;
     try {
-      final r = await Future.wait<Object>([stock.ventes(clientId: widget.clientId), stock.versements(clientId: widget.clientId)]);
+      final r = await Future.wait<Object>([
+        stock.ventes(clientId: widget.clientId),
+        stock.versements(clientId: widget.clientId),
+        commerce.avoirs(clientId: widget.clientId),
+      ]);
       if (mounted) {
         setState(() {
           _ventes = r[0] as List<Vente>;
           _versements = r[1] as List<Versement>;
+          _avoirs = r[2] as List<Avoir>;
         });
       }
     } catch (e) {
@@ -350,7 +358,13 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
   Future<void> _releve(Client c, {bool share = false}) async {
     setState(() => _pdf = true);
     try {
-      final bytes = await buildReleveClient(atelier: session.atelier!, client: c, ventes: _ventes, versements: _versements);
+      final bytes = await buildReleveClient(
+        atelier: session.atelier!,
+        client: c,
+        ventes: _ventes,
+        versements: _versements,
+        avoirs: [for (final a in _avoirs) (a.date, 'Avoir ${a.numero} (retour)', a.total)],
+      );
       final nom = 'releve_${c.nom.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}.pdf';
       share ? await partager(bytes, nom) : await imprimer(bytes, nom);
     } catch (e) {
@@ -400,13 +414,14 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                       alignment: Alignment.centerLeft,
                       child: Text(fmtDA(c.solde.abs()), style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w900)),
                     ),
-                    Text('Achats ${fmtDA(c.totalAchats)} · Versé ${fmtDA(c.totalVerse)} · ${c.nbVentes} vente(s)',
+                    Text('Achats ${fmtDA(c.totalAchats)} · Versé ${fmtDA(c.totalVerse)}${c.totalAvoirs > 0 ? ' · Avoirs ${fmtDA(c.totalAvoirs)}' : ''} · ${c.nbVentes} vente(s)',
                         style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
                     const SizedBox(height: 12),
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       _btn(Icons.payments_rounded, 'Versement', () => ouvrirVersementForm(context, c)),
                       _btn(Icons.add_shopping_cart_rounded, 'Nouvelle vente',
                           () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NouvelleVenteScreen(clientId: c.id)))),
+                      _btn(Icons.undo_rounded, 'Retour', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AvoirEditorScreen(client: c)))),
                       _btn(Icons.print_rounded, _pdf ? '…' : 'Relevé PDF', _pdf ? null : () => _releve(c)),
                       _btn(Icons.share_rounded, 'Partager', _pdf ? null : () => _releve(c, share: true)),
                     ]),
@@ -436,6 +451,18 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                       for (final v in _ventes) VenteTile(v, showClient: false),
                   ]),
                 ),
+                const SizedBox(height: 12),
+                _PrixSpeciaux(client: c),
+                if (_avoirs.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  AppCard(
+                    padding: const EdgeInsets.fromLTRB(16, 18, 8, 8),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      const SectionTitle('Retours (avoirs)'),
+                      for (final a in _avoirs) AvoirTile(a),
+                    ]),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 AppCard(
                   padding: const EdgeInsets.fromLTRB(16, 18, 8, 8),
@@ -523,6 +550,79 @@ class VersementTile extends StatelessWidget {
             }
           },
         ),
+      ]),
+    );
+  }
+}
+
+/// Prix spéciaux d'un client de gros.
+class _PrixSpeciaux extends StatelessWidget {
+  final Client client;
+  const _PrixSpeciaux({required this.client});
+
+  Future<void> _edit(BuildContext context, {Produit? produit}) async {
+    Produit? p = produit;
+    p ??= await showDialog<Produit>(context: context, builder: (_) => const ChoixProduitDialog());
+    if (p == null || !context.mounted) return;
+    final actuel = stock.prixClients[client.id]?[p.id];
+    final c = TextEditingController(text: actuel == null ? '' : actuel.toStringAsFixed(actuel == actuel.roundToDouble() ? 0 : 2));
+    final prod = p;
+    final v = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Prix spécial · ${prod.reference}'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('${prod.libelle}\nPrix de gros normal : ${fmtDA(prod.prixGros)}'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: c,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(labelText: 'Prix pour ${client.nom}', suffixText: 'DA'),
+          ),
+        ]),
+        actions: [
+          if (actuel != null) TextButton(onPressed: () => Navigator.pop(ctx, ''), child: const Text('Retirer')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('Enregistrer')),
+        ],
+      ),
+    );
+    if (v == null) return;
+    try {
+      await commerce.setPrixClient(client.id, prod.id, v.isEmpty ? null : parseNum(v));
+    } catch (e) {
+      if (context.mounted) showSnack(context, errorMessage(e), error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final prix = stock.prixClients[client.id] ?? {};
+    return AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SectionTitle('Prix spéciaux', subtitle: 'Appliqués automatiquement dans ses ventes et commandes',
+            trailing: IconButton.filledTonal(tooltip: 'Ajouter', onPressed: () => _edit(context), icon: const Icon(Icons.add_rounded))),
+        if (prix.isEmpty)
+          Text('Aucun : ce client paie le prix de gros normal.', style: TextStyle(color: context.pal.muted))
+        else
+          for (final e in prix.entries)
+            Builder(builder: (context) {
+              final p = stock.produit(e.key);
+              if (p == null) return const SizedBox.shrink();
+              return InkWell(
+                onTap: () => _edit(context, produit: p),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(children: [
+                    Expanded(child: Text('${p.reference} · ${p.libelle}', overflow: TextOverflow.ellipsis)),
+                    Text(fmtDA(p.prixGros), style: TextStyle(color: context.pal.muted, decoration: TextDecoration.lineThrough)),
+                    const SizedBox(width: 8),
+                    Text(fmtDA(e.value), style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.green)),
+                  ]),
+                ),
+              );
+            }),
       ]),
     );
   }

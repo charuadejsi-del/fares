@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/app_data.dart';
+import '../data/commerce.dart';
 import '../data/session.dart';
 import '../data/stock.dart';
 import '../theme.dart';
@@ -58,11 +59,22 @@ class _HomeShellState extends State<HomeShell> {
       await Future.wait<void>([
         if (session.peut(Espace.broderie) || session.peut(Espace.paie)) data.loadRefs(),
         if (session.peut(Espace.stock)) stock.load(),
+        if (session.peut(Espace.stock)) commerce.load().catchError((_) {}),
       ]);
     } catch (e) {
       _error = errorMessage(e);
     }
     if (mounted) setState(() => _loading = false);
+    _rafraichirAlertes();
+  }
+
+  List<Alerte> _alertes = [];
+
+  Future<void> _rafraichirAlertes() async {
+    try {
+      final a = await calculerAlertes();
+      if (mounted) setState(() => _alertes = a);
+    } catch (_) {}
   }
 
   void _aller(_Cle c) {
@@ -131,6 +143,19 @@ class _HomeShellState extends State<HomeShell> {
         Flexible(child: Text(d.title, overflow: TextOverflow.ellipsis)),
       ]),
       actions: [
+        IconButton(
+          tooltip: 'Alertes',
+          onPressed: () async {
+            await _rafraichirAlertes();
+            if (!context.mounted) return;
+            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => AlertesScreen(alertes: _alertes)));
+          },
+          icon: Badge(
+            isLabelVisible: _alertes.isNotEmpty,
+            label: Text('${_alertes.length}'),
+            child: const Icon(Icons.notifications_outlined),
+          ),
+        ),
         IconButton(tooltip: 'Actualiser', onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
         IconButton(
           tooltip: 'Réglages',

@@ -5,7 +5,9 @@ import 'dashboard_screen.dart';
 import 'production_screen.dart';
 import 'quick_entry_screen.dart';
 import 'refs_screens.dart';
+import 'stock/achats_screen.dart';
 import 'stock/clients_screen.dart';
+import 'stock/commandes_screen.dart';
 import 'stock/produits_screen.dart';
 import 'stock/ventes_screen.dart';
 
@@ -21,8 +23,8 @@ class _Onglets extends StatelessWidget {
           Material(
             color: Theme.of(context).scaffoldBackgroundColor,
             child: TabBar(
-              isScrollable: MediaQuery.sizeOf(context).width < 520,
-              tabAlignment: MediaQuery.sizeOf(context).width < 520 ? TabAlignment.start : TabAlignment.fill,
+              isScrollable: MediaQuery.sizeOf(context).width < 760,
+              tabAlignment: MediaQuery.sizeOf(context).width < 760 ? TabAlignment.start : TabAlignment.fill,
               dividerColor: context.pal.line,
               labelStyle: const TextStyle(fontWeight: FontWeight.w800),
               tabs: [for (final o in onglets) Tab(icon: Icon(o.$2, size: 20), text: o.$1, height: 56)],
@@ -55,6 +57,8 @@ class StockModule extends StatelessWidget {
   Widget build(BuildContext context) => const _Onglets([
         ('Stock', Icons.inventory_2_outlined, ProduitsScreen()),
         ('Ventes', Icons.receipt_long_outlined, VentesScreen()),
+        ('Commandes', Icons.assignment_outlined, CommandesScreen()),
         ('Clients', Icons.storefront_outlined, ClientsScreen()),
+        ('Achats', Icons.shopping_basket_outlined, AchatsModule()),
       ]);
 }

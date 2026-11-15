@@ -4,6 +4,17 @@ Application native (Flutter) pour **PC Windows** et **Android** qui suit la prod
 points brodés par ouvrier, nombre de robes, points par dessin et montant à payer.
 Les données sont dans **Supabase** : le PC de l'atelier et les téléphones partagent les mêmes chiffres.
 
+## Commerce, matières et pilotage (v6)
+
+- **Commandes clients** avec réservation du stock, **devis / proforma** convertibles, livraison → facture automatique.
+- **Retours et avoirs** (remise en stock, déduits du solde client), **prix spéciaux par client**.
+- **Matières, fournisseurs, achats** : stock des matières au coût moyen, dettes fournisseurs, paiements.
+- **Composition des robes** (matières par pièce) → coût de revient réel et marge ; bouton *Fabrication* qui déduit les matières.
+- **Tableau de bord** : ventes sur 12 mois, meilleurs clients et robes, marge estimée.
+- **Alertes** (cloche) : ruptures, matières basses, impayés > 30 jours, commandes en retard, devis expirés, avances non couvertes.
+- **Logo** de l'entreprise sur les factures, BL, devis et avoirs.
+- **Installateur Windows** (`AtelierBroderie-Setup-x.y.z.exe`) et **APK signé avec une clé fixe** (`android-signing/`) : les mises à jour s'installent par-dessus.
+
 ## Atelier partagé, employés, stock et ventes (v5)
 - **Comptes** : l'administrateur crée des comptes employés (Réglages → Employés et accès) avec un identifiant et un mot de passe.
   Chaque compte n'a accès qu'aux espaces cochés : **Broderie**, **Paie & avances**, **Stock & ventes**. L'admin voit tout (Vue d'ensemble).

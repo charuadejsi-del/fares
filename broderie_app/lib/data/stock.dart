@@ -24,6 +24,8 @@ class Produit {
   final bool actif;
   final int stock;
   final int vendus;
+  final int reserve;
+  final double coutMatieres;
 
   const Produit({
     required this.id,
@@ -39,6 +41,8 @@ class Produit {
     this.actif = true,
     this.stock = 0,
     this.vendus = 0,
+    this.reserve = 0,
+    this.coutMatieres = 0,
   });
 
   factory Produit.fromMap(Map<String, dynamic> m) => Produit(
@@ -55,6 +59,8 @@ class Produit {
         actif: (m['actif'] ?? true) as bool,
         stock: _i(m['stock']),
         vendus: _i(m['vendus']),
+        reserve: _i(m['reserve']),
+        coutMatieres: _d(m['cout_matieres']),
       );
 
   static Map<String, dynamic> toRow({
@@ -84,6 +90,9 @@ class Produit {
 
   String get variante => [if (taille != null) taille!, if (couleur != null) couleur!].join(' · ');
   String get libelle => variante.isEmpty ? designation : '$designation ($variante)';
+  int get disponible => stock - reserve;
+  double get coutTotal => coutMatieres + coutRevient;
+  double get marge => prixGros - coutTotal;
   bool get enAlerte => stock <= seuilAlerte;
   bool get rupture => stock <= 0;
   double get valeurStock => (stock > 0 ? stock : 0) * prixGros;
@@ -140,6 +149,7 @@ class Client {
   final double solde;
   final int nbVentes;
   final DateTime? derniereVente;
+  final double totalAvoirs;
 
   const Client({
     required this.id,
@@ -156,6 +166,7 @@ class Client {
     this.solde = 0,
     this.nbVentes = 0,
     this.derniereVente,
+    this.totalAvoirs = 0,
   });
 
   factory Client.fromMap(Map<String, dynamic> m) => Client(
@@ -173,6 +184,7 @@ class Client {
         solde: _d(m['solde']),
         nbVentes: _i(m['nb_ventes']),
         derniereVente: m['derniere_vente'] == null ? null : DateTime.tryParse(m['derniere_vente'] as String),
+        totalAvoirs: _d(m['total_avoirs']),
       );
 
   static Map<String, dynamic> toRow({
@@ -218,6 +230,7 @@ class Vente {
   final double verse;
   final double reste;
   final int nbArticles;
+  final double avoirs;
 
   const Vente({
     required this.id,
@@ -240,6 +253,7 @@ class Vente {
     this.verse = 0,
     this.reste = 0,
     this.nbArticles = 0,
+    this.avoirs = 0,
   });
 
   factory Vente.fromMap(Map<String, dynamic> m) => Vente(
@@ -263,6 +277,7 @@ class Vente {
         verse: _d(m['verse']),
         reste: _d(m['reste']),
         nbArticles: _i(m['nb_articles']),
+        avoirs: _d(m['avoirs']),
       );
 
   String get statutTexte {
@@ -348,8 +363,12 @@ class StockData extends ChangeNotifier {
 
   List<Produit> produits = [];
   List<Client> clients = [];
+  /// clientId -> (produitId -> prix spécial)
+  Map<String, Map<String, double>> prixClients = {};
   bool loaded = false;
   int version = 0;
+
+  double prixPour(Produit p, String? clientId) => prixClients[clientId]?[p.id] ?? p.prixGros;
 
   Produit? produit(String? id) {
     for (final p in produits) {
@@ -373,6 +392,7 @@ class StockData extends ChangeNotifier {
     return null;
   }
 
+  int get totalReserve => produits.where((p) => p.actif).fold<int>(0, (s, p) => s + p.reserve);
   int get totalPieces => produits.where((p) => p.actif).fold<int>(0, (s, p) => s + (p.stock > 0 ? p.stock : 0));
   double get valeurStock => produits.where((p) => p.actif).fold<double>(0, (s, p) => s + p.valeurStock);
   int get nbAlertes => produits.where((p) => p.actif && p.enAlerte).length;
@@ -382,9 +402,15 @@ class StockData extends ChangeNotifier {
     final res = await Future.wait<List<Map<String, dynamic>>>([
       _db.from('stock_etat').select().order('reference'),
       _db.from('stock_clients_soldes').select().order('nom'),
+      _db.from('stock_prix_clients').select('client_id, produit_id, prix'),
     ]);
     produits = res[0].map(Produit.fromMap).toList();
     clients = res[1].map(Client.fromMap).toList();
+    final pc = <String, Map<String, double>>{};
+    for (final r in res[2]) {
+      pc.putIfAbsent(r['client_id'] as String, () => {})[r['produit_id'] as String] = _d(r['prix']);
+    }
+    prixClients = pc;
     loaded = true;
     notifyListeners();
   }
@@ -394,6 +420,8 @@ class StockData extends ChangeNotifier {
     clients = [];
     loaded = false;
   }
+
+  Future<void> changed() => _changed();
 
   Future<void> _changed() async {
     version++;
@@ -529,6 +557,18 @@ class StockData extends ChangeNotifier {
   Future<void> annulerVente(String id, String? motif) async {
     await _db.rpc('stock_annuler_vente', params: {'p_vente': id, 'p_motif': motif});
     await _changed();
+  }
+
+  /// Lignes vendues (ventes validées) sur une période, pour les analyses.
+  Future<List<Map<String, dynamic>>> lignesVendues(DateTime from, DateTime to) async {
+    final rows = await _db
+        .from('stock_lignes_detail')
+        .select('produit_id, quantite, montant, client_id, date_vente, statut')
+        .gte('date_vente', dateKey(from))
+        .lte('date_vente', dateKey(to))
+        .eq('statut', 'validee')
+        .limit(10000);
+    return rows;
   }
 
   // ---------------- versements

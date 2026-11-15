@@ -2,6 +2,7 @@ import 'package:barcode_widget/barcode_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../data/commerce.dart';
 import '../../data/stock.dart';
 import '../../pdf/documents.dart';
 import '../../theme.dart';
@@ -163,7 +164,7 @@ class _ProduitCard extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(p.reference, style: TextStyle(fontWeight: FontWeight.w900, color: context.cs.primary, letterSpacing: 0.5)),
             Text(p.designation, style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
-            Text([if (p.variante.isNotEmpty) p.variante, if (p.prixGros > 0) '${fmtDA(p.prixGros)} gros', if (!p.actif) 'Inactif'].join(' · '),
+            Text([if (p.variante.isNotEmpty) p.variante, if (p.prixGros > 0) '${fmtDA(p.prixGros)} gros', if (p.reserve > 0) '${p.reserve} réservées', if (!p.actif) 'Inactif'].join(' · '),
                 style: context.tt.bodySmall?.copyWith(color: context.pal.muted), overflow: TextOverflow.ellipsis),
           ]),
         ),
@@ -702,6 +703,7 @@ class ProduitDetailScreen extends StatefulWidget {
 
 class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
   List<StockMvt> _mvts = [];
+  List<NomenclatureLigne> _nomenclature = [];
   bool _loading = true;
   int _seen = -1;
 
@@ -725,10 +727,49 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
   Future<void> _load() async {
     _seen = stock.version;
     try {
-      final m = await stock.mouvements(produitId: widget.produitId);
-      if (mounted) setState(() => _mvts = m);
+      if (!commerce.loaded) await commerce.load();
+      final r = await Future.wait<Object>([stock.mouvements(produitId: widget.produitId), commerce.nomenclature(widget.produitId)]);
+      if (mounted) setState(() {
+        _mvts = r[0] as List<StockMvt>;
+        _nomenclature = r[1] as List<NomenclatureLigne>;
+      });
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _fabriquer(Produit p) async {
+    final c = TextEditingController(text: '1');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Fabrication · ${p.reference}'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(_nomenclature.isEmpty
+              ? 'Aucune composition définie : seul le stock de robes augmentera.'
+              : 'Le stock de robes augmente et les matières de la composition sont déduites automatiquement.'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: c,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(labelText: 'Nombre de pièces fabriquées'),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Valider')),
+        ],
+      ),
+    );
+    final n = int.tryParse(c.text) ?? 0;
+    if (ok != true || n <= 0) return;
+    try {
+      await commerce.fabrication(p.id, n);
+      if (mounted) showSnack(context, '+$n pièces fabriquées${_nomenclature.isEmpty ? '' : ', matières déduites'}');
+    } catch (e) {
+      if (mounted) showSnack(context, errorMessage(e), error: true);
+    }
   }
 
   Future<void> _supprimer(Produit p) async {
@@ -797,6 +838,11 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
                   icon: const Icon(Icons.add_box_rounded),
                   label: const Text('Ajouter du stock'),
                 ),
+                FilledButton.tonalIcon(
+                  onPressed: () => _fabriquer(p),
+                  icon: const Icon(Icons.precision_manufacturing_rounded),
+                  label: const Text('Fabrication'),
+                ),
                 OutlinedButton.icon(
                   onPressed: () => showModalBottomSheet<bool>(
                       context: context, isScrollControlled: true, showDragHandle: true, builder: (_) => MouvementStockSheet(produit: p, sortie: true)),
@@ -814,6 +860,8 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
                   label: const Text('Petites étiquettes'),
                 ),
               ]),
+              const SizedBox(height: 16),
+              _CoutCard(produit: p, lignes: _nomenclature, onChanged: _load),
               const SizedBox(height: 16),
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -854,4 +902,101 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
         decoration: BoxDecoration(color: c.withValues(alpha: 0.13), borderRadius: BorderRadius.circular(20)),
         child: Text(t, style: TextStyle(color: c, fontWeight: FontWeight.w700, fontSize: 12.5)),
       );
+}
+
+/// Composition (matières par pièce), coût de revient et marge.
+class _CoutCard extends StatelessWidget {
+  final Produit produit;
+  final List<NomenclatureLigne> lignes;
+  final VoidCallback onChanged;
+  const _CoutCard({required this.produit, required this.lignes, required this.onChanged});
+
+  Future<void> _edit(BuildContext context, {NomenclatureLigne? ligne}) async {
+    String? matiereId = ligne?.matiereId;
+    final q = TextEditingController(text: ligne == null ? '' : fmtNum(ligne.quantite).replaceAll(RegExp(r'\s'), ''));
+    final res = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) {
+          final m = commerce.matiere(matiereId);
+          return AlertDialog(
+            title: const Text('Matière par pièce'),
+            content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              DropdownButtonFormField<String>(
+                value: matiereId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Matière'),
+                items: [for (final x in commerce.matieres) DropdownMenuItem(value: x.id, child: Text('${x.nom} (${x.unite})'))],
+                onChanged: ligne != null ? null : (v) => setD(() => matiereId = v),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: q,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(labelText: 'Quantité pour 1 pièce', suffixText: m?.unite ?? ''),
+              ),
+              if (commerce.matieres.isEmpty)
+                const Padding(padding: EdgeInsets.only(top: 8), child: Text('Créez d\'abord vos matières dans Stock → Achats → Matières.')),
+            ]),
+            actions: [
+              if (ligne != null) TextButton(onPressed: () => Navigator.pop(ctx, 'suppr'), child: const Text('Retirer')),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+              FilledButton(onPressed: matiereId == null ? null : () => Navigator.pop(ctx, 'ok'), child: const Text('Enregistrer')),
+            ],
+          );
+        },
+      ),
+    );
+    if (res == null || matiereId == null) return;
+    try {
+      await commerce.setNomenclature(produit.id, matiereId!, res == 'suppr' ? null : parseNum(q.text));
+      onChanged();
+    } catch (e) {
+      if (context.mounted) showSnack(context, errorMessage(e), error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = produit;
+    final pct = p.prixGros > 0 ? p.marge * 100 / p.prixGros : 0.0;
+    Widget ligne(String t, String v, {Color? c, bool b = false}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(children: [
+            Expanded(child: Text(t, style: TextStyle(fontWeight: b ? FontWeight.w900 : null))),
+            Text(v, style: TextStyle(fontWeight: b ? FontWeight.w900 : FontWeight.w700, color: c)),
+          ]),
+        );
+    return AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SectionTitle('Composition et coût de revient', subtitle: 'Matières utilisées pour 1 pièce',
+            trailing: IconButton.filledTonal(tooltip: 'Ajouter une matière', onPressed: () => _edit(context), icon: const Icon(Icons.add_rounded))),
+        if (lignes.isEmpty)
+          Text('Aucune matière. Ajoutez le tissu, le fil, les perles… pour connaître le coût réel.', style: TextStyle(color: context.pal.muted))
+        else
+          for (final l in lignes)
+            Builder(builder: (context) {
+              final m = commerce.matiere(l.matiereId);
+              return InkWell(
+                onTap: () => _edit(context, ligne: l),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Row(children: [
+                    const Icon(Icons.layers_rounded, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('${m?.nom ?? '?'} · ${fmtNum(l.quantite)} ${m?.unite ?? ''}')),
+                    Text(fmtDA(l.quantite * (m?.coutMoyen ?? 0)), style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ]),
+                ),
+              );
+            }),
+        const Divider(height: 22),
+        ligne('Coût des matières', fmtDA(p.coutMatieres)),
+        ligne('+ Main-d\'œuvre / autres (coût de revient saisi)', fmtDA(p.coutRevient)),
+        ligne('= Coût total par pièce', fmtDA(p.coutTotal), b: true),
+        ligne('Prix de gros', fmtDA(p.prixGros)),
+        ligne('Marge par pièce', '${fmtDA(p.marge)}  (${pct.toStringAsFixed(0)} %)', b: true, c: p.marge >= 0 ? AppColors.green : AppColors.rose),
+      ]),
+    );
+  }
 }

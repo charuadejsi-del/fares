@@ -51,6 +51,10 @@ jobs:
           F=android/build.gradle.kts; [ -f $F ] || F=android/build.gradle
           printf '\nsubprojects {\n    tasks.matching { it.name.contains("lintVital") }.configureEach { enabled = false }\n}\n' >> $F
           tail -4 $F
+      - name: Clé de signature fixe (les mises à jour s'installent par-dessus l'ancienne version)
+        run: |
+          mkdir -p ~/.android
+          cp android-signing/atelier-debug.keystore ~/.android/debug.keystore
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
@@ -80,3 +84,15 @@ jobs:
         with:
           name: atelier-broderie-windows
           path: broderie_app/build/windows/x64/runner/Release/
+      - name: Installateur Windows (Inno Setup)
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DAppVersion=$v" installer\atelier.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: atelier-broderie-windows-installateur
+          path: broderie_app/build/installer/*.exe

@@ -7,6 +7,8 @@ import '../../pdf/documents.dart';
 import '../../theme.dart';
 import '../../utils.dart';
 import '../../widgets.dart';
+import '../../data/commerce.dart';
+import 'avoirs_screen.dart';
 import 'clients_screen.dart';
 import 'produits_screen.dart' show stockColor;
 import 'scan_screen.dart';
@@ -249,7 +251,7 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
       if (i >= 0) {
         _panier[i].quantite += n;
       } else {
-        _panier.add(LignePanier(p, quantite: n));
+        _panier.add(LignePanier(p, quantite: n, prix: stock.prixPour(p, _clientId)));
       }
     });
   }
@@ -273,7 +275,7 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
       ));
 
   Future<void> _chercher() async {
-    final p = await showDialog<Produit>(context: context, builder: (_) => const _ChoixProduitDialog());
+    final p = await showDialog<Produit>(context: context, builder: (_) => const ChoixProduitDialog());
     if (p != null) _ajouter(p);
   }
 
@@ -341,7 +343,7 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
         if (_panier.isEmpty)
           const EmptyState('Scannez les étiquettes QR ou cherchez les produits.', icon: Icons.shopping_cart_outlined)
         else
-          for (final l in _panier) _LigneEditor(
+          for (final l in _panier) LigneEditor(
             ligne: l,
             onChanged: () => setState(() {}),
             onRemove: () => setState(() => _panier.remove(l)),
@@ -360,7 +362,12 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
             const DropdownMenuItem<String?>(value: null, child: Text('Client de passage')),
             for (final c in clients) DropdownMenuItem<String?>(value: c.id, child: Text(c.nom, overflow: TextOverflow.ellipsis)),
           ],
-          onChanged: (v) => setState(() => _clientId = v),
+          onChanged: (v) => setState(() {
+            _clientId = v;
+            for (final l in _panier) {
+              l.prix = stock.prixPour(l.produit, v);
+            }
+          }),
         ),
         Row(children: [
           TextButton.icon(
@@ -472,26 +479,27 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
       );
 }
 
-class _LigneEditor extends StatefulWidget {
+class LigneEditor extends StatefulWidget {
   final LignePanier ligne;
   final VoidCallback onChanged;
   final VoidCallback onRemove;
-  const _LigneEditor({required this.ligne, required this.onChanged, required this.onRemove});
+  const LigneEditor({super.key, required this.ligne, required this.onChanged, required this.onRemove});
 
   @override
-  State<_LigneEditor> createState() => _LigneEditorState();
+  State<LigneEditor> createState() => LigneEditorState();
 }
 
-class _LigneEditorState extends State<_LigneEditor> {
+class LigneEditorState extends State<LigneEditor> {
   late final _q = TextEditingController(text: '${widget.ligne.quantite}');
   late final _p = TextEditingController(text: _f(widget.ligne.prix));
 
   static String _f(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
 
   @override
-  void didUpdateWidget(covariant _LigneEditor old) {
+  void didUpdateWidget(covariant LigneEditor old) {
     super.didUpdateWidget(old);
     if (int.tryParse(_q.text) != widget.ligne.quantite) _q.text = '${widget.ligne.quantite}';
+    if ((parseNum(_p.text) ?? -1) != widget.ligne.prix) _p.text = _f(widget.ligne.prix);
   }
 
   @override
@@ -510,7 +518,7 @@ class _LigneEditorState extends State<_LigneEditor> {
   @override
   Widget build(BuildContext context) {
     final l = widget.ligne;
-    final manque = l.quantite > l.produit.stock;
+    final manque = l.quantite > l.produit.disponible;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -518,7 +526,7 @@ class _LigneEditorState extends State<_LigneEditor> {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('${l.produit.reference} · ${l.produit.libelle}', style: const TextStyle(fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis),
-              Text('Disponible : ${fmtInt(l.produit.stock)}${manque ? '  ⚠ insuffisant' : ''}',
+              Text('Disponible : ${fmtInt(l.produit.disponible)}${l.produit.reserve > 0 ? ' (${fmtInt(l.produit.reserve)} réservées)' : ''}${manque ? '  ⚠ insuffisant' : ''}',
                   style: TextStyle(fontSize: 12, color: manque ? AppColors.rose : stockColor(l.produit), fontWeight: FontWeight.w600)),
             ]),
           ),
@@ -569,14 +577,14 @@ class _LigneEditorState extends State<_LigneEditor> {
   }
 }
 
-class _ChoixProduitDialog extends StatefulWidget {
-  const _ChoixProduitDialog();
+class ChoixProduitDialog extends StatefulWidget {
+  const ChoixProduitDialog({super.key});
 
   @override
-  State<_ChoixProduitDialog> createState() => _ChoixProduitDialogState();
+  State<ChoixProduitDialog> createState() => ChoixProduitDialogState();
 }
 
-class _ChoixProduitDialogState extends State<_ChoixProduitDialog> {
+class ChoixProduitDialogState extends State<ChoixProduitDialog> {
   String _q = '';
 
   @override
@@ -637,6 +645,7 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
   Vente? _v;
   List<VenteLigne> _lignes = [];
   List<Versement> _versements = [];
+  List<Avoir> _avoirs = [];
   bool _loading = true;
   bool _pdf = false;
   String? _error;
@@ -666,12 +675,14 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
         stock.vente(widget.venteId),
         stock.lignes(widget.venteId),
         stock.versements(venteId: widget.venteId),
+        commerce.avoirs(venteId: widget.venteId),
       ]);
       if (mounted) {
         setState(() {
           _v = r[0] as Vente;
           _lignes = r[1] as List<VenteLigne>;
           _versements = r[2] as List<Versement>;
+          _avoirs = r[3] as List<Avoir>;
           _error = null;
         });
       }
@@ -802,6 +813,13 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
                     icon: const Icon(Icons.payments_rounded),
                     label: const Text('Encaisser'),
                   ),
+                if (!v.annulee && c != null)
+                  FilledButton.tonalIcon(
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => AvoirEditorScreen(client: c, vente: v, lignesVente: _lignes))),
+                    icon: const Icon(Icons.undo_rounded),
+                    label: const Text('Retour / avoir'),
+                  ),
               ]),
             ]),
           ),
@@ -829,6 +847,7 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
               if (v.tvaTaux > 0) ...[_l('Total HT', v.totalHt), _l('TVA ${fmtNum(v.tvaTaux)} %', v.totalTva)],
               _l(v.tvaTaux > 0 ? 'Total TTC' : 'Total', v.totalTtc, bold: true),
               if (!v.annulee) ...[
+                if (v.avoirs > 0) _l('Avoirs (retours)', -v.avoirs, color: AppColors.teal),
                 _l('Versé', v.verse, color: AppColors.green),
                 _l('Reste à payer', v.reste, bold: true, color: v.reste > 0.005 ? AppColors.rose : AppColors.green),
               ],
@@ -843,6 +862,16 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
                 if (v.vehicule != null) Text('Véhicule : ${v.vehicule}'),
                 if (v.adresseLivraison != null) Text('Adresse : ${v.adresseLivraison}'),
                 if (v.note != null) Text('Remarque : ${v.note}'),
+              ]),
+            ),
+          ],
+          if (_avoirs.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            AppCard(
+              padding: const EdgeInsets.fromLTRB(16, 18, 8, 8),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                const SectionTitle('Retours (avoirs)'),
+                for (final a in _avoirs) AvoirTile(a),
               ]),
             ),
           ],

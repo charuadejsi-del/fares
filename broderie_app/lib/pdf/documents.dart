@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/session.dart';
 import '../data/stock.dart';
@@ -15,6 +16,30 @@ const _green = PdfColor.fromInt(0xFF047857);
 const _red = PdfColor.fromInt(0xFFBE123C);
 
 pw.ThemeData? _theme;
+
+/// Logo de l'entreprise (chargé depuis Supabase Storage, mis en cache).
+Uint8List? _logo;
+String? _logoPath;
+
+Future<void> chargerLogo(Atelier a) async {
+  if (a.logoPath == null) {
+    _logo = null;
+    _logoPath = null;
+    return;
+  }
+  if (_logoPath == a.logoPath && _logo != null) return;
+  try {
+    _logo = await Supabase.instance.client.storage.from('broderie-dessins').download(a.logoPath!);
+    _logoPath = a.logoPath;
+  } catch (_) {
+    _logo = null;
+  }
+}
+
+void oublierLogo() {
+  _logo = null;
+  _logoPath = null;
+}
 
 Future<pw.ThemeData> _pdfTheme() async {
   if (_theme != null) return _theme!;
@@ -84,6 +109,10 @@ String montantEnLettres(double montant) {
 pw.Widget _entete(Atelier a, String titre, List<List<String>> infos) => pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
+        if (_logo != null) ...[
+          pw.Container(width: 70, height: 70, child: pw.Image(pw.MemoryImage(_logo!), fit: pw.BoxFit.contain)),
+          pw.SizedBox(width: 12),
+        ],
         pw.Expanded(
           child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
             pw.Text(a.nom.toUpperCase(), style: pw.TextStyle(fontSize: 17, fontWeight: pw.FontWeight.bold, color: _violet)),
@@ -175,6 +204,7 @@ pw.Widget _footer(pw.Context ctx, Atelier a) => pw.Column(children: [
 // ============================================================== facture
 
 Future<Uint8List> buildFacture({required Atelier atelier, required Vente vente, required List<VenteLigne> lignes, Client? client}) async {
+  await chargerLogo(atelier);
   final doc = pw.Document(title: 'Facture ${vente.numero}', author: atelier.nom, theme: await _pdfTheme());
   final qte = lignes.fold<int>(0, (s, l) => s + l.quantite);
 
@@ -271,6 +301,7 @@ Future<Uint8List> buildFacture({required Atelier atelier, required Vente vente, 
 // ============================================================== bon de livraison
 
 Future<Uint8List> buildBonLivraison({required Atelier atelier, required Vente vente, required List<VenteLigne> lignes, Client? client}) async {
+  await chargerLogo(atelier);
   final doc = pw.Document(title: 'Bon de livraison ${vente.numeroBl}', author: atelier.nom, theme: await _pdfTheme());
   final qte = lignes.fold<int>(0, (s, l) => s + l.quantite);
   doc.addPage(pw.MultiPage(
@@ -345,11 +376,14 @@ Future<Uint8List> buildReleveClient({
   required Client client,
   required List<Vente> ventes,
   required List<Versement> versements,
+  List<(DateTime, String, double)> avoirs = const [],
 }) async {
+  await chargerLogo(atelier);
   final doc = pw.Document(title: 'Relevé ${client.nom}', author: atelier.nom, theme: await _pdfTheme());
   final ops = <(DateTime, String, double, double)>[
     for (final v in ventes.where((v) => !v.annulee)) (v.date, 'Facture ${v.numero}', v.totalTtc, 0),
     for (final x in versements) (x.date, 'Versement (${x.modeTexte})${x.note != null ? ' — ${x.note}' : ''}', 0, x.montant),
+    for (final a in avoirs) (a.$1, a.$2, 0, a.$3),
   ]..sort((a, b) => a.$1.compareTo(b.$1));
   var solde = 0.0;
   final rows = <List<String>>[];
@@ -392,6 +426,106 @@ Future<Uint8List> buildReleveClient({
               style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: client.solde > 0 ? _red : _green)),
         ]),
       ),
+    ],
+  ));
+  return doc.save();
+}
+
+// ============================================================== devis, bon de commande, avoir
+
+typedef LigneDoc = ({String reference, String designation, int quantite, double prix, double montant});
+
+Future<Uint8List> buildDocumentCommercial({
+  required Atelier atelier,
+  required String titre,
+  required List<List<String>> infos,
+  required String titreClient,
+  Client? client,
+  required List<LigneDoc> lignes,
+  required List<(String, double, bool)> totaux,
+  double? montantLettres,
+  String? phraseLettres,
+  String? note,
+  List<String> signatures = const ['Le client', 'Cachet et signature'],
+  bool annule = false,
+}) async {
+  await chargerLogo(atelier);
+  final doc = pw.Document(title: titre, author: atelier.nom, theme: await _pdfTheme());
+  final qte = lignes.fold<int>(0, (s, l) => s + l.quantite);
+  doc.addPage(pw.MultiPage(
+    pageFormat: PdfPageFormat.a4,
+    margin: const pw.EdgeInsets.all(30),
+    footer: (ctx) => _footer(ctx, atelier),
+    build: (ctx) => [
+      if (annule) _annulee(),
+      _entete(atelier, titre, infos),
+      pw.SizedBox(height: 14),
+      _blocClient(titreClient, client),
+      pw.SizedBox(height: 14),
+      pw.TableHelper.fromTextArray(
+        headers: ['N°', 'Référence', 'Désignation', 'Qté', 'Prix unitaire', 'Montant'],
+        data: [
+          for (var i = 0; i < lignes.length; i++)
+            ['${i + 1}', lignes[i].reference, lignes[i].designation, fmtInt(lignes[i].quantite), fmtDA(lignes[i].prix), fmtDA(lignes[i].montant)],
+        ],
+        headerStyle: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold, fontSize: 9),
+        headerDecoration: const pw.BoxDecoration(color: _violet),
+        cellStyle: const pw.TextStyle(fontSize: 9),
+        oddRowDecoration: const pw.BoxDecoration(color: _light),
+        columnWidths: {
+          0: const pw.FixedColumnWidth(24),
+          1: const pw.FixedColumnWidth(70),
+          2: const pw.FlexColumnWidth(),
+          3: const pw.FixedColumnWidth(40),
+          4: const pw.FixedColumnWidth(80),
+          5: const pw.FixedColumnWidth(90),
+        },
+        cellAlignments: {
+          0: pw.Alignment.center,
+          1: pw.Alignment.centerLeft,
+          2: pw.Alignment.centerLeft,
+          3: pw.Alignment.centerRight,
+          4: pw.Alignment.centerRight,
+          5: pw.Alignment.centerRight,
+        },
+        border: null,
+      ),
+      pw.SizedBox(height: 10),
+      pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Expanded(
+          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text('Nombre d\'articles : ${fmtInt(qte)}', style: const pw.TextStyle(fontSize: 9)),
+            if (montantLettres != null) ...[
+              pw.SizedBox(height: 10),
+              pw.Text(phraseLettres ?? 'Arrêté le présent document à la somme de :', style: const pw.TextStyle(fontSize: 9, color: _grey)),
+              pw.Text(montantEnLettres(montantLettres), style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+            ],
+            if (note != null) ...[
+              pw.SizedBox(height: 8),
+              pw.Text(note, style: const pw.TextStyle(fontSize: 9)),
+            ],
+          ]),
+        ),
+        pw.SizedBox(width: 20),
+        pw.Container(
+          width: 220,
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(color: _light, borderRadius: pw.BorderRadius.circular(6)),
+          child: pw.Column(children: [
+            for (final t in totaux)
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(vertical: 2),
+                child: pw.Row(children: [
+                  pw.Expanded(child: pw.Text(t.$1, style: pw.TextStyle(fontSize: t.$3 ? 11 : 9.5, fontWeight: t.$3 ? pw.FontWeight.bold : null))),
+                  pw.Text(fmtDA(t.$2),
+                      style: pw.TextStyle(fontSize: t.$3 ? 12 : 9.5, fontWeight: t.$3 ? pw.FontWeight.bold : null, color: t.$3 ? _violet : null)),
+                ]),
+              ),
+          ]),
+        ),
+      ]),
+      pw.SizedBox(height: 30),
+      _signatures(signatures),
     ],
   ));
   return doc.save();

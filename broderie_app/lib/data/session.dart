@@ -30,6 +30,7 @@ class Atelier {
   final String? rib;
   final double tva;
   final String? mentions;
+  final String? logoPath;
 
   const Atelier({
     required this.id,
@@ -45,6 +46,7 @@ class Atelier {
     this.rib,
     this.tva = 0,
     this.mentions,
+    this.logoPath,
   });
 
   factory Atelier.fromMap(Map<String, dynamic> m) => Atelier(
@@ -61,6 +63,7 @@ class Atelier {
         rib: _s(m['rib']),
         tva: _d(m['tva']),
         mentions: _s(m['mentions']),
+        logoPath: _s(m['logo_path']),
       );
 }
 

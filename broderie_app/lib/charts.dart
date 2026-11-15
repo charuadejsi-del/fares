@@ -228,3 +228,78 @@ class DonutLegend extends StatelessWidget {
     ]);
   }
 }
+
+/// Histogramme simple (une valeur par libellé), ex. chiffre d'affaires par mois.
+class SimpleBarChart extends StatelessWidget {
+  final List<String> labels;
+  final List<double> values;
+  final double height;
+  final Color color;
+  const SimpleBarChart({super.key, required this.labels, required this.values, this.height = 220, this.color = AppColors.violet});
+
+  @override
+  Widget build(BuildContext context) {
+    final maxV = values.fold<double>(0, (m, v) => v > m ? v : m);
+    final top = maxV == 0 ? 1000.0 : maxV * 1.18;
+    final muted = context.pal.muted;
+    return SizedBox(
+      height: height,
+      child: BarChart(BarChartData(
+        maxY: top,
+        borderData: FlBorderData(show: false),
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: top / 4,
+          getDrawingHorizontalLine: (_) => FlLine(color: context.pal.line, strokeWidth: 1, dashArray: [4, 4]),
+        ),
+        titlesData: FlTitlesData(
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 46,
+              interval: top / 4,
+              getTitlesWidget: (v, meta) => v == 0 || v >= top ? const SizedBox.shrink() : Text(fmtCompact(v), style: TextStyle(fontSize: 10, color: muted)),
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 26,
+              interval: 1,
+              getTitlesWidget: (v, meta) {
+                final i = v.toInt();
+                if (i < 0 || i >= labels.length) return const SizedBox.shrink();
+                return Padding(padding: const EdgeInsets.only(top: 6), child: Text(labels[i], style: TextStyle(fontSize: 10, color: muted)));
+              },
+            ),
+          ),
+        ),
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipColor: (_) => const Color(0xFF1F1A2E),
+            getTooltipItem: (g, gi, rod, ri) => BarTooltipItem(
+              '${labels[g.x]}\n',
+              const TextStyle(color: Colors.white70, fontSize: 11),
+              children: [TextSpan(text: fmtDA(values[g.x]), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800))],
+            ),
+          ),
+        ),
+        barGroups: [
+          for (var i = 0; i < values.length; i++)
+            BarChartGroupData(x: i, barRods: [
+              BarChartRodData(
+                toY: values[i],
+                width: (300 / values.length).clamp(6.0, 28.0),
+                color: color,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                backDrawRodData: BackgroundBarChartRodData(show: true, toY: top, color: context.pal.surface2),
+              ),
+            ]),
+        ],
+      )),
+    );
+  }
+}
