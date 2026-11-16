@@ -13,25 +13,21 @@ class Langue extends ValueNotifier<String> {
 
   bool get ar => value == 'ar';
 
-  /// Locale des dates : arabe d'Algérie (chiffres latins) si disponible.
-  String get localeDates {
-    if (!ar) return 'fr_FR';
-    return DateFormat.localeExists('ar_DZ') ? 'ar_DZ' : 'ar';
-  }
+  /// Locale des dates (l'arabe standard est le plus sûr ; les chiffres sont remis en latin à l'affichage).
+  String get localeDates => ar ? 'ar' : 'fr_FR';
 
   Future<void> load() async {
     try {
-      await Future.wait([initializeDateFormatting('fr_FR'), initializeDateFormatting('ar_DZ').catchError((_) {}), initializeDateFormatting('ar')]);
+      await Future.wait([initializeDateFormatting('fr_FR'), initializeDateFormatting('ar')]);
     } catch (_) {}
     try {
       final p = await SharedPreferences.getInstance();
       value = p.getString(_cle) == 'ar' ? 'ar' : 'fr';
     } catch (_) {}
-    Intl.defaultLocale = ar ? localeDates : 'fr_FR';
+    Intl.defaultLocale = 'fr_FR';
   }
 
   Future<void> set(String v) async {
-    Intl.defaultLocale = v == 'ar' ? (DateFormat.localeExists('ar_DZ') ? 'ar_DZ' : 'ar') : 'fr_FR';
     value = v;
     try {
       final p = await SharedPreferences.getInstance();

@@ -14,13 +14,41 @@ import 'pin.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  ErrorWidget.builder = _ecranErreur;
   await Future.wait([ThemeController.instance.load(), UiPrefs.instance.load(), langue.load()]);
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
   runApp(const AtelierApp());
 }
 
-/// Clé du navigateur principal (retour global : Échap, Alt+←).
-final navigateurPrincipal = GlobalKey<NavigatorState>();
+/// Clé du navigateur principal (retour global : Échap, Alt+←), une par langue
+/// pour que l'ancienne application ne soit jamais greffée dans la nouvelle.
+final _clesNavigateur = <String, GlobalKey<NavigatorState>>{};
+GlobalKey<NavigatorState> get navigateurPrincipal => _clesNavigateur.putIfAbsent(langue.value, GlobalKey<NavigatorState>.new);
+
+/// En cas d'erreur d'affichage : message lisible + retour au français (jamais d'écran blanc).
+Widget _ecranErreur(FlutterErrorDetails d) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: Material(
+        color: const Color(0xFF10141D),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.error_outline_rounded, color: Color(0xFFE5486B), size: 40),
+              const SizedBox(height: 10),
+              const Text('Erreur d\'affichage · خطأ في العرض',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+              const SizedBox(height: 8),
+              Text('${d.exceptionAsString()}'.split('\n').take(4).join('\n'),
+                  textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFB7BDCB), fontSize: 12)),
+              const SizedBox(height: 14),
+              if (langue.ar)
+                FilledButton(onPressed: () => langue.set('fr'), child: const Text('Revenir en français')),
+            ]),
+          ),
+        ),
+      ),
+    );
 
 class AtelierApp extends StatelessWidget {
   const AtelierApp({super.key});
@@ -35,8 +63,8 @@ class AtelierApp extends StatelessWidget {
         navigatorKey: navigateurPrincipal,
         title: 'Atelier'.tr,
         debugShowCheckedModeBanner: false,
-        locale: langue.ar ? const Locale('ar', 'DZ') : const Locale('fr', 'FR'),
-        supportedLocales: const [Locale('fr', 'FR'), Locale('ar', 'DZ')],
+        locale: langue.ar ? const Locale('ar') : const Locale('fr', 'FR'),
+        supportedLocales: const [Locale('fr', 'FR'), Locale('ar')],
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,

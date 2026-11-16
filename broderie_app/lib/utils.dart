@@ -5,7 +5,7 @@ import 'i18n.dart';
 
 final _int = NumberFormat.decimalPattern('fr_FR');
 final _money = NumberFormat('#,##0.00', 'fr_FR');
-final _dateKey = DateFormat('yyyy-MM-dd');
+final _dateKey = DateFormat('yyyy-MM-dd', 'en_US');
 DateFormat get _dateFr => DateFormat('dd/MM/yyyy', langue.localeDates);
 DateFormat get _dateLong => DateFormat('EEEE d MMMM yyyy', langue.localeDates);
 DateFormat get _dateShort => DateFormat('dd/MM', langue.localeDates);
@@ -14,19 +14,30 @@ final _compact = NumberFormat.compact(locale: 'fr_FR');
 DateFormat get _weekday => DateFormat('E', langue.localeDates);
 DateFormat get _shortMonth => DateFormat('MMM', langue.localeDates);
 
+/// Chiffres arabes orientaux (٠-٩) → chiffres latins, comme en Algérie.
+String _latin(String s) {
+  const est = '٠١٢٣٤٥٦٧٨٩';
+  final b = StringBuffer();
+  for (final r in s.runes) {
+    final i = est.indexOf(String.fromCharCode(r));
+    b.write(i >= 0 ? '$i' : String.fromCharCode(r));
+  }
+  return b.toString();
+}
+
 String fmtInt(num n) => _int.format(n.round());
 final _dec = NumberFormat('#,##0.##', 'fr_FR');
 String fmtNum(num n) => n == n.roundToDouble() ? fmtInt(n) : _dec.format(n);
 String fmtDA(num n) => '{0} DA'.trf([_money.format(n)]);
 String dateKey(DateTime d) => _dateKey.format(d);
-String fmtDate(DateTime d) => _dateFr.format(d);
-String fmtDateLong(DateTime d) => _dateLong.format(d);
+String fmtDate(DateTime d) => _latin(_dateFr.format(d));
+String fmtDateLong(DateTime d) => _latin(_dateLong.format(d));
 DateTime dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
-String fmtShort(DateTime d) => _dateShort.format(d);
-String fmtMonthYear(DateTime d) => _monthYear.format(d);
+String fmtShort(DateTime d) => _latin(_dateShort.format(d));
+String fmtMonthYear(DateTime d) => _latin(_monthYear.format(d));
 String fmtCompact(num n) => _compact.format(n);
-String fmtWeekday(DateTime d) => _weekday.format(d);
-String fmtShortMonth(DateTime d) => _shortMonth.format(d);
+String fmtWeekday(DateTime d) => _latin(_weekday.format(d));
+String fmtShortMonth(DateTime d) => _latin(_shortMonth.format(d));
 
 /// Périodes de filtrage. La semaine commence le samedi (Algérie).
 enum Periode { aujourdhui, semaine, mois, moisDernier, tout, personnalisee }
