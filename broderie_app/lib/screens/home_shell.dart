@@ -455,16 +455,16 @@ class _Sidebar extends StatelessWidget {
       ));
     }
     items.add(_TitreSection('Outils'.tr, reduite: reduite));
-    for (final o in outils.where((o) => o.titre != 'Réglages')) {
+    for (final o in outils.where((o) => o.titre != 'Réglages'.tr)) {
       items.add(_ItemSidebar(
         icon: o.icon,
         label: o.titre,
         reduite: reduite,
-        badge: o.titre == 'Alertes' ? nbAlertes : 0,
+        badge: o.titre == 'Alertes'.tr ? nbAlertes : 0,
         onTap: o.ouvrir,
       ));
     }
-    final reglages = outils.firstWhere((o) => o.titre == 'Réglages');
+    final reglages = outils.firstWhere((o) => o.titre == 'Réglages'.tr);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
@@ -859,7 +859,7 @@ class _Mobile extends StatelessWidget {
                   _TuilePlus(
                     icon: o.icon,
                     label: o.titre,
-                    badge: o.titre == 'Alertes' ? nbAlertes : 0,
+                    badge: o.titre == 'Alertes'.tr ? nbAlertes : 0,
                     onTap: () {
                       Navigator.pop(ctx);
                       o.ouvrir();
@@ -1011,7 +1011,7 @@ class _PaletteRechercheState extends State<_PaletteRecherche> {
 
   List<_Cible> get _resultats {
     final q = _norm(_q.text.trim());
-    if (q.isEmpty) return widget.cibles.where((c) => c.groupe != 'Ouvriers').toList();
+    if (q.isEmpty) return widget.cibles.where((c) => c.groupe != 'Ouvriers'.tr).toList();
     final mots = q.split(RegExp(r'\s+'));
     return widget.cibles.where((c) {
       final t = _norm('${c.titre} ${c.sous} ${c.groupe}');

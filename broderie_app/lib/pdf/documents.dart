@@ -204,7 +204,7 @@ pw.PageTheme _page(pw.ThemeData theme) => pw.PageTheme(
 pw.TextStyle _label([PdfColor c = _gold]) => pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: c, letterSpacing: 1.2);
 
 pw.Widget _entete(Atelier a, String titre, List<List<String>> infos) {
-  final numero = infos.isNotEmpty && infos.first[0] == 'N°' ? infos.first[1] : null;
+  final numero = infos.isNotEmpty && infos.first[0] == 'N°'.tr ? infos.first[1] : null;
   return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.stretch, children: [
     pw.SizedBox(height: 6),
     pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
@@ -242,7 +242,7 @@ pw.Widget _entete(Atelier a, String titre, List<List<String>> infos) {
 
 /// Bloc client + bloc informations du document côte à côte.
 pw.Widget _parties(String titreClient, Client? c, List<List<String>> infos, {String? extra}) {
-  final details = infos.where((i) => i[0] != 'N°').toList();
+  final details = infos.where((i) => i[0] != 'N°'.tr).toList();
   return pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
     pw.Expanded(
       child: pw.Container(
