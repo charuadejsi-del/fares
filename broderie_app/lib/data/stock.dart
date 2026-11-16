@@ -438,6 +438,25 @@ class LignePanier {
 }
 
 /// Informations du site vitrine pour un modèle (photos, description, publication).
+/// Série de vente d'un modèle : quantité par couleur et taille (clé = cleGrille).
+class SerieVente {
+  final String nom;
+  final Map<String, int> composition;
+  const SerieVente({required this.nom, required this.composition});
+
+  int get total => composition.values.fold(0, (s, v) => s + v);
+
+  factory SerieVente.fromJson(Map<String, dynamic> m) => SerieVente(
+        nom: '${m['nom'] ?? ''}',
+        composition: {
+          for (final e in ((m['composition'] as Map?) ?? const {}).entries)
+            if ((e.value as num) > 0) e.key.toString(): (e.value as num).toInt(),
+        },
+      );
+
+  Map<String, dynamic> toJson() => {'nom': nom, 'composition': composition};
+}
+
 class InfoModele {
   final String modele;
   final String? description;
@@ -446,7 +465,16 @@ class InfoModele {
   final bool vedette;
   /// chemin de photo -> couleur
   final Map<String, String> photosCouleurs;
-  const InfoModele({required this.modele, this.description, this.photos = const [], this.publie = true, this.vedette = false, this.photosCouleurs = const {}});
+  final List<SerieVente> series;
+  const InfoModele({
+    required this.modele,
+    this.description,
+    this.photos = const [],
+    this.publie = true,
+    this.vedette = false,
+    this.photosCouleurs = const {},
+    this.series = const [],
+  });
   factory InfoModele.fromMap(Map<String, dynamic> m) => InfoModele(
         modele: m['modele'] as String,
         description: _s(m['description']),
@@ -456,6 +484,9 @@ class InfoModele {
         photosCouleurs: {
           for (final e in ((m['photos_couleurs'] as Map?) ?? const {}).entries) e.key.toString(): e.value.toString(),
         },
+        series: [
+          for (final x in (m['series'] as List? ?? const [])) SerieVente.fromJson(Map<String, dynamic>.from(x as Map)),
+        ],
       );
 }
 
@@ -511,7 +542,7 @@ class StockData extends ChangeNotifier {
       _db.from('stock_etat').select().order('reference'),
       _db.from('stock_clients_soldes').select().order('nom'),
       _db.from('stock_prix_clients').select('client_id, produit_id, prix'),
-      _db.from('stock_modeles_info').select('modele, description, photos, publie, vedette, photos_couleurs'),
+      _db.from('stock_modeles_info').select('modele, description, photos, publie, vedette, photos_couleurs, series'),
     ]);
     infos = {for (final r in res[3]) r['modele'] as String: InfoModele.fromMap(r)};
     produits = res[0].map(Produit.fromMap).toList();
@@ -544,7 +575,8 @@ class StockData extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> saveInfo(String cle, {String? description, List<String>? photos, bool? publie, bool? vedette, Map<String, String>? photosCouleurs}) async {
+  Future<void> saveInfo(String cle,
+      {String? description, List<String>? photos, bool? publie, bool? vedette, Map<String, String>? photosCouleurs, List<SerieVente>? series}) async {
     final cur = info(cle);
     final liste = photos ?? cur.photos;
     final pc = {for (final e in (photosCouleurs ?? cur.photosCouleurs).entries) if (liste.contains(e.key)) e.key: e.value};
@@ -555,6 +587,7 @@ class StockData extends ChangeNotifier {
       'photos': liste,
       'publie': publie ?? cur.publie,
       'vedette': vedette ?? cur.vedette,
+      'series': [for (final s in series ?? cur.series) s.toJson()],
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
     await _db.from('stock_modeles_info').upsert(row, onConflict: 'atelier_id,modele');

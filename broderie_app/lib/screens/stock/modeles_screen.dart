@@ -674,7 +674,10 @@ class ModeleDetailScreen extends StatelessWidget {
                 ),
               ]),
               const SizedBox(height: 12),
-              VitrineModeleCard(m: m),              const SizedBox(height: 12),
+              SeriesModeleCard(m: m),
+              const SizedBox(height: 12),
+              VitrineModeleCard(m: m),
+              const SizedBox(height: 12),
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   SectionTitle('Stock par couleur et taille'.tr, subtitle: 'Touchez une case pour la fiche, le QR et l\'historique'.tr),
@@ -782,30 +785,108 @@ Future<List<(Produit, int)>?> choisirArticles(BuildContext context, {bool verifi
     return ok == true && n > 0 ? [(m.base, n)] : null;
   }
   final ctrls = <String, TextEditingController>{};
+  final series = stock.info(m.cle).series.where((x) => x.total > 0).toList();
+  final nbSeries = {for (var i = 0; i < series.length; i++) i: 1};
   final ok = await showDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text('${m.reference} · ${m.designation}'),
-      content: SizedBox(
-        width: 640,
-        child: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Quantité par couleur et taille'.tr, style: TextStyle(color: ctx.pal.muted)),
-            const SizedBox(height: 10),
-            GrilleQuantites(
-              couleurs: m.couleurs,
-              tailles: m.tailles,
-              ctrls: ctrls,
-              cellulesActives: {for (final v in m.variantes) cleGrille(v.couleur, v.taille)},
-              disponible: {for (final v in m.variantes) cleGrille(v.couleur, v.taille): v.disponible},
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setD) {
+        final total = lireGrille(ctrls).values.fold(0, (s, v) => s + v);
+        void ajouterSerie(int i) {
+          final n = nbSeries[i] ?? 1;
+          for (final e in series[i].composition.entries) {
+            final c = ctrls.putIfAbsent(e.key, () => TextEditingController());
+            c.text = '${(int.tryParse(c.text) ?? 0) + e.value * n}';
+          }
+          setD(() {});
+        }
+
+        return AlertDialog(
+          title: Text('${m.reference} · ${m.designation}'),
+          content: SizedBox(
+            width: 680,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                if (series.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
+                    ),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Text('Vente par série'.tr, style: const TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 8),
+                      for (var i = 0; i < series.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(children: [
+                            const Icon(Icons.inventory_2_rounded, size: 18, color: AppColors.gold),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text('{0} · {1} pièces'.trf([series[i].nom, series[i].total]),
+                                  style: const TextStyle(fontWeight: FontWeight.w700)),
+                            ),
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              onPressed: (nbSeries[i] ?? 1) > 1 ? () => setD(() => nbSeries[i] = nbSeries[i]! - 1) : null,
+                              icon: const Icon(Icons.remove_circle_outline_rounded),
+                            ),
+                            Text('× {0}'.trf([nbSeries[i]]), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              onPressed: () => setD(() => nbSeries[i] = (nbSeries[i] ?? 1) + 1),
+                              icon: const Icon(Icons.add_circle_outline_rounded),
+                            ),
+                            const SizedBox(width: 6),
+                            FilledButton.tonal(
+                              onPressed: () => ajouterSerie(i),
+                              child: Text('Ajouter {0} série(s)'.trf([nbSeries[i]])),
+                            ),
+                          ]),
+                        ),
+                    ]),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                Row(children: [
+                  Expanded(child: Text('Quantité par couleur et taille'.tr, style: TextStyle(color: ctx.pal.muted))),
+                  if (total > 0) ...[
+                    Text('Total : {0} pièces'.trf([total]), style: const TextStyle(fontWeight: FontWeight.w800)),
+                    TextButton(
+                      onPressed: () {
+                        for (final c in ctrls.values) {
+                          c.clear();
+                        }
+                        setD(() {});
+                      },
+                      child: Text('Vider'.tr),
+                    ),
+                  ],
+                ]),
+                const SizedBox(height: 10),
+                GrilleQuantites(
+                  couleurs: m.couleurs,
+                  tailles: m.tailles,
+                  ctrls: ctrls,
+                  onChanged: () => setD(() {}),
+                  cellulesActives: {for (final v in m.variantes) cleGrille(v.couleur, v.taille)},
+                  disponible: {for (final v in m.variantes) cleGrille(v.couleur, v.taille): v.disponible},
+                ),
+              ]),
             ),
-          ]),
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
-        FilledButton.icon(onPressed: () => Navigator.pop(ctx, true), icon: const Icon(Icons.add_shopping_cart_rounded), label: Text('Ajouter'.tr)),
-      ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
+            FilledButton.icon(
+              onPressed: total > 0 ? () => Navigator.pop(ctx, true) : null,
+              icon: const Icon(Icons.add_shopping_cart_rounded),
+              label: Text(total > 0 ? 'Ajouter {0} pièces'.trf([total]) : 'Ajouter'.tr),
+            ),
+          ],
+        );
+      },
     ),
   );
   if (ok != true) return null;
@@ -869,6 +950,223 @@ class _ChoixModeleDialogState extends State<_ChoixModeleDialog> {
         ]),
       ),
       actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text('Fermer'.tr))],
+    );
+  }
+}
+
+// ======================================================================= séries de vente
+
+/// Séries programmées pour un modèle (ex. série de 12 : 1 pièce par couleur et taille).
+class SeriesModeleCard extends StatelessWidget {
+  final Modele m;
+  const SeriesModeleCard({super.key, required this.m});
+
+  Future<void> _editer(BuildContext context, {int? index}) async {
+    final info = stock.info(m.cle);
+    final r = await showDialog<SerieVente>(
+      context: context,
+      builder: (_) => _SerieDialog(m: m, existante: index == null ? null : info.series[index]),
+    );
+    if (r == null) return;
+    final liste = [...info.series];
+    if (index == null) {
+      liste.add(r);
+    } else {
+      liste[index] = r;
+    }
+    try {
+      await stock.saveInfo(m.cle, series: liste);
+      if (context.mounted) showSnack(context, 'Série enregistrée'.tr);
+    } catch (e) {
+      if (context.mounted) showSnack(context, errorMessage(e), error: true);
+    }
+  }
+
+  Future<void> _supprimer(BuildContext context, int index) async {
+    final info = stock.info(m.cle);
+    if (!await confirmDialog(context, 'Supprimer « {0} » ?'.trf([info.series[index].nom]), 'Les ventes déjà faites ne changent pas.'.tr,
+        action: 'Supprimer'.tr)) {
+      return;
+    }
+    try {
+      await stock.saveInfo(m.cle, series: [...info.series]..removeAt(index));
+    } catch (e) {
+      if (context.mounted) showSnack(context, errorMessage(e), error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: stock,
+        builder: (context, _) {
+          final series = stock.info(m.cle).series;
+          return AppCard(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              SectionTitle('Séries de vente'.tr, subtitle: 'Vendez ce modèle par série en un clic'.tr),
+              if (series.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text('Aucune série. Programmez la composition d\'une série (ex. 12 pièces : 4 couleurs × 3 tailles).'.tr,
+                      style: TextStyle(color: context.pal.muted)),
+                ),
+              for (var i = 0; i < series.length; i++)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(gradient: AppColors.goldGradient, borderRadius: BorderRadius.circular(12)),
+                    child: Text('${series[i].total}', style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.ink)),
+                  ),
+                  title: Text(series[i].nom, style: const TextStyle(fontWeight: FontWeight.w800)),
+                  subtitle: Text([
+                    '{0} pièces'.trf([series[i].total]),
+                    if (m.prixGros > 0) '{0} la série'.trf([fmtDA(series[i].total * m.prixGros)]),
+                    _resume(series[i]),
+                  ].join(' · ')),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(tooltip: 'Modifier'.tr, onPressed: () => _editer(context, index: i), icon: const Icon(Icons.edit_rounded)),
+                    IconButton(tooltip: 'Supprimer'.tr, onPressed: () => _supprimer(context, i), icon: const Icon(Icons.delete_outline_rounded)),
+                  ]),
+                ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: FilledButton.icon(
+                  onPressed: () => _editer(context),
+                  icon: const Icon(Icons.add_rounded),
+                  label: Text('Programmer une série'.tr),
+                ),
+              ),
+            ]),
+          );
+        },
+      );
+
+  String _resume(SerieVente s) {
+    final couleurs = <String>{}, tailles = <String>{};
+    for (final k in s.composition.keys) {
+      final p = k.split('|');
+      if (p[0].isNotEmpty) couleurs.add(p[0]);
+      if (p.length > 1 && p[1].isNotEmpty) tailles.add(p[1]);
+    }
+    return '{0} couleur(s) × {1} taille(s)'.trf([couleurs.length, tailles.length]);
+  }
+}
+
+class _SerieDialog extends StatefulWidget {
+  final Modele m;
+  final SerieVente? existante;
+  const _SerieDialog({required this.m, this.existante});
+
+  @override
+  State<_SerieDialog> createState() => _SerieDialogState();
+}
+
+class _SerieDialogState extends State<_SerieDialog> {
+  late final _nom = TextEditingController(text: widget.existante?.nom ?? '');
+  final _ctrls = <String, TextEditingController>{};
+  final _parCase = TextEditingController(text: '1');
+
+  Set<String> get _cases => {for (final v in widget.m.variantes) cleGrille(v.couleur, v.taille)};
+
+  @override
+  void initState() {
+    super.initState();
+    for (final e in (widget.existante?.composition ?? const <String, int>{}).entries) {
+      _ctrls[e.key] = TextEditingController(text: '${e.value}');
+    }
+  }
+
+  @override
+  void dispose() {
+    _nom.dispose();
+    _parCase.dispose();
+    for (final c in _ctrls.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _remplir() {
+    final n = int.tryParse(_parCase.text) ?? 1;
+    for (final k in _cases) {
+      _ctrls.putIfAbsent(k, () => TextEditingController()).text = '$n';
+    }
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final compo = {for (final e in lireGrille(_ctrls).entries) if (_cases.contains(e.key)) e.key: e.value};
+    final total = compo.values.fold(0, (s, v) => s + v);
+    return AlertDialog(
+      title: Text(widget.existante == null ? 'Programmer une série'.tr : 'Modifier la série'.tr),
+      content: SizedBox(
+        width: 680,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text('${widget.m.reference} · ${widget.m.designation}', style: const TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _nom,
+              decoration: InputDecoration(
+                labelText: 'Nom de la série'.tr,
+                hintText: 'Série {0}'.trf([total]),
+                prefixIcon: const Icon(Icons.inventory_2_rounded),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: Text('Remplir toutes les cases avec'.tr)),
+              SizedBox(
+                width: 64,
+                child: TextField(
+                  controller: _parCase,
+                  textAlign: TextAlign.center,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(isDense: true),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(onPressed: _remplir, child: Text('Remplir'.tr)),
+            ]),
+            const SizedBox(height: 12),
+            Text('Pièces de chaque couleur et taille dans une série'.tr, style: TextStyle(color: context.pal.muted)),
+            const SizedBox(height: 8),
+            GrilleQuantites(
+              couleurs: widget.m.couleurs,
+              tailles: widget.m.tailles,
+              ctrls: _ctrls,
+              cellulesActives: _cases,
+              onChanged: () => setState(() {}),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(gradient: AppColors.heroGradient, borderRadius: BorderRadius.circular(14)),
+              child: Column(children: [
+                Text('{0} pièces par série'.trf([total]),
+                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+                if (widget.m.prixGros > 0)
+                  Text('{0} la série au prix de gros'.trf([fmtDA(total * widget.m.prixGros)]), style: const TextStyle(color: Colors.white70)),
+              ]),
+            ),
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text('Annuler'.tr)),
+        FilledButton(
+          onPressed: total == 0
+              ? null
+              : () => Navigator.pop(
+                    context,
+                    SerieVente(nom: _nom.text.trim().isEmpty ? 'Série {0}'.trf([total]) : _nom.text.trim(), composition: compo),
+                  ),
+          child: Text('Enregistrer'.tr),
+        ),
+      ],
     );
   }
 }
