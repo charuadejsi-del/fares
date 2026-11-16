@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'data/models.dart';
 import 'theme.dart';
 import 'utils.dart';
+import 'i18n.dart';
 
 class _Bucket {
   final DateTime start;
@@ -128,7 +129,7 @@ class PointsBarChart extends StatelessWidget {
                   const TextStyle(color: Colors.white70, fontSize: 11),
                   children: [
                     TextSpan(
-                      text: '${fmtInt(b.points)} pts · ${fmtDA(b.montant)}',
+                      text: '{0} pts · {1}'.trf([fmtInt(b.points), fmtDA(b.montant)]),
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
                     ),
                   ],

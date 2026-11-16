@@ -11,6 +11,7 @@ import '../widgets.dart';
 import 'paie_forms.dart';
 import 'production_screen.dart';
 import 'refs_screens.dart';
+import '../i18n.dart';
 
 class OuvrierDetailScreen extends StatefulWidget {
   final String ouvrierId;
@@ -111,7 +112,7 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
         await Printing.layoutPdf(onLayout: (_) async => bytes, name: name);
       }
     } catch (e) {
-      if (mounted) showSnack(context, 'Impossible de créer le PDF : ${errorMessage(e)}', error: true);
+      if (mounted) showSnack(context, 'Impossible de créer le PDF : {0}'.trf([errorMessage(e)]), error: true);
     } finally {
       if (mounted) setState(() => _pdfBusy = false);
     }
@@ -123,8 +124,8 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
         JournalItem(
           date: p.dateProd,
           tri: p.createdAt,
-          titre: 'Broderie · ${data.typeNom(p.typeId)}',
-          detail: '${p.equipe.label} · ${fmtInt(p.totalPoints)} pts',
+          titre: 'Broderie · {0}'.trf([data.typeNom(p.typeId)]),
+          detail: '{0} · {1} pts'.trf([p.equipe.label, fmtInt(p.totalPoints)]),
           montant: p.montant,
           icon: p.equipe == Equipe.jour ? Icons.wb_sunny_rounded : Icons.nightlight_round,
           color: AppColors.violet,
@@ -136,7 +137,7 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
           date: p.date,
           tri: p.date,
           titre: p.libelle,
-          detail: '${fmtNum(p.quantite)} × ${fmtDA(p.prixUnitaire)}',
+          detail: '{0} × {1}'.trf([fmtNum(p.quantite), fmtDA(p.prixUnitaire)]),
           montant: p.montant,
           icon: Icons.checkroom_rounded,
           color: AppColors.teal,
@@ -148,7 +149,7 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
           date: m.date,
           tri: m.date,
           titre: m.type.label,
-          detail: m.note ?? (m.type.signe > 0 ? 'Ajouté à la paie' : 'Déduit de la paie'),
+          detail: m.note ?? (m.type.signe > 0 ? 'Ajouté à la paie'.tr : 'Déduit de la paie'.tr),
           montant: m.type.signe * m.montant,
           icon: mvtIcon(m.type),
           color: mvtColor(m.type),
@@ -167,7 +168,7 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
   Widget build(BuildContext context) {
     final o = data.ouvrier(widget.ouvrierId);
     if (o == null) {
-      return Scaffold(appBar: AppBar(), body: const EmptyState('Ouvrier introuvable.'));
+      return Scaffold(appBar: AppBar(), body: EmptyState('Ouvrier introuvable.'.tr));
     }
     final r = _range;
     final pts = _prod.fold<int>(0, (s, p) => s + p.totalPoints);
@@ -191,13 +192,13 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
           : FloatingActionButton.extended(
               onPressed: () => openPieceForm(context, o),
               icon: const Icon(Icons.add_task_rounded),
-              label: const Text('Ajouter du travail'),
+              label: Text('Ajouter du travail'.tr),
             ),
       appBar: AppBar(
         title: Text(o.nom),
         actions: [
           IconButton(
-            tooltip: 'Modifier',
+            tooltip: 'Modifier'.tr,
             icon: const Icon(Icons.edit_outlined),
             onPressed: () => showDialog<bool>(context: context, builder: (_) => OuvrierForm(o)),
           ),
@@ -218,11 +219,11 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
                   const SizedBox(height: 4),
                   Text(
                     [
-                      o.departement,
+                      o.departement.tr,
                       switch (o.modePaie) {
-                        ModePaie.points => 'Payé aux points',
-                        ModePaie.mois => 'Salaire ${fmtDA(o.salaireMensuel)} / mois',
-                        ModePaie.piece => '${fmtDA(o.prixPiece)} / pièce',
+                        ModePaie.points => 'Payé aux points'.tr,
+                        ModePaie.mois => 'Salaire {0} / mois'.trf([fmtDA(o.salaireMensuel)]),
+                        ModePaie.piece => '{0} / pièce'.trf([fmtDA(o.prixPiece)]),
                       },
                       if (o.telephone != null) o.telephone!,
                     ].join('  ·  '),
@@ -235,21 +236,21 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
 
           final bilanCard = AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SectionTitle('Bilan de la période',
-                  subtitle: _periode == Periode.tout ? 'Depuis le début' : 'Du ${fmtDate(r.start)} au ${fmtDate(r.end)}'),
-              _bl(context, 'Solde reporté (avant la période)', _bilan.anterieur, muted: true),
-              if (_bilan.broderie != 0 || o.brodeur) _bl(context, '+ Broderie (points)', _bilan.broderie),
+              SectionTitle('Bilan de la période'.tr,
+                  subtitle: _periode == Periode.tout ? 'Depuis le début'.tr : 'Du {0} au {1}'.trf([fmtDate(r.start), fmtDate(r.end)])),
+              _bl(context, 'Solde reporté (avant la période)'.tr, _bilan.anterieur, muted: true),
+              if (_bilan.broderie != 0 || o.brodeur) _bl(context, '+ Broderie (points)'.tr, _bilan.broderie),
               if (_bilan.pieces != 0 || o.modePaie == ModePaie.piece)
-                _bl(context, o.modePaie == ModePaie.mois ? '+ Travail en extra' : '+ Travaux à la pièce', _bilan.pieces),
-              if (_bilan.salaires != 0 || o.modePaie == ModePaie.mois) _bl(context, '+ Salaires', _bilan.salaires),
-              if (_bilan.primes != 0) _bl(context, '+ Primes', _bilan.primes),
-              _bl(context, '− Avances', -_bilan.avances),
-              if (_bilan.retenues != 0) _bl(context, '− Retenues', -_bilan.retenues),
-              _bl(context, '− Déjà payé', -_bilan.paiements),
+                _bl(context, o.modePaie == ModePaie.mois ? '+ Travail en extra'.tr : '+ Travaux à la pièce'.tr, _bilan.pieces),
+              if (_bilan.salaires != 0 || o.modePaie == ModePaie.mois) _bl(context, '+ Salaires'.tr, _bilan.salaires),
+              if (_bilan.primes != 0) _bl(context, '+ Primes'.tr, _bilan.primes),
+              _bl(context, '− Avances'.tr, -_bilan.avances),
+              if (_bilan.retenues != 0) _bl(context, '− Retenues'.tr, -_bilan.retenues),
+              _bl(context, '− Déjà payé'.tr, -_bilan.paiements),
               const Divider(height: 22),
               Row(children: [
                 Expanded(
-                  child: Text(_bilan.reste < -0.005 ? 'Avance non couverte' : 'Reste à payer',
+                  child: Text(_bilan.reste < -0.005 ? 'Avance non couverte'.tr : 'Reste à payer'.tr,
                       style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                 ),
                 Text(fmtDA(_bilan.reste.abs()),
@@ -263,12 +264,12 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
                     icon: _pdfBusy
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.print_rounded),
-                    label: const Text('Fiche de paie PDF'),
+                    label: Text('Fiche de paie PDF'.tr),
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton.filledTonal(
-                  tooltip: 'Partager le PDF',
+                  tooltip: 'Partager le PDF'.tr,
                   onPressed: _pdfBusy ? null : () => _fichePaie(share: true),
                   icon: const Icon(Icons.share_rounded),
                 ),
@@ -280,14 +281,14 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
               ? const SizedBox.shrink()
               : Column(children: [
                   AutoGrid(minItemWidth: 160, children: [
-                    StatTile(label: 'Points brodés', value: fmtInt(pts), icon: Icons.blur_on_rounded, color: AppColors.violet),
-                    StatTile(label: 'Équipes de jour', value: '$nbJour', icon: Icons.wb_sunny_rounded, color: AppColors.gold),
-                    StatTile(label: 'Équipes de nuit', value: '$nbNuit', icon: Icons.nightlight_round, color: AppColors.sky),
+                    StatTile(label: 'Points brodés'.tr, value: fmtInt(pts), icon: Icons.blur_on_rounded, color: AppColors.violet),
+                    StatTile(label: 'Équipes de jour'.tr, value: '$nbJour', icon: Icons.wb_sunny_rounded, color: AppColors.gold),
+                    StatTile(label: 'Équipes de nuit'.tr, value: '$nbNuit', icon: Icons.nightlight_round, color: AppColors.sky),
                   ]),
                   const SizedBox(height: 16),
                   AppCard(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      const SectionTitle('Évolution', subtitle: 'Points brodés'),
+                      SectionTitle('Évolution'.tr, subtitle: 'Points brodés'.tr),
                       PointsBarChart(rows: _prod, range: rangeFor(_periode, _custom), height: 190),
                     ]),
                   ),
@@ -298,22 +299,22 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
               : Column(children: [
                   AutoGrid(minItemWidth: 160, children: [
                     StatTile(
-                        label: 'Pièces réalisées',
+                        label: 'Pièces réalisées'.tr,
                         value: qtePieces == qtePieces.roundToDouble() ? qtePieces.toStringAsFixed(0) : qtePieces.toStringAsFixed(1),
                         icon: Icons.checkroom_rounded,
                         color: AppColors.violet),
                     StatTile(
-                        label: o.modePaie == ModePaie.mois ? 'Payé en extra' : 'Gagné aux pièces',
+                        label: o.modePaie == ModePaie.mois ? 'Payé en extra'.tr : 'Gagné aux pièces'.tr,
                         value: fmtDA(montantPieces),
                         icon: Icons.payments_rounded,
                         color: AppColors.green),
-                    StatTile(label: 'Jours travaillés', value: '$joursTravail', icon: Icons.event_available_rounded, color: AppColors.gold),
+                    StatTile(label: 'Jours travaillés'.tr, value: '$joursTravail', icon: Icons.event_available_rounded, color: AppColors.gold),
                   ]),
                   if (tachesTri.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     AppCard(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                        const SectionTitle('Travail par tâche'),
+                        SectionTitle('Travail par tâche'.tr),
                         for (final e in tachesTri)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 5),
@@ -340,10 +341,10 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Padding(
                 padding: const EdgeInsets.only(right: 10),
-                child: SectionTitle('Journal', subtitle: '${journal.length} opération${journal.length > 1 ? 's' : ''}'),
+                child: SectionTitle('Journal'.tr, subtitle: '{0} opération{1}'.trf([journal.length, journal.length > 1 ? 's' : ''])),
               ),
               if (journal.isEmpty)
-                const EmptyState('Rien sur cette période.', icon: Icons.receipt_long_outlined)
+                EmptyState('Rien sur cette période.'.tr, icon: Icons.receipt_long_outlined)
               else
                 for (final it in journal) JournalTile(it),
             ]),

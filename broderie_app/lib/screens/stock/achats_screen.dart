@@ -6,6 +6,7 @@ import '../../theme.dart';
 import '../../utils.dart';
 import '../../widgets.dart';
 import '../refs_screens.dart' show FormDialog;
+import '../../i18n.dart';
 
 /// Espace « Achats » : matières, achats, fournisseurs.
 class AchatsModule extends StatefulWidget {
@@ -18,10 +19,28 @@ class AchatsModule extends StatefulWidget {
 class _AchatsModuleState extends State<AchatsModule> {
   int _vue = 0;
 
+  final _historique = <int>[];
+
+  bool _peut() => mounted && PageActive.of(context) && _historique.isNotEmpty;
+
+  bool _revenir() {
+    if (!_peut()) return false;
+    setState(() => _vue = _historique.removeLast());
+    Retours.signaler();
+    return true;
+  }
+
   @override
   void initState() {
     super.initState();
+    Retours.inscrire(_peut, _revenir);
     if (!commerce.loaded) commerce.load().catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    Retours.desinscrire(_peut, _revenir);
+    super.dispose();
   }
 
   @override
@@ -30,13 +49,18 @@ class _AchatsModuleState extends State<AchatsModule> {
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
           child: SegmentedButton<int>(
             showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: 0, icon: Icon(Icons.layers_rounded), label: Text('Matières')),
-              ButtonSegment(value: 1, icon: Icon(Icons.shopping_basket_rounded), label: Text('Achats')),
-              ButtonSegment(value: 2, icon: Icon(Icons.local_shipping_rounded), label: Text('Fournisseurs')),
+            segments: [
+              ButtonSegment(value: 0, icon: Icon(Icons.layers_rounded), label: Text('Matières'.tr)),
+              ButtonSegment(value: 1, icon: Icon(Icons.shopping_basket_rounded), label: Text('Achats'.tr)),
+              ButtonSegment(value: 2, icon: Icon(Icons.local_shipping_rounded), label: Text('Fournisseurs'.tr)),
             ],
             selected: {_vue},
-            onSelectionChanged: (s) => setState(() => _vue = s.first),
+            onSelectionChanged: (s) {
+              if (s.first == _vue) return;
+              _historique.add(_vue);
+              setState(() => _vue = s.first);
+              Retours.signaler();
+            },
           ),
         ),
         Expanded(
@@ -74,24 +98,24 @@ class _MatieresViewState extends State<_MatieresView> {
               heroTag: 'fab-mat',
               onPressed: () => showDialog<String>(context: context, builder: (_) => const MatiereForm()),
               icon: const Icon(Icons.add_rounded),
-              label: const Text('Nouvelle matière'),
+              label: Text('Nouvelle matière'.tr),
             ),
             body: RefreshIndicator(
               onRefresh: commerce.load,
               child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 100), children: [
                 AutoGrid(minItemWidth: 170, children: [
-                  StatTile(label: 'Valeur des matières', value: fmtDA(commerce.valeurMatieres), icon: Icons.savings_rounded, color: AppColors.green),
-                  StatTile(label: 'Matières', value: '${commerce.matieres.length}', icon: Icons.layers_rounded, color: AppColors.violet),
-                  StatTile(label: 'En alerte', value: '${commerce.nbAlertesMatieres}', icon: Icons.warning_amber_rounded, color: AppColors.rose),
+                  StatTile(label: 'Valeur des matières'.tr, value: fmtDA(commerce.valeurMatieres), icon: Icons.savings_rounded, color: AppColors.green),
+                  StatTile(label: 'Matières'.tr, value: '${commerce.matieres.length}', icon: Icons.layers_rounded, color: AppColors.violet),
+                  StatTile(label: 'En alerte'.tr, value: '${commerce.nbAlertesMatieres}', icon: Icons.warning_amber_rounded, color: AppColors.rose),
                 ]),
                 const SizedBox(height: 12),
                 TextField(
-                  decoration: const InputDecoration(hintText: 'Tissu, fil, perles…', prefixIcon: Icon(Icons.search)),
+                  decoration: InputDecoration(hintText: 'Tissu, fil, perles…'.tr, prefixIcon: Icon(Icons.search)),
                   onChanged: (v) => setState(() => _q = v),
                 ),
                 const SizedBox(height: 12),
                 if (list.isEmpty)
-                  const EmptyState('Aucune matière.\nAjoutez vos tissus, fils, perles… puis enregistrez vos achats.', icon: Icons.layers_outlined)
+                  EmptyState('Aucune matière.\nAjoutez vos tissus, fils, perles… puis enregistrez vos achats.'.tr, icon: Icons.layers_outlined)
                 else
                   AutoGrid(minItemWidth: 320, children: [
                     for (final m in list)
@@ -161,7 +185,7 @@ class _MatiereFormState extends State<MatiereForm> {
 
   @override
   Widget build(BuildContext context) => FormDialog(
-        title: widget.m == null ? 'Nouvelle matière' : 'Modifier la matière',
+        title: widget.m == null ? 'Nouvelle matière'.tr : 'Modifier la matière'.tr,
         formKey: _form,
         busy: _busy,
         onSave: _save,
@@ -169,17 +193,17 @@ class _MatiereFormState extends State<MatiereForm> {
           TextFormField(
             controller: _nom,
             autofocus: widget.m == null,
-            decoration: const InputDecoration(labelText: 'Nom (ex. Tissu satin noir)', prefixIcon: Icon(Icons.layers_outlined)),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+            decoration: InputDecoration(labelText: 'Nom (ex. Tissu satin noir)'.tr, prefixIcon: Icon(Icons.layers_outlined)),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
           ),
-          TextFormField(controller: _cat, decoration: const InputDecoration(labelText: 'Catégorie (Tissu, Fil, Perles…)', prefixIcon: Icon(Icons.category_outlined))),
+          TextFormField(controller: _cat, decoration: InputDecoration(labelText: 'Catégorie (Tissu, Fil, Perles…)'.tr, prefixIcon: Icon(Icons.category_outlined))),
           Wrap(spacing: 6, runSpacing: 6, children: [
             for (final u in unitesMatieres) ChoiceChip(label: Text(u), selected: _unite == u, onSelected: (_) => setState(() => _unite = u)),
           ]),
           TextFormField(
             controller: _seuil,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(labelText: 'Alerte si stock ≤', suffixText: _unite, prefixIcon: const Icon(Icons.warning_amber_rounded)),
+            decoration: InputDecoration(labelText: 'Alerte si stock ≤'.tr, suffixText: _unite, prefixIcon: const Icon(Icons.warning_amber_rounded)),
           ),
         ],
       );
@@ -228,20 +252,20 @@ class _MatiereDetailScreenState extends State<MatiereDetailScreen> {
     final v = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(inventaire ? 'Inventaire · ${m.nom}' : 'Consommation · ${m.nom}'),
+        title: Text(inventaire ? 'Inventaire · {0}'.trf([m.nom]) : 'Consommation · {0}'.trf([m.nom])),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(
             controller: c,
             autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(labelText: inventaire ? 'Quantité réelle comptée' : 'Quantité utilisée', suffixText: m.unite),
+            decoration: InputDecoration(labelText: inventaire ? 'Quantité réelle comptée'.tr : 'Quantité utilisée'.tr, suffixText: m.unite),
           ),
           const SizedBox(height: 8),
-          TextField(controller: note, decoration: const InputDecoration(labelText: 'Remarque')),
+          TextField(controller: note, decoration: InputDecoration(labelText: 'Remarque'.tr)),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Valider')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Valider'.tr)),
         ],
       ),
     );
@@ -251,7 +275,7 @@ class _MatiereDetailScreenState extends State<MatiereDetailScreen> {
     try {
       if (inventaire) {
         final diff = q - m.stock;
-        if (diff.abs() > 0.0005) await commerce.mouvementMatiere(m.id, 'ajustement', diff, note: note.text.isEmpty ? 'Inventaire' : note.text);
+        if (diff.abs() > 0.0005) await commerce.mouvementMatiere(m.id, 'ajustement', diff, note: note.text.isEmpty ? 'Inventaire'.tr : note.text);
       } else if (q > 0) {
         await commerce.mouvementMatiere(m.id, 'consommation', -q, note: note.text);
       }
@@ -265,44 +289,44 @@ class _MatiereDetailScreenState extends State<MatiereDetailScreen> {
         listenable: commerce,
         builder: (context, _) {
           final m = commerce.matiere(widget.matiereId);
-          if (m == null) return Scaffold(appBar: AppBar(), body: const EmptyState('Matière introuvable.'));
+          if (m == null) return Scaffold(appBar: AppBar(), body: EmptyState('Matière introuvable.'.tr));
           return Scaffold(
             appBar: AppBar(title: Text(m.nom), actions: [
               IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => showDialog<String>(context: context, builder: (_) => MatiereForm(m: m))),
               PopupMenuButton<String>(
-                itemBuilder: (_) => const [PopupMenuItem(value: 'del', child: Text('Supprimer'))],
+                itemBuilder: (_) => [PopupMenuItem(value: 'del', child: Text('Supprimer'.tr))],
                 onSelected: (_) async {
-                  if (!await confirmDialog(context, 'Supprimer', 'Supprimer ${m.nom} ?')) return;
+                  if (!await confirmDialog(context, 'Supprimer'.tr, 'Supprimer {0} ?'.trf([m.nom]))) return;
                   try {
                     await commerce.deleteMatiere(m.id);
                     if (context.mounted) Navigator.pop(context);
                   } catch (_) {
-                    if (context.mounted) showSnack(context, 'Impossible : cette matière a des achats ou est utilisée.', error: true);
+                    if (context.mounted) showSnack(context, 'Impossible : cette matière a des achats ou est utilisée.'.tr, error: true);
                   }
                 },
               ),
             ]),
             body: ListView(padding: const EdgeInsets.all(16), children: [
               AutoGrid(minItemWidth: 160, children: [
-                StatTile(label: 'En stock', value: fmtQte(m.stock, m.unite), icon: Icons.inventory_2_rounded, color: m.enAlerte ? AppColors.rose : AppColors.green),
-                StatTile(label: 'Coût moyen', value: '${fmtDA(m.coutMoyen)} / ${m.unite}', icon: Icons.price_change_rounded, color: AppColors.violet),
-                StatTile(label: 'Valeur', value: fmtDA(m.valeur), icon: Icons.savings_rounded, color: AppColors.gold),
+                StatTile(label: 'En stock'.tr, value: fmtQte(m.stock, m.unite), icon: Icons.inventory_2_rounded, color: m.enAlerte ? AppColors.rose : AppColors.green),
+                StatTile(label: 'Coût moyen'.tr, value: '${fmtDA(m.coutMoyen)} / ${m.unite}', icon: Icons.price_change_rounded, color: AppColors.violet),
+                StatTile(label: 'Valeur'.tr, value: fmtDA(m.valeur), icon: Icons.savings_rounded, color: AppColors.gold),
               ]),
               const SizedBox(height: 12),
               Wrap(spacing: 10, runSpacing: 10, children: [
                 FilledButton.icon(
                   onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AchatEditorScreen(matiereInitiale: m))),
                   icon: const Icon(Icons.shopping_basket_rounded),
-                  label: const Text('Acheter'),
+                  label: Text('Acheter'.tr),
                 ),
-                OutlinedButton.icon(onPressed: () => _mouvement(m, inventaire: false), icon: const Icon(Icons.content_cut_rounded), label: const Text('Consommation')),
-                OutlinedButton.icon(onPressed: () => _mouvement(m, inventaire: true), icon: const Icon(Icons.fact_check_rounded), label: const Text('Inventaire')),
+                OutlinedButton.icon(onPressed: () => _mouvement(m, inventaire: false), icon: const Icon(Icons.content_cut_rounded), label: Text('Consommation'.tr)),
+                OutlinedButton.icon(onPressed: () => _mouvement(m, inventaire: true), icon: const Icon(Icons.fact_check_rounded), label: Text('Inventaire'.tr)),
               ]),
               const SizedBox(height: 12),
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const SectionTitle('Historique'),
-                  if (_mvts.isEmpty) const EmptyState('Aucun mouvement.', icon: Icons.history_rounded),
+                  SectionTitle('Historique'.tr),
+                  if (_mvts.isEmpty) EmptyState('Aucun mouvement.'.tr, icon: Icons.history_rounded),
                   for (final x in _mvts)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 5),
@@ -381,7 +405,7 @@ class _AchatsViewState extends State<_AchatsView> {
         heroTag: 'fab-achat',
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AchatEditorScreen())),
         icon: const Icon(Icons.add_shopping_cart_rounded),
-        label: const Text('Nouvel achat'),
+        label: Text('Nouvel achat'.tr),
       ),
       body: RefreshIndicator(
         onRefresh: _load,
@@ -399,13 +423,13 @@ class _AchatsViewState extends State<_AchatsView> {
           ),
           const SizedBox(height: 12),
           AutoGrid(minItemWidth: 170, children: [
-            StatTile(label: 'Achats de la période', value: fmtDA(total), icon: Icons.shopping_basket_rounded, color: AppColors.violet),
-            StatTile(label: 'Reste à payer (période)', value: fmtDA(reste), icon: Icons.hourglass_bottom_rounded, color: AppColors.rose),
-            StatTile(label: 'Dettes fournisseurs (total)', value: fmtDA(commerce.totalDettes), icon: Icons.account_balance_rounded, color: const Color(0xFFF97316)),
+            StatTile(label: 'Achats de la période'.tr, value: fmtDA(total), icon: Icons.shopping_basket_rounded, color: AppColors.violet),
+            StatTile(label: 'Reste à payer (période)'.tr, value: fmtDA(reste), icon: Icons.hourglass_bottom_rounded, color: AppColors.rose),
+            StatTile(label: 'Dettes fournisseurs (total)'.tr, value: fmtDA(commerce.totalDettes), icon: Icons.account_balance_rounded, color: const Color(0xFFF97316)),
           ]),
           const SizedBox(height: 12),
           if (_loading) const LinearProgressIndicator(minHeight: 2),
-          if (!_loading && _achats.isEmpty) const EmptyState('Aucun achat sur cette période.', icon: Icons.shopping_basket_outlined),
+          if (!_loading && _achats.isEmpty) EmptyState('Aucun achat sur cette période.'.tr, icon: Icons.shopping_basket_outlined),
           if (_achats.isNotEmpty)
             AppCard(
               padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
@@ -443,8 +467,8 @@ class AchatTile extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${a.numero} · ${a.fournisseurNom ?? 'Sans fournisseur'}', style: const TextStyle(fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis),
-              Text('${fmtDate(a.date)} · ${paye ? 'Payé' : 'Reste ${fmtDA(a.reste)}'}', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+              Text('${a.numero} · ${a.fournisseurNom ?? 'Sans fournisseur'.tr}', style: const TextStyle(fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis),
+              Text('${fmtDate(a.date)} · ${paye ? 'Payé'.tr : 'Reste {0}'.trf([fmtDA(a.reste)])}', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
             ]),
           ),
           Text(fmtDA(a.total), style: const TextStyle(fontWeight: FontWeight.w900)),
@@ -478,32 +502,32 @@ class _AchatDetailDialogState extends State<_AchatDetailDialog> {
     final a = widget.achat;
     final f = commerce.fournisseur(a.fournisseurId);
     return AlertDialog(
-      title: Text('Achat ${a.numero}'),
+      title: Text('Achat {0}'.trf([a.numero])),
       content: SizedBox(
         width: 460,
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('${a.fournisseurNom ?? 'Sans fournisseur'} · ${fmtDate(a.date)}'),
+          Text('${a.fournisseurNom ?? 'Sans fournisseur'.tr} · ${fmtDate(a.date)}'),
           const Divider(height: 20),
           for (final l in _l)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
               child: Row(children: [
                 Expanded(child: Text(commerce.matiere(l.matiereId)?.nom ?? '?')),
-                Text('${fmtNum(l.quantite)} ${commerce.matiere(l.matiereId)?.unite ?? ''} × ${fmtDA(l.prixUnitaire)}'),
+                Text('{0} {1} × {2}'.trf([fmtNum(l.quantite), commerce.matiere(l.matiereId)?.unite ?? '', fmtDA(l.prixUnitaire)])),
               ]),
             ),
           const Divider(height: 20),
-          Row(children: [const Expanded(child: Text('Total')), Text(fmtDA(a.total), style: const TextStyle(fontWeight: FontWeight.w900))]),
-          Row(children: [const Expanded(child: Text('Payé')), Text(fmtDA(a.paye), style: const TextStyle(color: AppColors.green))]),
+          Row(children: [Expanded(child: Text('Total'.tr)), Text(fmtDA(a.total), style: const TextStyle(fontWeight: FontWeight.w900))]),
+          Row(children: [Expanded(child: Text('Payé'.tr)), Text(fmtDA(a.paye), style: const TextStyle(color: AppColors.green))]),
           Row(children: [
-            const Expanded(child: Text('Reste', style: TextStyle(fontWeight: FontWeight.w800))),
+            Expanded(child: Text('Reste'.tr, style: TextStyle(fontWeight: FontWeight.w800))),
             Text(fmtDA(a.reste), style: TextStyle(fontWeight: FontWeight.w900, color: a.reste > 0.005 ? AppColors.rose : AppColors.green)),
           ]),
-          if (a.note != null) ...[const SizedBox(height: 8), Text('Remarque : ${a.note}')],
+          if (a.note != null) ...[const SizedBox(height: 8), Text('Remarque : {0}'.trf([a.note]))],
         ]),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text('Fermer'.tr)),
         if (f != null && a.reste > 0.005)
           FilledButton.icon(
             onPressed: () async {
@@ -511,7 +535,7 @@ class _AchatDetailDialogState extends State<_AchatDetailDialog> {
               await ouvrirPaiementFournisseur(context, f, achat: a);
             },
             icon: const Icon(Icons.payments_rounded),
-            label: const Text('Payer'),
+            label: Text('Payer'.tr),
           ),
       ],
     );
@@ -556,7 +580,7 @@ class _AchatEditorScreenState extends State<AchatEditorScreen> {
     final m = await showDialog<Matiere>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Choisir une matière'),
+        title: Text('Choisir une matière'.tr),
         children: [
           for (final m in commerce.matieres.where((m) => m.actif))
             SimpleDialogOption(onPressed: () => Navigator.pop(ctx, m), child: Text('${m.nom} (${m.unite})')),
@@ -565,7 +589,7 @@ class _AchatEditorScreenState extends State<AchatEditorScreen> {
               final id = await showDialog<String>(context: ctx, builder: (_) => const MatiereForm());
               if (id != null && ctx.mounted) Navigator.pop(ctx, commerce.matiere(id));
             },
-            child: const Text('+ Nouvelle matière', style: TextStyle(fontWeight: FontWeight.w800)),
+            child: Text('+ Nouvelle matière'.tr, style: TextStyle(fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -577,18 +601,18 @@ class _AchatEditorScreenState extends State<AchatEditorScreen> {
     if (_lignes.isEmpty) return;
     final pay = parseNum(_paiement.text) ?? 0;
     if (pay > 0 && _fournisseurId == null) {
-      showSnack(context, 'Choisissez le fournisseur pour enregistrer un paiement', error: true);
+      showSnack(context, 'Choisissez le fournisseur pour enregistrer un paiement'.tr, error: true);
       return;
     }
     if (_lignes.any((l) => l.quantite <= 0)) {
-      showSnack(context, 'Quantité invalide', error: true);
+      showSnack(context, 'Quantité invalide'.tr, error: true);
       return;
     }
     setState(() => _busy = true);
     try {
       await commerce.creerAchat(fournisseurId: _fournisseurId, date: _date, lignes: _lignes, paiement: pay, mode: _mode, note: _note.text);
       if (mounted) {
-        showSnack(context, 'Achat enregistré, stock des matières mis à jour');
+        showSnack(context, 'Achat enregistré, stock des matières mis à jour'.tr);
         Navigator.pop(context);
       }
     } catch (e) {
@@ -601,16 +625,16 @@ class _AchatEditorScreenState extends State<AchatEditorScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Nouvel achat de matières')),
+        appBar: AppBar(title: Text('Nouvel achat de matières'.tr)),
         body: ListView(padding: const EdgeInsets.all(16), children: [
           AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               DropdownButtonFormField<String?>(
                 value: _fournisseurId,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Fournisseur', prefixIcon: Icon(Icons.local_shipping_outlined)),
+                decoration: InputDecoration(labelText: 'Fournisseur'.tr, prefixIcon: Icon(Icons.local_shipping_outlined)),
                 items: [
-                  const DropdownMenuItem<String?>(value: null, child: Text('Sans fournisseur')),
+                  DropdownMenuItem<String?>(value: null, child: Text('Sans fournisseur'.tr)),
                   for (final f in commerce.fournisseurs.where((f) => f.actif)) DropdownMenuItem<String?>(value: f.id, child: Text(f.nom)),
                 ],
                 onChanged: (v) => setState(() => _fournisseurId = v),
@@ -623,7 +647,7 @@ class _AchatEditorScreenState extends State<AchatEditorScreen> {
                     if (id != null) setState(() => _fournisseurId = id);
                   },
                   icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Nouveau fournisseur'),
+                  label: Text('Nouveau fournisseur'.tr),
                 ),
               ),
               InkWell(
@@ -631,16 +655,16 @@ class _AchatEditorScreenState extends State<AchatEditorScreen> {
                   final d = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100));
                   if (d != null) setState(() => _date = d);
                 },
-                child: InputDecorator(decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.event)), child: Text(fmtDate(_date))),
+                child: InputDecorator(decoration: InputDecoration(labelText: 'Date'.tr, prefixIcon: Icon(Icons.event)), child: Text(fmtDate(_date))),
               ),
             ]),
           ),
           const SizedBox(height: 12),
           AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SectionTitle('Matières achetées',
-                  trailing: FilledButton.tonalIcon(onPressed: _ajouter, icon: const Icon(Icons.add_rounded), label: const Text('Ajouter'))),
-              if (_lignes.isEmpty) const EmptyState('Ajoutez les matières achetées.', icon: Icons.layers_outlined),
+              SectionTitle('Matières achetées'.tr,
+                  trailing: FilledButton.tonalIcon(onPressed: _ajouter, icon: const Icon(Icons.add_rounded), label: Text('Ajouter'.tr))),
+              if (_lignes.isEmpty) EmptyState('Ajoutez les matières achetées.'.tr, icon: Icons.layers_outlined),
               for (final l in _lignes)
                 Padding(
                   key: ObjectKey(l),
@@ -655,7 +679,7 @@ class _AchatEditorScreenState extends State<AchatEditorScreen> {
                         child: TextFormField(
                           initialValue: fmtNum(l.quantite).replaceAll(RegExp(r'\s'), ''),
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(labelText: 'Quantité', suffixText: l.matiere.unite),
+                          decoration: InputDecoration(labelText: 'Quantité'.tr, suffixText: l.matiere.unite),
                           onChanged: (v) => setState(() => l.quantite = parseNum(v) ?? 0),
                         ),
                       ),
@@ -664,7 +688,7 @@ class _AchatEditorScreenState extends State<AchatEditorScreen> {
                         child: TextFormField(
                           initialValue: l.prix == 0 ? '' : fmtNum(l.prix).replaceAll(RegExp(r'\s'), ''),
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: InputDecoration(labelText: 'Prix / ${l.matiere.unite}', suffixText: 'DA'),
+                          decoration: InputDecoration(labelText: 'Prix / {0}'.trf([l.matiere.unite]), suffixText: 'DA'.tr),
                           onChanged: (v) => setState(() => l.prix = parseNum(v) ?? 0),
                         ),
                       ),
@@ -679,7 +703,7 @@ class _AchatEditorScreenState extends State<AchatEditorScreen> {
           AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Row(children: [
-                const Expanded(child: Text('TOTAL', style: TextStyle(fontWeight: FontWeight.w900))),
+                Expanded(child: Text('TOTAL'.tr, style: TextStyle(fontWeight: FontWeight.w900))),
                 Text(fmtDA(_total), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: context.cs.primary)),
               ]),
               const SizedBox(height: 12),
@@ -687,24 +711,24 @@ class _AchatEditorScreenState extends State<AchatEditorScreen> {
                 controller: _paiement,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
-                  labelText: 'Payé maintenant',
-                  suffixText: 'DA',
-                  suffixIcon: TextButton(onPressed: () => _paiement.text = _total.toStringAsFixed(0), child: const Text('Tout')),
+                  labelText: 'Payé maintenant'.tr,
+                  suffixText: 'DA'.tr,
+                  suffixIcon: TextButton(onPressed: () => _paiement.text = _total.toStringAsFixed(0), child: Text('Tout'.tr)),
                 ),
               ),
               const SizedBox(height: 8),
               Wrap(spacing: 6, runSpacing: 6, children: [
-                for (final m in modesPaiement.entries) ChoiceChip(label: Text(m.value), selected: _mode == m.key, onSelected: (_) => setState(() => _mode = m.key)),
+                for (final m in modesPaiement.entries) ChoiceChip(label: Text(m.value.tr), selected: _mode == m.key, onSelected: (_) => setState(() => _mode = m.key)),
               ]),
               const SizedBox(height: 8),
-              TextField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque (n° de facture fournisseur…)', prefixIcon: Icon(Icons.notes))),
+              TextField(controller: _note, decoration: InputDecoration(labelText: 'Remarque (n° de facture fournisseur…)'.tr, prefixIcon: Icon(Icons.notes))),
               const SizedBox(height: 14),
               SizedBox(
                 height: 54,
                 child: FilledButton.icon(
                   onPressed: _busy || _lignes.isEmpty ? null : _save,
                   icon: _busy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.check_rounded),
-                  label: Text('Enregistrer l\'achat · ${fmtDA(_total)}'),
+                  label: Text('Enregistrer l\'achat · {0}'.trf([fmtDA(_total)])),
                 ),
               ),
             ]),
@@ -726,14 +750,14 @@ class _FournisseursView extends StatelessWidget {
             heroTag: 'fab-fourn',
             onPressed: () => showDialog<String>(context: context, builder: (_) => const FournisseurForm()),
             icon: const Icon(Icons.add_business_rounded),
-            label: const Text('Nouveau fournisseur'),
+            label: Text('Nouveau fournisseur'.tr),
           ),
           body: RefreshIndicator(
             onRefresh: commerce.load,
             child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 100), children: [
-              StatTile(label: 'Je dois aux fournisseurs', value: fmtDA(commerce.totalDettes), icon: Icons.account_balance_rounded, color: AppColors.rose),
+              StatTile(label: 'Je dois aux fournisseurs'.tr, value: fmtDA(commerce.totalDettes), icon: Icons.account_balance_rounded, color: AppColors.rose),
               const SizedBox(height: 12),
-              if (commerce.fournisseurs.isEmpty) const EmptyState('Aucun fournisseur.', icon: Icons.local_shipping_outlined),
+              if (commerce.fournisseurs.isEmpty) EmptyState('Aucun fournisseur.'.tr, icon: Icons.local_shipping_outlined),
               AutoGrid(minItemWidth: 320, children: [
                 for (final f in commerce.fournisseurs)
                   AppCard(
@@ -745,11 +769,11 @@ class _FournisseursView extends StatelessWidget {
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text(f.nom, style: const TextStyle(fontWeight: FontWeight.w800)),
-                          Text('Achats ${fmtDA(f.totalAchats)}${f.telephone != null ? ' · ${f.telephone}' : ''}',
+                          Text('Achats {0}{1}'.trf([fmtDA(f.totalAchats), f.telephone != null ? ' · ${f.telephone}' : '']),
                               style: context.tt.bodySmall?.copyWith(color: context.pal.muted), overflow: TextOverflow.ellipsis),
                         ]),
                       ),
-                      Text(f.solde > 0.005 ? 'Je dois ${fmtDA(f.solde)}' : 'À jour',
+                      Text(f.solde > 0.005 ? 'Je dois {0}'.trf([fmtDA(f.solde)]) : 'À jour'.tr,
                           style: TextStyle(fontWeight: FontWeight.w900, color: f.solde > 0.005 ? AppColors.rose : AppColors.green)),
                     ]),
                   ),
@@ -794,7 +818,7 @@ class _FournisseurFormState extends State<FournisseurForm> {
 
   @override
   Widget build(BuildContext context) => FormDialog(
-        title: widget.f == null ? 'Nouveau fournisseur' : 'Modifier le fournisseur',
+        title: widget.f == null ? 'Nouveau fournisseur'.tr : 'Modifier le fournisseur'.tr,
         formKey: _form,
         busy: _busy,
         onSave: _save,
@@ -802,12 +826,12 @@ class _FournisseurFormState extends State<FournisseurForm> {
           TextFormField(
             controller: _nom,
             autofocus: widget.f == null,
-            decoration: const InputDecoration(labelText: 'Nom', prefixIcon: Icon(Icons.local_shipping_outlined)),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+            decoration: InputDecoration(labelText: 'Nom'.tr, prefixIcon: Icon(Icons.local_shipping_outlined)),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
           ),
-          TextFormField(controller: _tel, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Téléphone', prefixIcon: Icon(Icons.phone_outlined))),
-          TextFormField(controller: _adr, decoration: const InputDecoration(labelText: 'Adresse', prefixIcon: Icon(Icons.place_outlined))),
-          TextFormField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque', prefixIcon: Icon(Icons.notes))),
+          TextFormField(controller: _tel, keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'Téléphone'.tr, prefixIcon: Icon(Icons.phone_outlined))),
+          TextFormField(controller: _adr, decoration: InputDecoration(labelText: 'Adresse'.tr, prefixIcon: Icon(Icons.place_outlined))),
+          TextFormField(controller: _note, decoration: InputDecoration(labelText: 'Remarque'.tr, prefixIcon: Icon(Icons.notes))),
         ],
       );
 }
@@ -821,19 +845,19 @@ Future<void> ouvrirPaiementFournisseur(BuildContext context, Fournisseur f, {Ach
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setD) => AlertDialog(
-        title: Text('Payer ${f.nom}'),
+        title: Text('Payer {0}'.trf([f.nom])),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text(achat != null ? 'Achat ${achat.numero} · reste ${fmtDA(achat.reste)}' : 'Je dois : ${fmtDA(f.solde)}'),
+          Text(achat != null ? 'Achat {0} · reste {1}'.trf([achat.numero, fmtDA(achat.reste)]) : 'Je dois : {0}'.trf([fmtDA(f.solde)])),
           const SizedBox(height: 10),
           TextField(
             controller: mt,
             autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Montant payé', suffixText: 'DA'),
+            decoration: InputDecoration(labelText: 'Montant payé'.tr, suffixText: 'DA'.tr),
           ),
           const SizedBox(height: 8),
           Wrap(spacing: 6, runSpacing: 6, children: [
-            for (final m in modesPaiement.entries) ChoiceChip(label: Text(m.value), selected: mode == m.key, onSelected: (_) => setD(() => mode = m.key)),
+            for (final m in modesPaiement.entries) ChoiceChip(label: Text(m.value.tr), selected: mode == m.key, onSelected: (_) => setD(() => mode = m.key)),
           ]),
           const SizedBox(height: 8),
           InkWell(
@@ -841,14 +865,14 @@ Future<void> ouvrirPaiementFournisseur(BuildContext context, Fournisseur f, {Ach
               final d = await showDatePicker(context: ctx, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime(2100));
               if (d != null) setD(() => date = d);
             },
-            child: InputDecorator(decoration: const InputDecoration(labelText: 'Date'), child: Text(fmtDate(date))),
+            child: InputDecorator(decoration: InputDecoration(labelText: 'Date'.tr), child: Text(fmtDate(date))),
           ),
           const SizedBox(height: 8),
-          TextField(controller: note, decoration: const InputDecoration(labelText: 'Remarque')),
+          TextField(controller: note, decoration: InputDecoration(labelText: 'Remarque'.tr)),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enregistrer')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Enregistrer'.tr)),
         ],
       ),
     ),
@@ -858,7 +882,7 @@ Future<void> ouvrirPaiementFournisseur(BuildContext context, Fournisseur f, {Ach
   if (v == null || v <= 0) return;
   try {
     await commerce.savePaiementFournisseur(fournisseurId: f.id, achatId: achat?.id, date: date, montant: v, mode: mode, note: note.text);
-    if (context.mounted) showSnack(context, 'Paiement enregistré');
+    if (context.mounted) showSnack(context, 'Paiement enregistré'.tr);
   } catch (e) {
     if (context.mounted) showSnack(context, errorMessage(e), error: true);
   }
@@ -913,7 +937,7 @@ class _FournisseurDetailScreenState extends State<FournisseurDetailScreen> {
         listenable: commerce,
         builder: (context, _) {
           final f = commerce.fournisseur(widget.fournisseurId);
-          if (f == null) return Scaffold(appBar: AppBar(), body: const EmptyState('Fournisseur introuvable.'));
+          if (f == null) return Scaffold(appBar: AppBar(), body: EmptyState('Fournisseur introuvable.'.tr));
           return Scaffold(
             appBar: AppBar(title: Text(f.nom), actions: [
               IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => showDialog<String>(context: context, builder: (_) => FournisseurForm(f: f))),
@@ -922,22 +946,22 @@ class _FournisseurDetailScreenState extends State<FournisseurDetailScreen> {
               AppCard(
                 gradient: f.solde > 0.005 ? const LinearGradient(colors: [Color(0xFFBE123C), Color(0xFFF43F5E)]) : const LinearGradient(colors: [Color(0xFF047857), Color(0xFF10B981)]),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  Text(f.solde > 0.005 ? 'Je dois encore' : 'Compte à jour', style: const TextStyle(color: Colors.white70)),
+                  Text(f.solde > 0.005 ? 'Je dois encore'.tr : 'Compte à jour'.tr, style: const TextStyle(color: Colors.white70)),
                   Text(fmtDA(f.solde.abs()), style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900)),
-                  Text('Achats ${fmtDA(f.totalAchats)} · Payé ${fmtDA(f.totalPaye)}', style: const TextStyle(color: Colors.white70)),
+                  Text('Achats {0} · Payé {1}'.trf([fmtDA(f.totalAchats), fmtDA(f.totalPaye)]), style: const TextStyle(color: Colors.white70)),
                   const SizedBox(height: 12),
                   Wrap(spacing: 8, runSpacing: 8, children: [
                     FilledButton.icon(
                       style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black87),
                       onPressed: () => ouvrirPaiementFournisseur(context, f),
                       icon: const Icon(Icons.payments_rounded),
-                      label: const Text('Payer'),
+                      label: Text('Payer'.tr),
                     ),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(backgroundColor: Colors.white24, foregroundColor: Colors.white),
                       onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AchatEditorScreen(fournisseurId: f.id))),
                       icon: const Icon(Icons.add_shopping_cart_rounded),
-                      label: const Text('Nouvel achat'),
+                      label: Text('Nouvel achat'.tr),
                     ),
                   ]),
                 ]),
@@ -946,16 +970,16 @@ class _FournisseurDetailScreenState extends State<FournisseurDetailScreen> {
               AppCard(
                 padding: const EdgeInsets.fromLTRB(12, 16, 8, 8),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const Padding(padding: EdgeInsets.only(left: 4), child: SectionTitle('Achats')),
-                  if (_achats.isEmpty) const EmptyState('Aucun achat.', icon: Icons.shopping_basket_outlined),
+                  Padding(padding: EdgeInsets.only(left: 4), child: SectionTitle('Achats'.tr)),
+                  if (_achats.isEmpty) EmptyState('Aucun achat.'.tr, icon: Icons.shopping_basket_outlined),
                   for (final a in _achats) AchatTile(a),
                 ]),
               ),
               const SizedBox(height: 12),
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const SectionTitle('Paiements'),
-                  if (_paiements.isEmpty) const EmptyState('Aucun paiement.', icon: Icons.payments_outlined),
+                  SectionTitle('Paiements'.tr),
+                  if (_paiements.isEmpty) EmptyState('Aucun paiement.'.tr, icon: Icons.payments_outlined),
                   for (final p in _paiements)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 5),
@@ -967,7 +991,7 @@ class _FournisseurDetailScreenState extends State<FournisseurDetailScreen> {
                         IconButton(
                           icon: Icon(Icons.delete_outline, size: 18, color: context.pal.muted),
                           onPressed: () async {
-                            if (await confirmDialog(context, 'Supprimer', 'Supprimer ce paiement de ${fmtDA(p.montant)} ?')) {
+                            if (await confirmDialog(context, 'Supprimer'.tr, 'Supprimer ce paiement de {0} ?'.trf([fmtDA(p.montant)]))) {
                               await commerce.deletePaiementFournisseur(p.id);
                             }
                           },

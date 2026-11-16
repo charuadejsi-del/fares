@@ -11,6 +11,7 @@ import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
 import 'ouvrier_detail_screen.dart';
+import '../i18n.dart';
 
 class Agg {
   int saisies = 0;
@@ -116,7 +117,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _csv() {
     String q(Object? v) => '"${(v ?? '').toString().replaceAll('"', '""')}"';
-    final b = StringBuffer('Date;Equipe;Ouvrier;Type;Machine;Points;Tarif DA/1000;Montant DA;Dessin;Robes;Remarque\n');
+    final b = StringBuffer('Date;Equipe;Ouvrier;Type;Machine;Points;Tarif DA/1000;Montant DA;Dessin;Robes;Remarque\n'.tr);
     for (final p in _rows) {
       b.writeln([
         dateKey(p.dateProd),
@@ -137,7 +138,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _export() async {
     if (_rows.isEmpty) {
-      showSnack(context, 'Rien à exporter sur cette période.');
+      showSnack(context, 'Rien à exporter sur cette période.'.tr);
       return;
     }
     final csv = _csv();
@@ -151,10 +152,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final f = File('${dir.path}${Platform.pathSeparator}production_${dateKey(DateTime.now())}_${DateTime.now().millisecondsSinceEpoch}.csv');
       await f.writeAsString('﻿$csv');
       await Clipboard.setData(ClipboardData(text: csv));
-      if (mounted) showSnack(context, 'Exporté : ${f.path} (copié aussi dans le presse-papiers)');
+      if (mounted) showSnack(context, 'Exporté : {0} (copié aussi dans le presse-papiers)'.trf([f.path]));
     } catch (e) {
       await Clipboard.setData(ClipboardData(text: csv));
-      if (mounted) showSnack(context, 'Fichier impossible à écrire — données copiées dans le presse-papiers.');
+      if (mounted) showSnack(context, 'Fichier impossible à écrire — données copiées dans le presse-papiers.'.tr);
     }
   }
 
@@ -183,27 +184,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final hero = _HeroCard(total: total, prevPoints: _prevPoints, periode: _periode);
 
     final stats = AutoGrid(minItemWidth: 165, children: [
-      StatTile(label: 'À payer', value: fmtDA(total.montant), icon: Icons.payments_rounded, color: AppColors.green),
-      StatTile(label: 'Équipe de jour', value: '${fmtCompact(parEquipe[Equipe.jour]!.points)} pts', icon: Icons.wb_sunny_rounded,
+      StatTile(label: 'À payer'.tr, value: fmtDA(total.montant), icon: Icons.payments_rounded, color: AppColors.green),
+      StatTile(label: 'Équipe de jour'.tr, value: '${fmtCompact(parEquipe[Equipe.jour]!.points)} pts', icon: Icons.wb_sunny_rounded,
           color: AppColors.gold, sub: fmtDA(parEquipe[Equipe.jour]!.montant)),
-      StatTile(label: 'Équipe de nuit', value: '${fmtCompact(parEquipe[Equipe.nuit]!.points)} pts', icon: Icons.nightlight_round,
+      StatTile(label: 'Équipe de nuit'.tr, value: '${fmtCompact(parEquipe[Equipe.nuit]!.points)} pts', icon: Icons.nightlight_round,
           color: AppColors.sky, sub: fmtDA(parEquipe[Equipe.nuit]!.montant)),
-      StatTile(label: 'Moyenne par équipe', value: '${fmtCompact(moyEquipe)} pts', icon: Icons.speed_rounded, color: AppColors.rose,
-          sub: '${total.saisies} relevés'),
+      StatTile(label: 'Moyenne par équipe'.tr, value: '${fmtCompact(moyEquipe)} pts', icon: Icons.speed_rounded, color: AppColors.rose,
+          sub: '{0} relevés'.trf([total.saisies])),
     ]);
 
     final chart = AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SectionTitle('Production', subtitle: 'Points brodés sur la période'),
+        SectionTitle('Production'.tr, subtitle: 'Points brodés sur la période'.tr),
         PointsBarChart(rows: _rows, range: range),
       ]),
     );
 
     final donut = AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const SectionTitle('Répartition', subtitle: 'Part des points par ouvrier'),
+        SectionTitle('Répartition'.tr, subtitle: 'Part des points par ouvrier'.tr),
         if (ouv.isEmpty)
-          const EmptyState('Aucune production sur cette période.', icon: Icons.pie_chart_outline)
+          EmptyState('Aucune production sur cette période.'.tr, icon: Icons.pie_chart_outline)
         else
           Wrap(
             alignment: WrapAlignment.center,
@@ -227,9 +228,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final classement = AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const SectionTitle('Classement des ouvriers', subtitle: 'Touchez un ouvrier pour sa fiche'),
+        SectionTitle('Classement des ouvriers'.tr, subtitle: 'Touchez un ouvrier pour sa fiche'.tr),
         if (ouv.isEmpty)
-          const EmptyState('Aucun ouvrier n\'a produit sur cette période.', icon: Icons.emoji_events_outlined)
+          EmptyState('Aucun ouvrier n\'a produit sur cette période.'.tr, icon: Icons.emoji_events_outlined)
         else
           for (var i = 0; i < ouv.length; i++)
             _RankRow(
@@ -243,7 +244,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final typesCard = AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const SectionTitle('Par type de broderie', subtitle: 'Points et montant'),
+        SectionTitle('Par type de broderie'.tr, subtitle: 'Points et montant'.tr),
         if (typesList.isEmpty)
           const EmptyState('—', icon: Icons.gesture_rounded)
         else
@@ -264,7 +265,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(height: 6),
                 Bar(total.points == 0 ? 0 : e.value.points / total.points, color: _typeColor(e.key)),
                 const SizedBox(height: 4),
-                Text('${fmtInt(e.value.points)} pts · ${e.value.saisies} relevés',
+                Text('{0} pts · {1} relevés'.trf([fmtInt(e.value.points), e.value.saisies]),
                     style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
               ]),
             ),
@@ -275,7 +276,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? const SizedBox.shrink()
         : AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const SectionTitle('Dessins'),
+        SectionTitle('Dessins'.tr),
         if (des.isEmpty)
           const EmptyState('—', icon: Icons.local_florist_outlined)
         else
@@ -288,7 +289,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(data.dessinNom(e.key), style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
-                    Text('${fmtInt(data.dessin(e.key)?.points ?? 0)} pts / robe',
+                    Text('{0} pts / robe'.trf([fmtInt(data.dessin(e.key)?.points ?? 0)]),
                         style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
                   ]),
                 ),
@@ -306,16 +307,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final gainsAutres = _pieces.fold<double>(0, (s, p) => s + p.montant) + sumMvt(TypeMvt.salaire) + sumMvt(TypeMvt.prime);
     final paieCard = AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const SectionTitle('Paie et avances', subtitle: 'Tous départements'),
+        SectionTitle('Paie et avances'.tr, subtitle: 'Tous départements'.tr),
         AutoGrid(minItemWidth: 150, children: [
-          _MiniStat('Reste à payer (total)', fmtDA(data.totalResteAPayer), AppColors.green, Icons.account_balance_wallet_rounded),
-          _MiniStat('Avances (période)', fmtDA(sumMvt(TypeMvt.avance)), AppColors.rose, Icons.north_east_rounded),
-          _MiniStat('Payé (période)', fmtDA(sumMvt(TypeMvt.paiement)), AppColors.sky, Icons.payments_rounded),
-          _MiniStat('Autres gains (pièces, salaires)', fmtDA(gainsAutres), AppColors.teal, Icons.checkroom_rounded),
+          _MiniStat('Reste à payer (total)'.tr, fmtDA(data.totalResteAPayer), AppColors.green, Icons.account_balance_wallet_rounded),
+          _MiniStat('Avances (période)'.tr, fmtDA(sumMvt(TypeMvt.avance)), AppColors.rose, Icons.north_east_rounded),
+          _MiniStat('Payé (période)'.tr, fmtDA(sumMvt(TypeMvt.paiement)), AppColors.sky, Icons.payments_rounded),
+          _MiniStat('Autres gains (pièces, salaires)'.tr, fmtDA(gainsAutres), AppColors.teal, Icons.checkroom_rounded),
         ]),
         if (data.totalAvancesNonCouvertes > 0) ...[
           const SizedBox(height: 10),
-          Text('Avances non encore couvertes par le travail : ${fmtDA(data.totalAvancesNonCouvertes)}',
+          Text('Avances non encore couvertes par le travail : {0}'.trf([fmtDA(data.totalAvancesNonCouvertes)]),
               style: TextStyle(color: AppColors.rose, fontWeight: FontWeight.w600, fontSize: 12.5)),
         ],
       ]),
@@ -348,7 +349,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _load();
                 },
               ),
-              OutlinedButton.icon(onPressed: _export, icon: const Icon(Icons.file_download_outlined), label: const Text('Exporter CSV')),
+              OutlinedButton.icon(onPressed: _export, icon: const Icon(Icons.file_download_outlined), label: Text('Exporter CSV'.tr)),
             ]),
             const SizedBox(height: 14),
             AnimatedOpacity(
@@ -442,7 +443,7 @@ class _HeroCard extends StatelessWidget {
               ),
           ]),
           const SizedBox(height: 18),
-          const Text('Points brodés', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w500)),
+          Text('Points brodés'.tr, style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w500)),
           const SizedBox(height: 2),
           FittedBox(
             fit: BoxFit.scaleDown,
@@ -453,8 +454,8 @@ class _HeroCard extends StatelessWidget {
           const SizedBox(height: 14),
           Wrap(spacing: 18, runSpacing: 6, children: [
             _heroInfo(Icons.payments_rounded, fmtDA(total.montant)),
-            _heroInfo(Icons.receipt_long_rounded, '${total.saisies} relevés'),
-            if (prevPoints != null) _heroInfo(Icons.history_rounded, 'Avant : ${fmtCompact(prevPoints!)} pts'),
+            _heroInfo(Icons.receipt_long_rounded, '{0} relevés'.trf([total.saisies])),
+            if (prevPoints != null) _heroInfo(Icons.history_rounded, 'Avant : {0} pts'.trf([fmtCompact(prevPoints!)])),
           ]),
         ]),
       ]),
@@ -506,7 +507,7 @@ class _RankRow extends StatelessWidget {
               const SizedBox(height: 6),
               Bar(ratio, color: AppColors.forName(nom)),
               const SizedBox(height: 4),
-              Text('${agg.saisies} équipe${agg.saisies > 1 ? 's' : ''} · ${fmtDA(agg.montant)}',
+              Text('{0} équipe{1} · {2}'.trf([agg.saisies, agg.saisies > 1 ? 's' : '', fmtDA(agg.montant)]),
                   style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
             ]),
           ),

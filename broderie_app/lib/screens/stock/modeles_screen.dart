@@ -8,6 +8,7 @@ import '../../theme.dart';
 import '../../utils.dart';
 import '../../widgets.dart';
 import 'produits_screen.dart' show EtiquettesDialog, ProduitDetailScreen, stockColor;
+import '../../i18n.dart';
 
 // ======================================================================= couleurs
 
@@ -71,8 +72,8 @@ class Pastille extends StatelessWidget {
         );
 }
 
-String nomCouleur(String? c) => c ?? 'Sans couleur';
-String nomTaille(String? t) => t ?? 'Unique';
+String nomCouleur(String? c) => c ?? 'Sans couleur'.tr;
+String nomTaille(String? t) => t ?? 'Unique'.tr;
 
 // ======================================================================= sélecteur
 
@@ -97,17 +98,17 @@ class SelecteurValeurs extends StatelessWidget {
     final v = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(couleurs ? 'Autre couleur' : 'Autre taille'),
+        title: Text(couleurs ? 'Autre couleur'.tr : 'Autre taille'.tr),
         content: TextField(
           controller: c,
           autofocus: true,
           textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(labelText: couleurs ? 'Nom de la couleur' : 'Taille (ex. 56, Enfant 8 ans)'),
+          decoration: InputDecoration(labelText: couleurs ? 'Nom de la couleur'.tr : 'Taille (ex. 56, Enfant 8 ans)'.tr),
           onSubmitted: (x) => Navigator.pop(ctx, x),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('Ajouter')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: Text('Ajouter'.tr)),
         ],
       ),
     );
@@ -132,7 +133,7 @@ class SelecteurValeurs extends StatelessWidget {
               ? null
               : (sel) => onChanged(sel ? [...choisies, v] : choisies.where((x) => x != v).toList()),
         ),
-      ActionChip(avatar: const Icon(Icons.add_rounded, size: 18), label: Text(couleurs ? 'Autre couleur' : 'Autre taille'), onPressed: () => _autre(context)),
+      ActionChip(avatar: const Icon(Icons.add_rounded, size: 18), label: Text(couleurs ? 'Autre couleur'.tr : 'Autre taille'.tr), onPressed: () => _autre(context)),
     ]);
   }
 }
@@ -172,7 +173,7 @@ class GrilleQuantites extends StatelessWidget {
         defaultVerticalAlignment: TableCellVerticalAlignment.middle,
         children: [
           TableRow(children: [
-            Padding(padding: const EdgeInsets.all(6), child: Text('Couleur \\ Taille', style: head)),
+            Padding(padding: const EdgeInsets.all(6), child: Text('Couleur \\ Taille'.tr, style: head)),
             for (final t in ts) Center(child: Padding(padding: const EdgeInsets.all(6), child: Text(nomTaille(t), style: head))),
           ]),
           for (final c in cs)
@@ -296,7 +297,7 @@ class _ModeleFormState extends State<ModeleForm> {
     if (!_form.currentState!.validate()) return;
     final ref = _ref.text.trim().toUpperCase();
     if (m == null && stock.produits.any((p) => p.reference.toUpperCase() == ref || p.modele == ref)) {
-      showSnack(context, 'La référence $ref existe déjà', error: true);
+      showSnack(context, 'La référence {0} existe déjà'.trf([ref]), error: true);
       return;
     }
     setState(() => _busy = true);
@@ -329,7 +330,7 @@ class _ModeleFormState extends State<ModeleForm> {
       final cree = stock.modeleParCle(cle);
       Navigator.pop(context, cle);
       if (m == null && cree != null) {
-        showSnack(context, '${cree.variantes.length} variante(s) créée(s) · ${fmtInt(cree.stock)} pièces');
+        showSnack(context, '{0} variante(s) créée(s) · {1} pièces'.trf([cree.variantes.length, fmtInt(cree.stock)]));
       }
     } catch (e) {
       if (mounted) {
@@ -347,48 +348,48 @@ class _ModeleFormState extends State<ModeleForm> {
     final propCouleurs = {...couleursPalette.keys, ...stock.couleursUtilisees}.toList();
     final propTailles = {...taillesStandard, ...stock.taillesUtilisees}.toList()..sort((a, b) => ordreTaille(a).compareTo(ordreTaille(b)));
     return Scaffold(
-      appBar: AppBar(title: Text(m == null ? 'Nouveau modèle' : 'Modifier ${m!.reference}')),
+      appBar: AppBar(title: Text(m == null ? 'Nouveau modèle'.tr : 'Modifier {0}'.trf([m!.reference]))),
       body: Form(
         key: _form,
         child: ListView(padding: const EdgeInsets.all(16), children: [
           AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const SectionTitle('Le modèle', subtitle: 'Une référence et un QR code sont créés pour chaque couleur et taille'),
+              SectionTitle('Le modèle'.tr, subtitle: 'Une référence et un QR code sont créés pour chaque couleur et taille'.tr),
               AutoGrid(minItemWidth: 240, children: [
                 TextFormField(
                   controller: _ref,
                   enabled: m == null,
                   textCapitalization: TextCapitalization.characters,
-                  decoration: const InputDecoration(labelText: 'Référence du modèle', prefixIcon: Icon(Icons.qr_code_2_rounded)),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+                  decoration: InputDecoration(labelText: 'Référence du modèle'.tr, prefixIcon: Icon(Icons.qr_code_2_rounded)),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
                 ),
                 TextFormField(
                   controller: _nom,
                   autofocus: m == null,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(labelText: 'Nom (ex. Robe Karakou brodée)', prefixIcon: Icon(Icons.checkroom_rounded)),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+                  decoration: InputDecoration(labelText: 'Nom (ex. Robe Karakou brodée)'.tr, prefixIcon: Icon(Icons.checkroom_rounded)),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
                 ),
-                TextFormField(controller: _cat, decoration: const InputDecoration(labelText: 'Catégorie', prefixIcon: Icon(Icons.category_outlined))),
+                TextFormField(controller: _cat, decoration: InputDecoration(labelText: 'Catégorie'.tr, prefixIcon: Icon(Icons.category_outlined))),
                 TextFormField(
                   controller: _gros,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Prix de gros', suffixText: 'DA', prefixIcon: Icon(Icons.sell_outlined)),
+                  decoration: InputDecoration(labelText: 'Prix de gros'.tr, suffixText: 'DA'.tr, prefixIcon: Icon(Icons.sell_outlined)),
                 ),
                 TextFormField(
                   controller: _detail,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Prix détail', suffixText: 'DA', prefixIcon: Icon(Icons.storefront_outlined)),
+                  decoration: InputDecoration(labelText: 'Prix détail'.tr, suffixText: 'DA'.tr, prefixIcon: Icon(Icons.storefront_outlined)),
                 ),
                 TextFormField(
                   controller: _cout,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Main-d\'œuvre / pièce', suffixText: 'DA', prefixIcon: Icon(Icons.engineering_outlined)),
+                  decoration: InputDecoration(labelText: 'Main-d\'œuvre / pièce'.tr, suffixText: 'DA'.tr, prefixIcon: Icon(Icons.engineering_outlined)),
                 ),
                 TextFormField(
                   controller: _seuil,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Alerte si stock ≤ (par variante)', prefixIcon: Icon(Icons.warning_amber_rounded)),
+                  decoration: InputDecoration(labelText: 'Alerte si stock ≤ (par variante)'.tr, prefixIcon: Icon(Icons.warning_amber_rounded)),
                 ),
               ]),
             ]),
@@ -397,7 +398,7 @@ class _ModeleFormState extends State<ModeleForm> {
             const SizedBox(height: 12),
             AppCard(
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                SectionTitle('Photos pour le site', subtitle: '${_photos.length}/12 · la première est la photo principale'),
+                SectionTitle('Photos pour le site'.tr, subtitle: '{0}/12 · la première est la photo principale'.trf([_photos.length])),
                 SizedBox(
                   height: 130,
                   child: ListView(scrollDirection: Axis.horizontal, children: [
@@ -429,10 +430,10 @@ class _ModeleFormState extends State<ModeleForm> {
                             border: Border.all(color: AppColors.gold.withValues(alpha: 0.6), width: 1.4),
                             color: AppColors.gold.withValues(alpha: 0.06),
                           ),
-                          child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                             Icon(Icons.add_photo_alternate_rounded, color: AppColors.gold, size: 30),
                             SizedBox(height: 4),
-                            Text('Ajouter', style: TextStyle(fontWeight: FontWeight.w700)),
+                            Text('Ajouter'.tr, style: TextStyle(fontWeight: FontWeight.w700)),
                           ]),
                         ),
                       ),
@@ -443,14 +444,14 @@ class _ModeleFormState extends State<ModeleForm> {
                   controller: _desc,
                   maxLines: 3,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(labelText: 'Description sur le site (facultatif)', prefixIcon: Icon(Icons.notes_rounded)),
+                  decoration: InputDecoration(labelText: 'Description sur le site (facultatif)'.tr, prefixIcon: Icon(Icons.notes_rounded)),
                 ),
               ]),
             ),
           ],          const SizedBox(height: 12),
           AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SectionTitle('Couleurs', subtitle: _couleurs.isEmpty ? 'Aucune couleur choisie : modèle sans couleur' : '${_couleurs.length} couleur(s)'),
+              SectionTitle('Couleurs'.tr, subtitle: _couleurs.isEmpty ? 'Aucune couleur choisie : modèle sans couleur'.tr : '{0} couleur(s)'.trf([_couleurs.length])),
               SelecteurValeurs(
                 couleurs: true,
                 proposees: propCouleurs,
@@ -463,7 +464,7 @@ class _ModeleFormState extends State<ModeleForm> {
           const SizedBox(height: 12),
           AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SectionTitle('Tailles', subtitle: _tailles.isEmpty ? 'Aucune taille choisie : taille unique' : '${_tailles.length} taille(s)'),
+              SectionTitle('Tailles'.tr, subtitle: _tailles.isEmpty ? 'Aucune taille choisie : taille unique'.tr : '{0} taille(s)'.trf([_tailles.length])),
               SelecteurValeurs(
                 proposees: propTailles,
                 choisies: _tailles,
@@ -475,8 +476,8 @@ class _ModeleFormState extends State<ModeleForm> {
           const SizedBox(height: 12),
           AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SectionTitle(m == null ? 'Quantités en stock' : 'Ajouter des pièces',
-                  subtitle: '$_nbVariantes variante(s) · total ${fmtInt(_total)} pièces'),
+              SectionTitle(m == null ? 'Quantités en stock'.tr : 'Ajouter des pièces'.tr,
+                  subtitle: '{0} variante(s) · total {1} pièces'.trf([_nbVariantes, fmtInt(_total)])),
               GrilleQuantites(
                 couleurs: _cs,
                 tailles: _ts,
@@ -487,7 +488,7 @@ class _ModeleFormState extends State<ModeleForm> {
               if (m != null && existantes.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text('Les quantités saisies s\'ajoutent au stock actuel.', style: TextStyle(color: context.pal.muted)),
+                  child: Text('Les quantités saisies s\'ajoutent au stock actuel.'.tr, style: TextStyle(color: context.pal.muted)),
                 ),
             ]),
           ),
@@ -497,7 +498,7 @@ class _ModeleFormState extends State<ModeleForm> {
             child: FilledButton.icon(
               onPressed: _busy ? null : _save,
               icon: _busy ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.check_rounded),
-              label: Text(m == null ? 'Créer le modèle' : 'Enregistrer'),
+              label: Text(m == null ? 'Créer le modèle'.tr : 'Enregistrer'.tr),
             ),
           ),
         ]),
@@ -587,9 +588,9 @@ class ModeleDetailScreen extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.viewInsetsOf(ctx).bottom + 16),
         child: SingleChildScrollView(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text(sortie ? 'Retirer du stock · ${m.reference}' : 'Ajouter du stock · ${m.reference}', style: ctx.tt.titleLarge),
+            Text(sortie ? 'Retirer du stock · {0}'.trf([m.reference]) : 'Ajouter du stock · {0}'.trf([m.reference]), style: ctx.tt.titleLarge),
             const SizedBox(height: 6),
-            Text('Saisissez la quantité pour chaque couleur et taille.', style: TextStyle(color: ctx.pal.muted)),
+            Text('Saisissez la quantité pour chaque couleur et taille.'.tr, style: TextStyle(color: ctx.pal.muted)),
             const SizedBox(height: 12),
             GrilleQuantites(
               couleurs: m.couleurs,
@@ -599,13 +600,13 @@ class ModeleDetailScreen extends StatelessWidget {
               disponible: {for (final v in m.variantes) cleGrille(v.couleur, v.taille): v.stock},
             ),
             const SizedBox(height: 10),
-            TextField(controller: note, decoration: InputDecoration(labelText: sortie ? 'Motif (défaut, perte…)' : 'Remarque (production, retour atelier…)')),
+            TextField(controller: note, decoration: InputDecoration(labelText: sortie ? 'Motif (défaut, perte…)'.tr : 'Remarque (production, retour atelier…)'.tr)),
             const SizedBox(height: 14),
             FilledButton.icon(
               style: sortie ? FilledButton.styleFrom(backgroundColor: AppColors.rose) : null,
               onPressed: () => Navigator.pop(ctx, true),
               icon: Icon(sortie ? Icons.remove_rounded : Icons.add_rounded),
-              label: Text(sortie ? 'Retirer' : 'Ajouter au stock'),
+              label: Text(sortie ? 'Retirer'.tr : 'Ajouter au stock'.tr),
             ),
           ]),
         ),
@@ -622,7 +623,7 @@ class ModeleDetailScreen extends StatelessWidget {
     try {
       await stock.mouvementsGroupes(par, sortie ? TypeStock.sortie : TypeStock.entree, note: note.text);
       final total = par.values.fold<int>(0, (s, v) => s + v.abs());
-      if (context.mounted) showSnack(context, '${sortie ? '−' : '+'}$total pièces');
+      if (context.mounted) showSnack(context, '{0}{1} pièces'.trf([sortie ? '−' : '+', total]));
     } catch (e) {
       if (context.mounted) showSnack(context, errorMessage(e), error: true);
     }
@@ -633,12 +634,12 @@ class ModeleDetailScreen extends StatelessWidget {
         listenable: stock,
         builder: (context, _) {
           final m = stock.modeleParCle(cle);
-          if (m == null) return Scaffold(appBar: AppBar(), body: const EmptyState('Modèle introuvable.'));
+          if (m == null) return Scaffold(appBar: AppBar(), body: EmptyState('Modèle introuvable.'.tr));
           final cs = m.couleurs, ts = m.tailles;
           final head = TextStyle(fontWeight: FontWeight.w800, color: context.pal.muted, fontSize: 12);
           return Scaffold(
             appBar: AppBar(title: Text(m.reference), actions: [
-              IconButton(tooltip: 'Modifier / ajouter couleurs et tailles', icon: const Icon(Icons.edit_outlined), onPressed: () => ouvrirModeleForm(context, modele: m)),
+              IconButton(tooltip: 'Modifier / ajouter couleurs et tailles'.tr, icon: const Icon(Icons.edit_outlined), onPressed: () => ouvrirModeleForm(context, modele: m)),
             ]),
             body: ListView(padding: const EdgeInsets.all(16), children: [
               AppCard(
@@ -649,34 +650,34 @@ class ModeleDetailScreen extends StatelessWidget {
                       style: const TextStyle(color: Colors.white70)),
                   const SizedBox(height: 14),
                   Wrap(spacing: 22, runSpacing: 10, children: [
-                    _Chiffre('En stock', fmtInt(m.stock)),
-                    _Chiffre('Disponible', fmtInt(m.disponible)),
-                    _Chiffre('Réservé', fmtInt(m.reserve)),
-                    _Chiffre('Vendu', fmtInt(m.vendus)),
-                    _Chiffre('Valeur', fmtDA(m.valeurStock)),
+                    _Chiffre('En stock'.tr, fmtInt(m.stock)),
+                    _Chiffre('Disponible'.tr, fmtInt(m.disponible)),
+                    _Chiffre('Réservé'.tr, fmtInt(m.reserve)),
+                    _Chiffre('Vendu'.tr, fmtInt(m.vendus)),
+                    _Chiffre('Valeur'.tr, fmtDA(m.valeurStock)),
                   ]),
                 ]),
               ),
               const SizedBox(height: 12),
               Wrap(spacing: 10, runSpacing: 10, children: [
-                FilledButton.icon(onPressed: () => _stock(context, m, sortie: false), icon: const Icon(Icons.add_box_rounded), label: const Text('Ajouter du stock')),
-                OutlinedButton.icon(onPressed: () => _stock(context, m, sortie: true), icon: const Icon(Icons.indeterminate_check_box_outlined), label: const Text('Retirer')),
+                FilledButton.icon(onPressed: () => _stock(context, m, sortie: false), icon: const Icon(Icons.add_box_rounded), label: Text('Ajouter du stock'.tr)),
+                OutlinedButton.icon(onPressed: () => _stock(context, m, sortie: true), icon: const Icon(Icons.indeterminate_check_box_outlined), label: Text('Retirer'.tr)),
                 OutlinedButton.icon(
                   onPressed: () => ouvrirModeleForm(context, modele: m),
                   icon: const Icon(Icons.palette_outlined),
-                  label: const Text('Couleurs / tailles'),
+                  label: Text('Couleurs / tailles'.tr),
                 ),
                 OutlinedButton.icon(
                   onPressed: () => showDialog<void>(context: context, builder: (_) => EtiquettesDialog(produits: m.variantes)),
                   icon: const Icon(Icons.print_rounded),
-                  label: const Text('Étiquettes QR'),
+                  label: Text('Étiquettes QR'.tr),
                 ),
               ]),
               const SizedBox(height: 12),
               VitrineModeleCard(m: m),              const SizedBox(height: 12),
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const SectionTitle('Stock par couleur et taille', subtitle: 'Touchez une case pour la fiche, le QR et l\'historique'),
+                  SectionTitle('Stock par couleur et taille'.tr, subtitle: 'Touchez une case pour la fiche, le QR et l\'historique'.tr),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Table(
@@ -687,7 +688,7 @@ class ModeleDetailScreen extends StatelessWidget {
                         TableRow(children: [
                           const SizedBox(),
                           for (final t in ts) Center(child: Padding(padding: const EdgeInsets.all(6), child: Text(nomTaille(t), style: head))),
-                          Center(child: Text('Total', style: head)),
+                          Center(child: Text('Total'.tr, style: head)),
                         ]),
                         for (final c in cs)
                           TableRow(children: [
@@ -714,7 +715,7 @@ class ModeleDetailScreen extends StatelessWidget {
                                       decoration: BoxDecoration(color: col.withValues(alpha: 0.13), borderRadius: BorderRadius.circular(12)),
                                       child: Column(children: [
                                         Text(fmtInt(v.stock), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: col)),
-                                        if (v.reserve > 0) Text('${v.reserve} rés.', style: TextStyle(fontSize: 10, color: col)),
+                                        if (v.reserve > 0) Text('{0} rés.'.trf([v.reserve]), style: TextStyle(fontSize: 10, color: col)),
                                       ]),
                                     ),
                                   ),
@@ -768,12 +769,12 @@ Future<List<(Produit, int)>?> choisirArticles(BuildContext context, {bool verifi
           autofocus: true,
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: InputDecoration(labelText: 'Quantité', helperText: 'Disponible : ${m.base.disponible}'),
+          decoration: InputDecoration(labelText: 'Quantité'.tr, helperText: 'Disponible : {0}'.trf([m.base.disponible])),
           onSubmitted: (_) => Navigator.pop(ctx, true),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ajouter')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Ajouter'.tr)),
         ],
       ),
     );
@@ -789,7 +790,7 @@ Future<List<(Produit, int)>?> choisirArticles(BuildContext context, {bool verifi
         width: 640,
         child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Quantité par couleur et taille', style: TextStyle(color: ctx.pal.muted)),
+            Text('Quantité par couleur et taille'.tr, style: TextStyle(color: ctx.pal.muted)),
             const SizedBox(height: 10),
             GrilleQuantites(
               couleurs: m.couleurs,
@@ -802,8 +803,8 @@ Future<List<(Produit, int)>?> choisirArticles(BuildContext context, {bool verifi
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-        FilledButton.icon(onPressed: () => Navigator.pop(ctx, true), icon: const Icon(Icons.add_shopping_cart_rounded), label: const Text('Ajouter')),
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
+        FilledButton.icon(onPressed: () => Navigator.pop(ctx, true), icon: const Icon(Icons.add_shopping_cart_rounded), label: Text('Ajouter'.tr)),
       ],
     ),
   );
@@ -829,20 +830,20 @@ class _ChoixModeleDialogState extends State<_ChoixModeleDialog> {
   Widget build(BuildContext context) {
     final list = stock.modeles.where((m) => m.actif).where((m) => _q.isEmpty || m.contient(_q)).take(150).toList();
     return AlertDialog(
-      title: const Text('Choisir un modèle'),
+      title: Text('Choisir un modèle'.tr),
       content: SizedBox(
         width: 520,
         height: 480,
         child: Column(children: [
           TextField(
             autofocus: true,
-            decoration: const InputDecoration(hintText: 'Référence, nom, couleur…', prefixIcon: Icon(Icons.search)),
+            decoration: InputDecoration(hintText: 'Référence, nom, couleur…'.tr, prefixIcon: Icon(Icons.search)),
             onChanged: (v) => setState(() => _q = v),
           ),
           const SizedBox(height: 8),
           Expanded(
             child: list.isEmpty
-                ? const EmptyState('Aucun modèle.')
+                ? EmptyState('Aucun modèle.'.tr)
                 : ListView.builder(
                     itemCount: list.length,
                     itemBuilder: (_, i) {
@@ -867,7 +868,7 @@ class _ChoixModeleDialogState extends State<_ChoixModeleDialog> {
           ),
         ]),
       ),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text('Fermer'.tr))],
     );
   }
 }
@@ -898,7 +899,7 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
         photos.add(await stock.envoyerPhotoVitrine(await f.readAsBytes(), ext: ext));
       }
       await stock.saveInfo(_cle, photos: photos);
-      if (mounted) showSnack(context, 'Photo(s) publiée(s) sur le site');
+      if (mounted) showSnack(context, 'Photo(s) publiée(s) sur le site'.tr);
     } catch (e) {
       if (mounted) showSnack(context, errorMessage(e), error: true);
     } finally {
@@ -907,7 +908,7 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
   }
 
   Future<void> _retirer(String path) async {
-    if (!await confirmDialog(context, 'Retirer la photo', 'Retirer cette photo du site ?')) return;
+    if (!await confirmDialog(context, 'Retirer la photo'.tr, 'Retirer cette photo du site ?'.tr)) return;
     final photos = stock.info(_cle).photos.where((p) => p != path).toList();
     try {
       await stock.saveInfo(_cle, photos: photos);
@@ -927,7 +928,7 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
     final choix = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Couleur de cette photo'),
+        title: Text('Couleur de cette photo'.tr),
         children: [
           for (final c in widget.m.couleurs.whereType<String>())
             SimpleDialogOption(
@@ -938,7 +939,7 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
                 Text(c, style: TextStyle(fontWeight: c == cur ? FontWeight.w900 : FontWeight.w500)),
               ]),
             ),
-          SimpleDialogOption(onPressed: () => Navigator.pop(ctx, ''), child: const Text('Aucune couleur')),
+          SimpleDialogOption(onPressed: () => Navigator.pop(ctx, ''), child: Text('Aucune couleur'.tr)),
         ],
       ),
     );
@@ -957,19 +958,19 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Description sur le site'),
+        title: Text('Description sur le site'.tr),
         content: SizedBox(
           width: 480,
           child: TextField(
             controller: c,
             maxLines: 6,
             textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(hintText: 'Tissu, broderie, finitions, conseils…'),
+            decoration: InputDecoration(hintText: 'Tissu, broderie, finitions, conseils…'.tr),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Enregistrer')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Enregistrer'.tr)),
         ],
       ),
     );
@@ -983,8 +984,8 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
           final i = stock.info(_cle);
           return AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SectionTitle('Site vitrine',
-                  subtitle: i.publie ? 'Visible par vos clients, mis à jour automatiquement' : 'Masqué du site',
+              SectionTitle('Site vitrine'.tr,
+                  subtitle: i.publie ? 'Visible par vos clients, mis à jour automatiquement'.tr : 'Masqué du site'.tr,
                   trailing: Switch(value: i.publie, onChanged: (v) => stock.saveInfo(_cle, publie: v))),
               SizedBox(
                 height: 150,
@@ -1019,7 +1020,7 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                               decoration: BoxDecoration(color: AppColors.gold, borderRadius: BorderRadius.circular(8)),
-                              child: const Text('Principale', style: TextStyle(color: AppColors.ink, fontSize: 10, fontWeight: FontWeight.w800)),
+                              child: Text('Principale'.tr, style: TextStyle(color: AppColors.ink, fontSize: 10, fontWeight: FontWeight.w800)),
                             ),
                           ),
                         Positioned(
@@ -1032,10 +1033,10 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
                               child: const Icon(Icons.more_vert, color: Colors.white, size: 18),
                             ),
                             itemBuilder: (_) => [
-                              if (k > 0) const PopupMenuItem(value: 'main', child: Text('Mettre en photo principale')),
+                              if (k > 0) PopupMenuItem(value: 'main', child: Text('Mettre en photo principale'.tr)),
                               if (widget.m.couleurs.whereType<String>().isNotEmpty)
-                                const PopupMenuItem(value: 'col', child: Text('Associer à une couleur')),
-                              const PopupMenuItem(value: 'del', child: Text('Retirer')),
+                                PopupMenuItem(value: 'col', child: Text('Associer à une couleur'.tr)),
+                              PopupMenuItem(value: 'del', child: Text('Retirer'.tr)),
                             ],
                             onSelected: (v) => switch (v) {
                               'main' => _principale(p),
@@ -1062,7 +1063,7 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
                               ? const CircularProgressIndicator(strokeWidth: 2)
                               : const Icon(Icons.add_photo_alternate_rounded, color: AppColors.gold, size: 34),
                           const SizedBox(height: 6),
-                          const Text('Ajouter\ndes photos', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700)),
+                          Text('Ajouter\ndes photos'.tr, textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w700)),
                         ]),
                       ),
                     ),
@@ -1072,7 +1073,7 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.notes_rounded),
-                title: Text(i.description == null || i.description!.isEmpty ? 'Ajouter une description' : i.description!,
+                title: Text(i.description == null || i.description!.isEmpty ? 'Ajouter une description'.tr : i.description!,
                     maxLines: 2, overflow: TextOverflow.ellipsis),
                 trailing: const Icon(Icons.edit_outlined),
                 onTap: _description,
@@ -1080,8 +1081,8 @@ class _VitrineModeleCardState extends State<VitrineModeleCard> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 secondary: const Icon(Icons.star_rounded, color: AppColors.gold),
-                title: const Text('Mettre en vedette'),
-                subtitle: const Text('Affiché en premier sur le site'),
+                title: Text('Mettre en vedette'.tr),
+                subtitle: Text('Affiché en premier sur le site'.tr),
                 value: i.vedette,
                 onChanged: (v) => stock.saveInfo(_cle, vedette: v),
               ),

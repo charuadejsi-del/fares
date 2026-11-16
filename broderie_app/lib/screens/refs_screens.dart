@@ -11,6 +11,7 @@ import '../utils.dart';
 import '../widgets.dart';
 import 'ouvrier_detail_screen.dart';
 import 'paie_forms.dart';
+import '../i18n.dart';
 
 /// Barre de recherche + filtre « inactifs ».
 class _ListHeader extends StatelessWidget {
@@ -25,13 +26,13 @@ class _ListHeader extends StatelessWidget {
         SizedBox(
           width: 300,
           child: TextField(
-            decoration: const InputDecoration(hintText: 'Rechercher', prefixIcon: Icon(Icons.search)),
+            decoration: InputDecoration(hintText: 'Rechercher'.tr, prefixIcon: Icon(Icons.search)),
             onChanged: onSearch,
           ),
         ),
         if (nbInactive > 0)
           FilterChip(
-            label: Text('Inactifs ($nbInactive)'),
+            label: Text('Inactifs ({0})'.trf([nbInactive])),
             selected: showInactive,
             onSelected: onShowInactive,
           ),
@@ -39,11 +40,11 @@ class _ListHeader extends StatelessWidget {
 }
 
 Future<void> _deleteRef(BuildContext context, String table, String id, String nom) async {
-  final ok = await confirmDialog(context, 'Supprimer', 'Supprimer « $nom » définitivement ?');
+  final ok = await confirmDialog(context, 'Supprimer'.tr, 'Supprimer « {0} » définitivement ?'.trf([nom]));
   if (!ok) return;
   try {
     await data.deleteRef(table, id);
-    if (context.mounted) showSnack(context, 'Supprimé');
+    if (context.mounted) showSnack(context, 'Supprimé'.tr);
   } catch (e) {
     if (context.mounted) showSnack(context, errorMessage(e), error: true);
   }
@@ -79,20 +80,20 @@ class _OuvriersScreenState extends State<OuvriersScreen> {
               heroTag: 'fab-ouv',
               onPressed: () => showDialog<bool>(context: context, builder: (_) => OuvrierForm(null, departement: _dept)),
               icon: const Icon(Icons.person_add_alt_1_rounded),
-              label: const Text('Ajouter un ouvrier'),
+              label: Text('Ajouter un ouvrier'.tr),
             ),
             body: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
               children: [
                 AutoGrid(minItemWidth: 200, children: [
                   StatTile(
-                    label: 'Reste à payer (tous)',
+                    label: 'Reste à payer (tous)'.tr,
                     value: fmtDA(data.totalResteAPayer),
                     icon: Icons.account_balance_wallet_rounded,
                     color: AppColors.green,
                   ),
                   StatTile(
-                    label: 'Avances non couvertes',
+                    label: 'Avances non couvertes'.tr,
                     value: fmtDA(data.totalAvancesNonCouvertes),
                     icon: Icons.north_east_rounded,
                     color: AppColors.rose,
@@ -107,8 +108,8 @@ class _OuvriersScreenState extends State<OuvriersScreen> {
                       decoration: BoxDecoration(gradient: AppColors.goldGradient, borderRadius: BorderRadius.circular(10)),
                       child: const Icon(Icons.lock_clock_rounded, color: AppColors.ink),
                     ),
-                    title: const Text('Clôture de la paie du mois', style: TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: const Text('Salaires, avances, net à payer · toutes les fiches de paie en un clic'),
+                    title: Text('Clôture de la paie du mois'.tr, style: TextStyle(fontWeight: FontWeight.w800)),
+                    subtitle: Text('Salaires, avances, net à payer · toutes les fiches de paie en un clic'.tr),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CloturePaieScreen())),
                   ),
@@ -119,9 +120,8 @@ class _OuvriersScreenState extends State<OuvriersScreen> {
                   child: Row(children: [
                     Icon(Icons.info_outline_rounded, color: context.cs.primary),
                     const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text('Ici : les ouvriers de l\'atelier, sans compte ni accès au logiciel. '
-                          'Brodeurs sur les machines → mode « Points ». Autres ouvriers → « Mois » (salaire fixe) ou « Pièce ».'),
+                    Expanded(
+                      child: Text('Ici : les ouvriers de l\'atelier, sans compte ni accès au logiciel. Brodeurs sur les machines → mode « Points ». Autres ouvriers → « Mois » (salaire fixe) ou « Pièce ».'.tr),
                     ),
                   ]),
                 ),
@@ -139,7 +139,7 @@ class _OuvriersScreenState extends State<OuvriersScreen> {
                     child: Row(children: [
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(label: Text('Tous (${all.length})'), selected: _dept == null, onSelected: (_) => setState(() => _dept = null)),
+                        child: ChoiceChip(label: Text('Tous ({0})'.trf([all.length])), selected: _dept == null, onSelected: (_) => setState(() => _dept = null)),
                       ),
                       for (final d in depts)
                         Padding(
@@ -155,7 +155,7 @@ class _OuvriersScreenState extends State<OuvriersScreen> {
                 ],
                 const SizedBox(height: 14),
                 if (list.isEmpty)
-                  EmptyState(all.isEmpty ? 'Aucun ouvrier.\nAjoutez les ouvriers de l\'atelier.' : 'Aucun résultat.',
+                  EmptyState(all.isEmpty ? 'Aucun ouvrier.\nAjoutez les ouvriers de l\'atelier.'.tr : 'Aucun résultat.'.tr,
                       icon: Icons.people_outline)
                 else
                   AutoGrid(minItemWidth: 320, children: [
@@ -188,20 +188,20 @@ class _OuvrierCard extends StatelessWidget {
               Text(o.nom, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16), overflow: TextOverflow.ellipsis),
               const SizedBox(height: 4),
               Wrap(spacing: 6, runSpacing: 4, children: [
-                _pill(context, o.departement, AppColors.forName(o.departement)),
+                _pill(context, o.departement.tr, AppColors.forName(o.departement)),
                 _pill(context, _modeText(o), context.pal.muted),
-                if (!o.actif) _pill(context, 'Inactif', AppColors.rose),
+                if (!o.actif) _pill(context, 'Inactif'.tr, AppColors.rose),
               ]),
             ]),
           ),
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert, color: context.pal.muted),
             itemBuilder: (_) => [
-              if (!o.brodeur) const PopupMenuItem(value: 'travail', child: Text('Ajouter du travail')),
-              const PopupMenuItem(value: 'avance', child: Text('Donner une avance')),
-              const PopupMenuItem(value: 'payer', child: Text('Payer')),
-              const PopupMenuItem(value: 'edit', child: Text('Modifier')),
-              const PopupMenuItem(value: 'del', child: Text('Supprimer')),
+              if (!o.brodeur) PopupMenuItem(value: 'travail', child: Text('Ajouter du travail'.tr)),
+              PopupMenuItem(value: 'avance', child: Text('Donner une avance'.tr)),
+              PopupMenuItem(value: 'payer', child: Text('Payer'.tr)),
+              PopupMenuItem(value: 'edit', child: Text('Modifier'.tr)),
+              PopupMenuItem(value: 'del', child: Text('Supprimer'.tr)),
             ],
             onSelected: (v) {
               switch (v) {
@@ -226,7 +226,7 @@ class _OuvrierCard extends StatelessWidget {
           child: Row(children: [
             Icon(solde < -0.005 ? Icons.north_east_rounded : Icons.account_balance_wallet_rounded, size: 18, color: c),
             const SizedBox(width: 8),
-            Expanded(child: Text(solde < -0.005 ? 'Avance non couverte' : 'Reste à payer', style: TextStyle(color: c, fontWeight: FontWeight.w600))),
+            Expanded(child: Text(solde < -0.005 ? 'Avance non couverte'.tr : 'Reste à payer'.tr, style: TextStyle(color: c, fontWeight: FontWeight.w600))),
             Text(fmtDA(solde.abs()), style: TextStyle(color: c, fontWeight: FontWeight.w900)),
           ]),
         ),
@@ -235,9 +235,9 @@ class _OuvrierCard extends StatelessWidget {
   }
 
   static String _modeText(Ouvrier o) => switch (o.modePaie) {
-        ModePaie.points => 'Points broderie',
-        ModePaie.mois => 'Mois · ${fmtDA(o.salaireMensuel)}',
-        ModePaie.piece => 'Pièce · ${fmtDA(o.prixPiece)}',
+        ModePaie.points => 'Points broderie'.tr,
+        ModePaie.mois => 'Mois · {0}'.trf([fmtDA(o.salaireMensuel)]),
+        ModePaie.piece => 'Pièce · {0}'.trf([fmtDA(o.prixPiece)]),
       };
 
   static Widget _pill(BuildContext context, String t, Color c) => Container(
@@ -298,7 +298,7 @@ class _OuvrierFormState extends State<OuvrierForm> {
         id: widget.o?.id,
       );
       if (mounted) {
-        showSnack(context, 'Ouvrier enregistré');
+        showSnack(context, 'Ouvrier enregistré'.tr);
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -311,7 +311,7 @@ class _OuvrierFormState extends State<OuvrierForm> {
 
   @override
   Widget build(BuildContext context) => FormDialog(
-        title: widget.o == null ? 'Nouvel ouvrier' : 'Modifier l\'ouvrier',
+        title: widget.o == null ? 'Nouvel ouvrier'.tr : 'Modifier l\'ouvrier'.tr,
         formKey: _form,
         busy: _busy,
         onSave: _save,
@@ -320,24 +320,24 @@ class _OuvrierFormState extends State<OuvrierForm> {
             controller: _nom,
             autofocus: widget.o == null,
             textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(labelText: 'Nom et prénom', prefixIcon: Icon(Icons.person_outline)),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+            decoration: InputDecoration(labelText: 'Nom et prénom'.tr, prefixIcon: Icon(Icons.person_outline)),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
           ),
           TextFormField(
             controller: _tel,
             keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'Téléphone (facultatif)', prefixIcon: Icon(Icons.phone_outlined)),
+            decoration: InputDecoration(labelText: 'Téléphone (facultatif)'.tr, prefixIcon: Icon(Icons.phone_outlined)),
           ),
           TextFormField(
             controller: _dept,
             textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(labelText: 'Département / poste', prefixIcon: Icon(Icons.apartment_rounded)),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+            decoration: InputDecoration(labelText: 'Département / poste'.tr, prefixIcon: Icon(Icons.apartment_rounded)),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
           ),
           Wrap(spacing: 6, runSpacing: 6, children: [
             for (final d in data.departements)
               ChoiceChip(
-                label: Text(d),
+                label: Text(d.tr),
                 selected: _dept.text.trim() == d,
                 onSelected: (_) => setState(() {
                   _dept.text = d;
@@ -345,50 +345,50 @@ class _OuvrierFormState extends State<OuvrierForm> {
                 }),
               ),
           ]),
-          Text('Mode de paie', style: context.tt.labelLarge),
+          Text('Mode de paie'.tr, style: context.tt.labelLarge),
           SegmentedButton<ModePaie>(
             showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: ModePaie.points, icon: Icon(Icons.blur_on_rounded), label: Text('Points')),
-              ButtonSegment(value: ModePaie.mois, icon: Icon(Icons.calendar_month_rounded), label: Text('Mois')),
-              ButtonSegment(value: ModePaie.piece, icon: Icon(Icons.checkroom_rounded), label: Text('Pièce')),
+            segments: [
+              ButtonSegment(value: ModePaie.points, icon: Icon(Icons.blur_on_rounded), label: Text('Points'.tr)),
+              ButtonSegment(value: ModePaie.mois, icon: Icon(Icons.calendar_month_rounded), label: Text('Mois'.tr)),
+              ButtonSegment(value: ModePaie.piece, icon: Icon(Icons.checkroom_rounded), label: Text('Pièce'.tr)),
             ],
             selected: {_mode},
             onSelectionChanged: (s) => setState(() => _mode = s.first),
           ),
           if (_mode == ModePaie.points)
-            Text('Payé selon les points du compteur et le type de broderie (Réglages → tarifs).',
+            Text('Payé selon les points du compteur et le type de broderie (Réglages → tarifs).'.tr,
                 style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
           if (_mode == ModePaie.mois)
             TextFormField(
               controller: _salaire,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Salaire mensuel', suffixText: 'DA', prefixIcon: Icon(Icons.payments_outlined)),
+              decoration: InputDecoration(labelText: 'Salaire mensuel'.tr, suffixText: 'DA'.tr, prefixIcon: Icon(Icons.payments_outlined)),
               validator: (v) {
                 final n = parseNum(v ?? '');
-                return (n == null || n <= 0) ? 'Indiquez le salaire' : null;
+                return (n == null || n <= 0) ? 'Indiquez le salaire'.tr : null;
               },
             ),
           if (_mode != ModePaie.points && _dept.text.trim().toLowerCase() == 'broderie')
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('Département Broderie : vous pourrez saisir ses points (production suivie), sans montant ajouté à sa paie.',
+              child: Text('Département Broderie : vous pourrez saisir ses points (production suivie), sans montant ajouté à sa paie.'.tr,
                   style: TextStyle(fontSize: 12, color: context.cs.primary)),
             ),
           if (_mode == ModePaie.piece)
             TextFormField(
               controller: _prix,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Prix par pièce (par défaut)', suffixText: 'DA', prefixIcon: Icon(Icons.sell_outlined)),
+              decoration: InputDecoration(labelText: 'Prix par pièce (par défaut)'.tr, suffixText: 'DA'.tr, prefixIcon: Icon(Icons.sell_outlined)),
               validator: (v) {
                 final n = parseNum(v ?? '');
-                return (n == null || n <= 0) ? 'Indiquez le prix' : null;
+                return (n == null || n <= 0) ? 'Indiquez le prix'.tr : null;
               },
             ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Actif'),
-            subtitle: const Text('Un ouvrier inactif n\'apparaît plus dans les saisies'),
+            title: Text('Actif'.tr),
+            subtitle: Text('Un ouvrier inactif n\'apparaît plus dans les saisies'.tr),
             value: _actif,
             onChanged: (v) => setState(() => _actif = v),
           ),
@@ -423,7 +423,7 @@ class _DessinsScreenState extends State<DessinsScreen> {
               heroTag: 'fab-des',
               onPressed: () => showDialog<bool>(context: context, builder: (_) => const DessinForm(null)),
               icon: const Icon(Icons.add_photo_alternate_rounded),
-              label: const Text('Ajouter un dessin'),
+              label: Text('Ajouter un dessin'.tr),
             ),
             body: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
@@ -436,7 +436,7 @@ class _DessinsScreenState extends State<DessinsScreen> {
                 ),
                 const SizedBox(height: 14),
                 if (list.isEmpty)
-                  EmptyState(all.isEmpty ? 'Aucun dessin.\nAjoutez vos dessins avec leur photo et leur nombre de points.' : 'Aucun résultat.',
+                  EmptyState(all.isEmpty ? 'Aucun dessin.\nAjoutez vos dessins avec leur photo et leur nombre de points.'.tr : 'Aucun résultat.'.tr,
                       icon: Icons.local_florist_outlined)
                 else
                   AutoGrid(minItemWidth: 170, children: [
@@ -537,7 +537,7 @@ class _DessinFormState extends State<DessinForm> {
         _removePhoto = false;
       });
     } catch (e) {
-      if (mounted) showSnack(context, 'Impossible d\'ouvrir la photo : ${errorMessage(e)}', error: true);
+      if (mounted) showSnack(context, 'Impossible d\'ouvrir la photo : {0}'.trf([errorMessage(e)]), error: true);
     }
   }
 
@@ -549,9 +549,9 @@ class _DessinFormState extends State<DessinForm> {
       showDragHandle: true,
       builder: (c) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(leading: const Icon(Icons.photo_camera_outlined), title: const Text('Prendre une photo'),
+          ListTile(leading: const Icon(Icons.photo_camera_outlined), title: Text('Prendre une photo'.tr),
               onTap: () => Navigator.pop(c, ImageSource.camera)),
-          ListTile(leading: const Icon(Icons.photo_library_outlined), title: const Text('Choisir dans la galerie'),
+          ListTile(leading: const Icon(Icons.photo_library_outlined), title: Text('Choisir dans la galerie'.tr),
               onTap: () => Navigator.pop(c, ImageSource.gallery)),
         ]),
       ),
@@ -578,7 +578,7 @@ class _DessinFormState extends State<DessinForm> {
         await data.removePhoto(old);
       }
       if (mounted) {
-        showSnack(context, 'Dessin enregistré');
+        showSnack(context, 'Dessin enregistré'.tr);
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -600,7 +600,7 @@ class _DessinFormState extends State<DessinForm> {
       content = Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(Icons.add_a_photo_outlined, size: 36, color: context.cs.primary),
         const SizedBox(height: 8),
-        Text('Ajouter une photo du dessin', style: TextStyle(color: context.pal.muted)),
+        Text('Ajouter une photo du dessin'.tr, style: TextStyle(color: context.pal.muted)),
       ]);
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -618,7 +618,7 @@ class _DessinFormState extends State<DessinForm> {
       ),
       if (_newPhoto != null || hasOld)
         Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-          TextButton.icon(onPressed: _busy ? null : _choosePhoto, icon: const Icon(Icons.swap_horiz, size: 18), label: const Text('Changer')),
+          TextButton.icon(onPressed: _busy ? null : _choosePhoto, icon: const Icon(Icons.swap_horiz, size: 18), label: Text('Changer'.tr)),
           TextButton.icon(
             onPressed: _busy
                 ? null
@@ -627,7 +627,7 @@ class _DessinFormState extends State<DessinForm> {
                       _removePhoto = true;
                     }),
             icon: const Icon(Icons.delete_outline, size: 18),
-            label: const Text('Retirer'),
+            label: Text('Retirer'.tr),
           ),
         ]),
     ]);
@@ -635,7 +635,7 @@ class _DessinFormState extends State<DessinForm> {
 
   @override
   Widget build(BuildContext context) => FormDialog(
-        title: widget.d == null ? 'Nouveau dessin' : 'Modifier le dessin',
+        title: widget.d == null ? 'Nouveau dessin'.tr : 'Modifier le dessin'.tr,
         formKey: _form,
         busy: _busy,
         onSave: _save,
@@ -643,27 +643,27 @@ class _DessinFormState extends State<DessinForm> {
           _photoBox(),
           TextFormField(
             controller: _nom,
-            decoration: const InputDecoration(labelText: 'Nom / référence du dessin', prefixIcon: Icon(Icons.local_florist_outlined)),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+            decoration: InputDecoration(labelText: 'Nom / référence du dessin'.tr, prefixIcon: Icon(Icons.local_florist_outlined)),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
           ),
           TextFormField(
             controller: _pts,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              labelText: 'Nombre de points (par robe)',
+              labelText: 'Nombre de points (par robe)'.tr,
               prefixIcon: const Icon(Icons.blur_on_rounded),
-              helperText: widget.d == null ? null : 'Modifier ce nombre ne change pas les saisies déjà enregistrées',
+              helperText: widget.d == null ? null : 'Modifier ce nombre ne change pas les saisies déjà enregistrées'.tr,
             ),
             validator: (v) {
               final n = parseInt(v ?? '');
-              return (n == null || n <= 0) ? 'Nombre entier supérieur à 0' : null;
+              return (n == null || n <= 0) ? 'Nombre entier supérieur à 0'.tr : null;
             },
           ),
-          TextFormField(controller: _client, decoration: const InputDecoration(labelText: 'Client (facultatif)', prefixIcon: Icon(Icons.storefront_outlined))),
-          TextFormField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque (facultatif)', prefixIcon: Icon(Icons.notes))),
+          TextFormField(controller: _client, decoration: InputDecoration(labelText: 'Client (facultatif)'.tr, prefixIcon: Icon(Icons.storefront_outlined))),
+          TextFormField(controller: _note, decoration: InputDecoration(labelText: 'Remarque (facultatif)'.tr, prefixIcon: Icon(Icons.notes))),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Actif'),
+            title: Text('Actif'.tr),
             value: _actif,
             onChanged: (v) => setState(() => _actif = v),
           ),
@@ -678,12 +678,12 @@ class MachinesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Machines')),
+        appBar: AppBar(title: Text('Machines'.tr)),
         floatingActionButton: FloatingActionButton.extended(
           heroTag: 'fab-mac',
           onPressed: () => showDialog<bool>(context: context, builder: (_) => const _MachineForm(null)),
           icon: const Icon(Icons.add),
-          label: const Text('Ajouter une machine'),
+          label: Text('Ajouter une machine'.tr),
         ),
         body: ListenableBuilder(
           listenable: data,
@@ -691,7 +691,7 @@ class MachinesScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
             children: [
               if (data.machines.isEmpty)
-                const EmptyState('Aucune machine (facultatif).\nAjoutez vos machines pour savoir laquelle a brodé.',
+                EmptyState('Aucune machine (facultatif).\nAjoutez vos machines pour savoir laquelle a brodé.'.tr,
                     icon: Icons.precision_manufacturing_outlined)
               else
                 for (final m in data.machines)
@@ -710,7 +710,7 @@ class MachinesScreen extends StatelessWidget {
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(m.nom, style: const TextStyle(fontWeight: FontWeight.w800)),
-                            Text('${m.nbTetes} tête${m.nbTetes > 1 ? 's' : ''}${m.actif ? '' : ' · Inactive'}',
+                            Text('{0} tête{1}{2}'.trf([m.nbTetes, m.nbTetes > 1 ? 's' : '', m.actif ? '' : ' · Inactive'.tr]),
                                 style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
                           ]),
                         ),
@@ -769,7 +769,7 @@ class _MachineFormState extends State<_MachineForm> {
 
   @override
   Widget build(BuildContext context) => FormDialog(
-        title: widget.m == null ? 'Nouvelle machine' : 'Modifier la machine',
+        title: widget.m == null ? 'Nouvelle machine'.tr : 'Modifier la machine'.tr,
         formKey: _form,
         busy: _busy,
         onSave: _save,
@@ -777,21 +777,21 @@ class _MachineFormState extends State<_MachineForm> {
           TextFormField(
             controller: _nom,
             autofocus: true,
-            decoration: const InputDecoration(labelText: 'Nom (ex. Tajima 1)'),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+            decoration: InputDecoration(labelText: 'Nom (ex. Tajima 1)'.tr),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
           ),
           TextFormField(
             controller: _tetes,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Nombre de têtes'),
+            decoration: InputDecoration(labelText: 'Nombre de têtes'.tr),
             validator: (v) {
               final n = parseInt(v ?? '');
-              return (n == null || n <= 0) ? 'Nombre entier supérieur à 0' : null;
+              return (n == null || n <= 0) ? 'Nombre entier supérieur à 0'.tr : null;
             },
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Active'),
+            title: Text('Active'.tr),
             value: _actif,
             onChanged: (v) => setState(() => _actif = v),
           ),
@@ -825,10 +825,10 @@ class FormDialog extends StatelessWidget {
           ),
         ),
         actions: [
-          TextButton(onPressed: busy ? null : () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(onPressed: busy ? null : () => Navigator.pop(context, false), child: Text('Annuler'.tr)),
           FilledButton(
             onPressed: busy ? null : onSave,
-            child: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Enregistrer'),
+            child: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Text('Enregistrer'.tr),
           ),
         ],
       );

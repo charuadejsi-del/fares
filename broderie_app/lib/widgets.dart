@@ -4,6 +4,7 @@ import 'data/app_data.dart';
 import 'data/models.dart';
 import 'theme.dart';
 import 'utils.dart';
+import 'i18n.dart';
 
 /// Carte de base : surface, bordure fine, coins arrondis.
 /// Sur PC, une carte cliquable se soulève et s'illumine d'or au survol.
@@ -69,7 +70,7 @@ class SectionTitle extends StatelessWidget {
   final String title;
   final String? subtitle;
   final Widget? trailing;
-  const SectionTitle(this.title, {super.key, this.subtitle, this.trailing});
+  SectionTitle(this.title, {super.key, this.subtitle, this.trailing});
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -146,7 +147,7 @@ class PeriodChips extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(top: 6, left: 4),
           child: Text(
-            r.start == r.end ? fmtDateLong(r.start) : 'Du ${fmtDate(r.start)} au ${fmtDate(r.end)}',
+            r.start == r.end ? fmtDateLong(r.start) : 'Du {0} au {1}'.trf([fmtDate(r.start), fmtDate(r.end)]),
             style: context.tt.bodySmall?.copyWith(color: context.pal.muted),
           ),
         ),
@@ -168,7 +169,7 @@ class OuvrierFilter extends StatelessWidget {
           isExpanded: true,
           decoration: const InputDecoration(prefixIcon: Icon(Icons.person_search_outlined)),
           items: [
-            const DropdownMenuItem<String?>(value: null, child: Text('Tous les ouvriers')),
+            DropdownMenuItem<String?>(value: null, child: Text('Tous les ouvriers'.tr)),
             for (final o in data.ouvriers) DropdownMenuItem<String?>(value: o.id, child: Text(o.nom)),
           ],
           onChanged: onChanged,
@@ -357,7 +358,7 @@ class ErrorBanner extends StatelessWidget {
           Icon(Icons.cloud_off, color: context.cs.onErrorContainer),
           const SizedBox(width: 10),
           Expanded(child: Text(message, style: TextStyle(color: context.cs.onErrorContainer))),
-          TextButton(onPressed: onRetry, child: const Text('Réessayer')),
+          TextButton(onPressed: onRetry, child: Text('Réessayer'.tr)),
         ]),
       );
 }
@@ -378,4 +379,51 @@ class Bar extends StatelessWidget {
           backgroundColor: context.pal.surface2,
         ),
       );
+}
+
+// ====================================================================== navigation « retour »
+
+/// Indique si la page (dans la pile des pages principales) est celle affichée.
+class PageActive extends InheritedWidget {
+  final bool actif;
+  const PageActive({super.key, required this.actif, required super.child});
+
+  static bool of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<PageActive>()?.actif ?? true;
+
+  @override
+  bool updateShouldNotify(PageActive old) => old.actif != actif;
+}
+
+/// Gestionnaires de retour internes (onglets, vues) : le plus récent passe en premier.
+class Retours {
+  Retours._();
+  static final _gestionnaires = <bool Function()>[];
+  static final _peut = <bool Function()>[];
+
+  /// Change à chaque fois qu'un « retour » devient possible ou non (pour afficher le bouton).
+  static final version = ValueNotifier<int>(0);
+
+  static void inscrire(bool Function() peutRevenir, bool Function() revenir) {
+    _peut.add(peutRevenir);
+    _gestionnaires.add(revenir);
+    signaler();
+  }
+
+  static void desinscrire(bool Function() peutRevenir, bool Function() revenir) {
+    _peut.remove(peutRevenir);
+    _gestionnaires.remove(revenir);
+    signaler();
+  }
+
+  static void signaler() => WidgetsBinding.instance.addPostFrameCallback((_) => version.value++);
+
+  static bool get peutRevenir => _peut.any((f) => f());
+
+  /// Essaie de revenir en arrière dans un onglet/une vue ; true si c'est fait.
+  static bool revenir() {
+    for (var i = _gestionnaires.length - 1; i >= 0; i--) {
+      if (_peut[i]() && _gestionnaires[i]()) return true;
+    }
+    return false;
+  }
 }

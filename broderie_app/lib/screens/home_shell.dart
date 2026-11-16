@@ -18,6 +18,7 @@ import 'settings_screen.dart';
 import 'stock/achats_screen.dart' show AchatsModule;
 import 'stock/produits_screen.dart' show ProduitsScreen;
 import 'travaux_screens.dart';
+import '../i18n.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -54,21 +55,23 @@ class _HomeShellState extends State<HomeShell> {
   bool _loading = true;
   String? _error;
   final Set<int> _visitees = {0};
+  final List<int> _historique = [];
+  DateTime? _dernierRetour;
   List<Alerte> _alertes = [];
 
   List<_Dest> get _dests => [
         if (session.admin)
-          const _Dest(_Cle.accueil, 'Accueil', 'Vue d\'ensemble', 'Pilotage', Icons.space_dashboard_outlined, Icons.space_dashboard_rounded),
+          _Dest(_Cle.accueil, 'Accueil'.tr, 'Vue d\'ensemble'.tr, 'Pilotage'.tr, Icons.space_dashboard_outlined, Icons.space_dashboard_rounded),
         if (session.peut(Espace.broderie))
-          const _Dest(_Cle.broderie, 'Broderie', 'Production broderie', 'Atelier', Icons.blur_on_outlined, Icons.blur_on_rounded),
+          _Dest(_Cle.broderie, 'Broderie'.tr, 'Production broderie'.tr, 'Atelier'.tr, Icons.blur_on_outlined, Icons.blur_on_rounded),
         if (session.peut(Espace.paie))
-          const _Dest(_Cle.paie, 'Ouvriers', 'Ouvriers · salaires & avances', 'Atelier', Icons.groups_outlined, Icons.groups_rounded),
+          _Dest(_Cle.paie, 'Ouvriers'.tr, 'Ouvriers · salaires & avances'.tr, 'Atelier'.tr, Icons.groups_outlined, Icons.groups_rounded),
         if (session.peut(Espace.stock))
-          const _Dest(_Cle.stock, 'Robes', 'Stock des robes terminées', 'Commerce', Icons.checkroom_outlined, Icons.checkroom_rounded),
+          _Dest(_Cle.stock, 'Robes'.tr, 'Stock des robes terminées'.tr, 'Commerce'.tr, Icons.checkroom_outlined, Icons.checkroom_rounded),
         if (session.peut(Espace.stock))
-          const _Dest(_Cle.ventes, 'Ventes', 'Ventes · commandes · clients', 'Commerce', Icons.point_of_sale_outlined, Icons.point_of_sale_rounded),
+          _Dest(_Cle.ventes, 'Ventes'.tr, 'Ventes · commandes · clients'.tr, 'Commerce'.tr, Icons.point_of_sale_outlined, Icons.point_of_sale_rounded),
         if (session.peut(Espace.stock))
-          const _Dest(_Cle.achats, 'Achats', 'Achats · matières · fournisseurs', 'Commerce', Icons.shopping_basket_outlined, Icons.shopping_basket_rounded),
+          _Dest(_Cle.achats, 'Achats'.tr, 'Achats · matières · fournisseurs'.tr, 'Commerce'.tr, Icons.shopping_basket_outlined, Icons.shopping_basket_rounded),
       ];
 
   @override
@@ -102,12 +105,41 @@ class _HomeShellState extends State<HomeShell> {
     } catch (_) {}
   }
 
-  void _allerIndex(int i) {
-    if (i < 0 || i >= _dests.length) return;
+  void _allerIndex(int i, {bool historique = true}) {
+    if (i < 0 || i >= _dests.length || i == _index) return;
     setState(() {
+      if (historique) {
+        _historique.remove(i);
+        _historique.add(_index);
+      }
       _index = i;
       _visitees.add(i);
     });
+  }
+
+  bool get _peutRevenir => Retours.peutRevenir || _historique.isNotEmpty;
+
+  /// Retour : d'abord dans les onglets de la page, puis vers la page précédente.
+  bool _retour() {
+    if (Retours.revenir()) return true;
+    if (_historique.isNotEmpty) {
+      _allerIndex(_historique.removeLast(), historique: false);
+      return true;
+    }
+    return false;
+  }
+
+  void _gererRetourSysteme() {
+    if (_retour()) return;
+    // Rien à défaire : sur téléphone, deux appuis pour quitter
+    if (estBureau) return;
+    final now = DateTime.now();
+    if (_dernierRetour != null && now.difference(_dernierRetour!) < const Duration(seconds: 2)) {
+      SystemNavigator.pop();
+      return;
+    }
+    _dernierRetour = now;
+    showSnack(context, 'Appuyez encore sur retour pour quitter'.tr);
   }
 
   void _aller(_Cle c) => _allerIndex(_dests.indexWhere((d) => d.cle == c));
@@ -124,32 +156,32 @@ class _HomeShellState extends State<HomeShell> {
 
   List<_Cible> get _outils => [
         if (session.peut(Espace.broderie))
-          _Cible(Icons.bolt_rounded, 'Saisie rapide des points', 'Relevé du compteur de la machine', 'Actions',
-              () => _pousser(Scaffold(appBar: AppBar(title: const Text('Saisie rapide')), body: const QuickEntryScreen()))),
+          _Cible(Icons.bolt_rounded, 'Saisie rapide des points'.tr, 'Relevé du compteur de la machine'.tr, 'Actions'.tr,
+              () => _pousser(Scaffold(appBar: AppBar(title: Text('Saisie rapide'.tr)), body: const QuickEntryScreen()))),
         if (session.peut(Espace.paie))
-          _Cible(Icons.add_task_rounded, 'Saisie du travail', 'Pièces, travail au mois et extra', 'Actions',
-              () => _pousser(Scaffold(appBar: AppBar(title: const Text('Saisie du travail')), body: const TravauxSaisieScreen()))),
+          _Cible(Icons.add_task_rounded, 'Saisie du travail'.tr, 'Pièces, travail au mois et extra'.tr, 'Actions'.tr,
+              () => _pousser(Scaffold(appBar: AppBar(title: Text('Saisie du travail'.tr)), body: const TravauxSaisieScreen()))),
         if (session.peut(Espace.paie))
-          _Cible(Icons.person_add_alt_1_rounded, 'Ajouter un ouvrier', 'Nouvelle fiche ouvrier', 'Actions',
+          _Cible(Icons.person_add_alt_1_rounded, 'Ajouter un ouvrier'.tr, 'Nouvelle fiche ouvrier'.tr, 'Actions'.tr,
               () => showDialog<bool>(context: context, builder: (_) => const OuvrierForm(null))),
         if (session.peut(Espace.paie))
-          _Cible(Icons.lock_clock_rounded, 'Clôture de la paie', 'Fiches de paie du mois en un clic', 'Actions', () => _pousser(const CloturePaieScreen())),
-        if (session.admin) _Cible(Icons.history_rounded, 'Journal des actions', 'Qui a fait quoi, et quand', 'Actions', () => _pousser(const JournalScreen())),
-        _Cible(Icons.notifications_active_rounded, 'Alertes', '${_alertes.length} alerte(s) en cours', 'Actions', _ouvrirAlertes),
-        _Cible(Icons.settings_rounded, 'Réglages', 'Thème, comptes, entreprise, tarifs', 'Actions', () => _pousser(const SettingsScreen()), raccourci: 'Ctrl ,'),
+          _Cible(Icons.lock_clock_rounded, 'Clôture de la paie'.tr, 'Fiches de paie du mois en un clic'.tr, 'Actions'.tr, () => _pousser(const CloturePaieScreen())),
+        if (session.admin) _Cible(Icons.history_rounded, 'Journal des actions'.tr, 'Qui a fait quoi, et quand'.tr, 'Actions'.tr, () => _pousser(const JournalScreen())),
+        _Cible(Icons.notifications_active_rounded, 'Alertes'.tr, '{0} alerte(s) en cours'.trf([_alertes.length]), 'Actions'.tr, _ouvrirAlertes),
+        _Cible(Icons.settings_rounded, 'Réglages'.tr, 'Thème, comptes, entreprise, tarifs'.tr, 'Actions'.tr, () => _pousser(const SettingsScreen()), raccourci: 'Ctrl ,'.tr),
       ];
 
   List<_Cible> get _cibles {
     final dests = _dests;
     return [
       for (var i = 0; i < dests.length; i++)
-        _Cible(dests[i].selected, dests[i].label, dests[i].title, 'Pages', () => _allerIndex(i), raccourci: i < 9 ? 'Ctrl ${i + 1}' : null),
+        _Cible(dests[i].selected, dests[i].label, dests[i].title, 'Pages'.tr, () => _allerIndex(i), raccourci: i < 9 ? 'Ctrl {0}'.trf([i + 1]) : null),
       ..._outils,
-      _Cible(context.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded, context.isDark ? 'Passer en thème clair' : 'Passer en thème sombre',
-          'Apparence', 'Actions', () => ThemeController.instance.set(context.isDark ? ThemeMode.light : ThemeMode.dark)),
+      _Cible(context.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded, context.isDark ? 'Passer en thème clair'.tr : 'Passer en thème sombre'.tr,
+          'Apparence'.tr, 'Actions'.tr, () => ThemeController.instance.set(context.isDark ? ThemeMode.light : ThemeMode.dark)),
       if (session.peut(Espace.paie))
         for (final o in data.ouvriers.where((o) => o.actif))
-          _Cible(Icons.badge_outlined, o.nom, '${o.departement} · ${fmtDA(data.solde(o.id).solde)} à payer', 'Ouvriers',
+          _Cible(Icons.badge_outlined, o.nom, '{0} · {1} à payer'.trf([o.departement.tr, fmtDA(data.solde(o.id).solde)]), 'Ouvriers'.tr,
               () => _pousser(OuvrierDetailScreen(ouvrierId: o.id))),
     ];
   }
@@ -191,7 +223,7 @@ class _HomeShellState extends State<HomeShell> {
             const SizedBox(height: 12),
             Text(_error!, textAlign: TextAlign.center),
             const SizedBox(height: 12),
-            FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: const Text('Réessayer')),
+            FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: Text('Réessayer'.tr)),
           ]),
         ),
       );
@@ -201,7 +233,10 @@ class _HomeShellState extends State<HomeShell> {
       children: [
         for (var i = 0; i < dests.length; i++)
           _visitees.contains(i)
-              ? TickerMode(enabled: i == _index, child: _Apparition(actif: i == _index, child: _page(dests[i])))
+              ? PageActive(
+                  actif: i == _index,
+                  child: TickerMode(enabled: i == _index, child: _Apparition(actif: i == _index, child: _page(dests[i]))),
+                )
               : const SizedBox.shrink(),
       ],
     );
@@ -214,10 +249,10 @@ class _HomeShellState extends State<HomeShell> {
     final dests = _dests;
     if (dests.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Atelier'), actions: [
+        appBar: AppBar(title: Text('Atelier'.tr), actions: [
           IconButton(icon: const Icon(Icons.settings_outlined), onPressed: () => _pousser(const SettingsScreen())),
         ]),
-        body: const Center(child: Text('Aucun accès n\'est attribué à ce compte.\nDemandez à l\'administrateur.', textAlign: TextAlign.center)),
+        body: Center(child: Text('Aucun accès n\'est attribué à ce compte.\nDemandez à l\'administrateur.'.tr, textAlign: TextAlign.center)),
       );
     }
     if (_index >= dests.length) _index = 0;
@@ -228,6 +263,8 @@ class _HomeShellState extends State<HomeShell> {
       const SingleActivator(LogicalKeyboardKey.keyK, control: true): _recherche,
       const SingleActivator(LogicalKeyboardKey.keyF, control: true): _recherche,
       const SingleActivator(LogicalKeyboardKey.f5): _load,
+      const SingleActivator(LogicalKeyboardKey.escape): _retour,
+      const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true): _retour,
       const SingleActivator(LogicalKeyboardKey.comma, control: true): () => _pousser(const SettingsScreen()),
       const SingleActivator(LogicalKeyboardKey.keyB, control: true): UiPrefs.instance.basculerSidebar,
       for (var i = 0; i < dests.length && i < 9; i++)
@@ -255,6 +292,7 @@ class _HomeShellState extends State<HomeShell> {
                 child: Column(children: [
                   _BarreHaut(
                     dest: d,
+                    onRetour: _retour,
                     nbAlertes: _alertes.length,
                     onRecherche: _recherche,
                     onAlertes: _ouvrirAlertes,
@@ -270,6 +308,7 @@ class _HomeShellState extends State<HomeShell> {
       );
     } else {
       corps = _Mobile(
+        onRetour: _retour,
         dests: dests,
         index: _index,
         contenu: _contenu(dests),
@@ -281,7 +320,13 @@ class _HomeShellState extends State<HomeShell> {
         onActualiser: _load,
       );
     }
-    return CallbackShortcuts(bindings: raccourcis, child: Focus(autofocus: true, child: corps));
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _gererRetourSysteme();
+      },
+      child: CallbackShortcuts(bindings: raccourcis, child: Focus(autofocus: true, child: corps)),
+    );
   }
 }
 
@@ -335,7 +380,7 @@ class _Chargement extends StatelessWidget {
           const SizedBox(height: 18),
           const SizedBox(width: 160, child: LinearProgressIndicator(minHeight: 3)),
           const SizedBox(height: 12),
-          Text('Chargement de l\'atelier…', style: TextStyle(color: context.pal.muted, fontWeight: FontWeight.w600)),
+          Text('Chargement de l\'atelier…'.tr, style: TextStyle(color: context.pal.muted, fontWeight: FontWeight.w600)),
         ]),
       );
 }
@@ -360,13 +405,13 @@ class _Logo extends StatelessWidget {
 String _role() {
   final m = session.membre;
   if (m == null) return '';
-  if (m.admin) return 'Administrateur';
-  return [if (m.broderie) 'Broderie', if (m.paie) 'Paie', if (m.stock) 'Stock'].join(' · ');
+  if (m.admin) return 'Administrateur'.tr;
+  return [if (m.broderie) 'Broderie'.tr, if (m.paie) 'Paie'.tr, if (m.stock) 'Stock'].join(' · ');
 }
 
 String _bonjour() {
   final h = DateTime.now().hour;
-  return h < 5 ? 'Bonne nuit' : (h < 18 ? 'Bonjour' : 'Bonsoir');
+  return h < 5 ? 'Bonne nuit'.tr : (h < 18 ? 'Bonjour'.tr : 'Bonsoir'.tr);
 }
 
 // ====================================================================== PC : barre latérale
@@ -405,11 +450,11 @@ class _Sidebar extends StatelessWidget {
         label: d.label,
         actif: i == index,
         reduite: reduite,
-        raccourci: i < 9 ? 'Ctrl+${i + 1}' : null,
+        raccourci: i < 9 ? 'Ctrl+{0}'.trf([i + 1]) : null,
         onTap: () => onSelect(i),
       ));
     }
-    items.add(_TitreSection('Outils', reduite: reduite));
+    items.add(_TitreSection('Outils'.tr, reduite: reduite));
     for (final o in outils.where((o) => o.titre != 'Réglages')) {
       items.add(_ItemSidebar(
         icon: o.icon,
@@ -443,11 +488,11 @@ class _Sidebar extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(session.atelier?.nom ?? 'Atelier',
+                      Text(session.atelier?.nom ?? 'Atelier'.tr,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15.5, letterSpacing: 0.2)),
-                      const Text('GESTION D\'ATELIER',
+                      Text('GESTION D\'ATELIER'.tr,
                           style: TextStyle(color: AppColors.gold, fontSize: 9.5, fontWeight: FontWeight.w800, letterSpacing: 1.8)),
                     ]),
                   ),
@@ -478,8 +523,8 @@ class _Sidebar extends StatelessWidget {
                 ? Column(children: [
                     Tooltip(message: session.membre?.nom ?? '', child: NameAvatar(session.membre?.nom ?? '?', size: 36)),
                     const SizedBox(height: 6),
-                    _BoutonIcone(icon: Icons.settings_rounded, tip: 'Réglages (Ctrl+,)', onTap: reglages.ouvrir),
-                    if (peutAgrandir) _BoutonIcone(icon: Icons.keyboard_double_arrow_right_rounded, tip: 'Agrandir (Ctrl+B)', onTap: UiPrefs.instance.basculerSidebar),
+                    _BoutonIcone(icon: Icons.settings_rounded, tip: 'Réglages (Ctrl+,)'.tr, onTap: reglages.ouvrir),
+                    if (peutAgrandir) _BoutonIcone(icon: Icons.keyboard_double_arrow_right_rounded, tip: 'Agrandir (Ctrl+B)'.tr, onTap: UiPrefs.instance.basculerSidebar),
                   ])
                 : Row(children: [
                     NameAvatar(session.membre?.nom ?? '?', size: 36),
@@ -491,8 +536,8 @@ class _Sidebar extends StatelessWidget {
                         Text(_role(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF8F97AB), fontSize: 11)),
                       ]),
                     ),
-                    _BoutonIcone(icon: Icons.settings_rounded, tip: 'Réglages (Ctrl+,)', onTap: reglages.ouvrir),
-                    _BoutonIcone(icon: Icons.keyboard_double_arrow_left_rounded, tip: 'Réduire (Ctrl+B)', onTap: UiPrefs.instance.basculerSidebar),
+                    _BoutonIcone(icon: Icons.settings_rounded, tip: 'Réglages (Ctrl+,)'.tr, onTap: reglages.ouvrir),
+                    _BoutonIcone(icon: Icons.keyboard_double_arrow_left_rounded, tip: 'Réduire (Ctrl+B)'.tr, onTap: UiPrefs.instance.basculerSidebar),
                   ]),
           ),
         ]),
@@ -611,6 +656,7 @@ class _BoutonIcone extends StatelessWidget {
 
 class _BarreHaut extends StatelessWidget {
   final _Dest dest;
+  final bool Function() onRetour;
   final int nbAlertes;
   final VoidCallback onRecherche;
   final VoidCallback onAlertes;
@@ -619,6 +665,7 @@ class _BarreHaut extends StatelessWidget {
 
   const _BarreHaut({
     required this.dest,
+    required this.onRetour,
     required this.nbAlertes,
     required this.onRecherche,
     required this.onAlertes,
@@ -637,6 +684,7 @@ class _BarreHaut extends StatelessWidget {
         border: Border(bottom: BorderSide(color: context.pal.line)),
       ),
       child: Row(children: [
+        _BoutonRetour(onRetour: onRetour),
         Expanded(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(dest.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: context.tt.titleLarge),
@@ -662,32 +710,65 @@ class _BarreHaut extends StatelessWidget {
             child: Row(children: [
               Icon(Icons.search_rounded, size: 20, color: context.pal.muted),
               const SizedBox(width: 8),
-              Expanded(child: Text('Rechercher, ouvrir…', style: TextStyle(color: context.pal.muted))),
-              const _Touche('Ctrl K'),
+              Expanded(child: Text('Rechercher, ouvrir…'.tr, style: TextStyle(color: context.pal.muted))),
+              _Touche('Ctrl K'.tr),
             ]),
           ),
         ),
         const SizedBox(width: 8),
         IconButton(
-          tooltip: 'Alertes',
+          tooltip: 'Alertes'.tr,
           onPressed: onAlertes,
           icon: Badge(isLabelVisible: nbAlertes > 0, label: Text('$nbAlertes'), child: const Icon(Icons.notifications_outlined)),
         ),
         IconButton(
-          tooltip: 'Actualiser (F5)',
+          tooltip: 'Actualiser (F5)'.tr,
           onPressed: chargement ? null : onActualiser,
           icon: chargement
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
               : const Icon(Icons.refresh_rounded),
         ),
         IconButton(
-          tooltip: context.isDark ? 'Thème clair' : 'Thème sombre',
+          tooltip: context.isDark ? 'Thème clair'.tr : 'Thème sombre'.tr,
           onPressed: () => ThemeController.instance.set(context.isDark ? ThemeMode.light : ThemeMode.dark),
           icon: Icon(context.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
         ),
       ]),
     );
   }
+}
+
+/// Bouton « retour » : visible seulement s'il y a une page ou un onglet précédent.
+class _BoutonRetour extends StatelessWidget {
+  final bool Function() onRetour;
+  final Widget sinon;
+  const _BoutonRetour({required this.onRetour, this.sinon = const SizedBox.shrink()});
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<int>(
+        valueListenable: Retours.version,
+        builder: (context, _, __) {
+          final shell = context.findAncestorStateOfType<_HomeShellState>();
+          final peut = shell?._peutRevenir ?? false;
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            child: peut
+                ? Padding(
+                    key: const ValueKey('retour'),
+                    padding: const EdgeInsetsDirectional.only(end: 8),
+                    child: IconButton.filledTonal(
+                      tooltip: estBureau ? 'Retour (Échap)'.tr : 'Retour'.tr,
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
+                        onRetour();
+                      },
+                      icon: const BackButtonIcon(),
+                    ),
+                  )
+                : KeyedSubtree(key: const ValueKey('sans'), child: sinon),
+          );
+        },
+      );
 }
 
 class _Touche extends StatelessWidget {
@@ -709,6 +790,7 @@ class _Touche extends StatelessWidget {
 // ====================================================================== téléphone
 
 class _Mobile extends StatelessWidget {
+  final bool Function() onRetour;
   final List<_Dest> dests;
   final int index;
   final Widget contenu;
@@ -720,6 +802,7 @@ class _Mobile extends StatelessWidget {
   final VoidCallback onActualiser;
 
   const _Mobile({
+    required this.onRetour,
     required this.dests,
     required this.index,
     required this.contenu,
@@ -799,9 +882,10 @@ class _Mobile extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 64,
-        titleSpacing: 16,
+        titleSpacing: 8,
+        automaticallyImplyLeading: false,
         title: Row(children: [
-          const _Logo(taille: 34),
+          _BoutonRetour(onRetour: onRetour, sinon: const Padding(padding: EdgeInsetsDirectional.only(start: 8), child: _Logo(taille: 34))),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -812,9 +896,9 @@ class _Mobile extends StatelessWidget {
           ),
         ]),
         actions: [
-          IconButton(tooltip: 'Rechercher', onPressed: onRecherche, icon: const Icon(Icons.search_rounded)),
+          IconButton(tooltip: 'Rechercher'.tr, onPressed: onRecherche, icon: const Icon(Icons.search_rounded)),
           IconButton(
-            tooltip: 'Alertes',
+            tooltip: 'Alertes'.tr,
             onPressed: onAlertes,
             icon: Badge(isLabelVisible: nbAlertes > 0, label: Text('$nbAlertes'), child: const Icon(Icons.notifications_outlined)),
           ),
@@ -855,7 +939,7 @@ class _Mobile extends StatelessWidget {
                   NavigationDestination(
                     icon: Badge(isLabelVisible: nbAlertes > 0, smallSize: 8, child: const Icon(Icons.grid_view_outlined)),
                     selectedIcon: const Icon(Icons.grid_view_rounded),
-                    label: 'Plus',
+                    label: 'Plus'.tr,
                   ),
               ],
             ),
@@ -1024,9 +1108,9 @@ class _PaletteRechercheState extends State<_PaletteRecherche> {
         onChanged: (_) => setState(() => _sel = 0),
         style: const TextStyle(fontSize: 16),
         decoration: InputDecoration(
-          hintText: 'Rechercher une page, une action, un ouvrier…',
+          hintText: 'Rechercher une page, une action, un ouvrier…'.tr,
           prefixIcon: const Icon(Icons.search_rounded),
-          suffixIcon: mobile ? null : const Padding(padding: EdgeInsets.all(12), child: _Touche('Échap')),
+          suffixIcon: mobile ? null : Padding(padding: EdgeInsets.all(12), child: _Touche('Échap'.tr)),
           filled: false,
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
@@ -1043,7 +1127,7 @@ class _PaletteRechercheState extends State<_PaletteRecherche> {
         child: res.isEmpty
             ? Padding(
                 padding: const EdgeInsets.all(30),
-                child: Text('Aucun résultat', style: TextStyle(color: context.pal.muted)),
+                child: Text('Aucun résultat'.tr, style: TextStyle(color: context.pal.muted)),
               )
             : ListView(controller: _scroll, shrinkWrap: true, padding: const EdgeInsets.only(bottom: 8), children: lignes),
       ),
@@ -1054,7 +1138,7 @@ class _PaletteRechercheState extends State<_PaletteRecherche> {
           child: Row(children: [
             const _Touche('↑ ↓'),
             Text('  naviguer    ', style: TextStyle(fontSize: 11.5, color: context.pal.muted)),
-            const _Touche('Entrée'),
+            _Touche('Entrée'.tr),
             Text('  ouvrir', style: TextStyle(fontSize: 11.5, color: context.pal.muted)),
             const Spacer(),
             const Icon(Icons.diamond_rounded, size: 14, color: AppColors.gold),
@@ -1068,7 +1152,7 @@ class _PaletteRechercheState extends State<_PaletteRecherche> {
           child: Column(children: [
             Row(children: [
               IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back_rounded)),
-              const Text('Recherche', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+              Text('Recherche'.tr, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
             ]),
             Expanded(child: contenu),
           ]),

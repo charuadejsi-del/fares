@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils.dart';
 import 'app_data.dart';
 import 'models.dart';
+import '../i18n.dart';
 
 double _d(Object? v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryParse('$v') ?? 0);
 
@@ -147,30 +148,30 @@ class ActionJournal {
 }
 
 /// Noms lisibles des tables suivies par le journal, regroupés par espace.
-const tablesJournal = <String, (String, String)>{
-  'ateliers': ('Paramètres de l\'entreprise', 'Paramètres'),
-  'atelier_membres': ('Compte utilisateur', 'Paramètres'),
-  'broderie_types': ('Type de travail', 'Paramètres'),
-  'broderie_ouvriers': ('Ouvrier', 'Ouvriers & paie'),
-  'broderie_pieces': ('Travail à la pièce', 'Ouvriers & paie'),
-  'broderie_mouvements': ('Avance / paiement ouvrier', 'Ouvriers & paie'),
-  'paie_clotures': ('Clôture de paie', 'Ouvriers & paie'),
-  'broderie_dessins': ('Dessin', 'Broderie'),
-  'broderie_machines': ('Machine', 'Broderie'),
-  'broderie_production': ('Production broderie', 'Broderie'),
-  'stock_produits': ('Article (robe)', 'Stock & ventes'),
-  'stock_mouvements': ('Mouvement de stock manuel', 'Stock & ventes'),
-  'stock_clients': ('Client', 'Stock & ventes'),
-  'stock_ventes': ('Vente / facture', 'Stock & ventes'),
-  'stock_versements': ('Versement client', 'Stock & ventes'),
-  'stock_commandes': ('Commande / devis', 'Stock & ventes'),
-  'stock_avoirs': ('Avoir', 'Stock & ventes'),
-  'stock_prix_clients': ('Prix spécial client', 'Stock & ventes'),
-  'stock_achats': ('Achat', 'Achats'),
-  'stock_fournisseurs': ('Fournisseur', 'Achats'),
-  'stock_matieres': ('Matière', 'Achats'),
-  'stock_matiere_mvts': ('Mouvement de matière', 'Achats'),
-  'stock_paiements_fournisseurs': ('Paiement fournisseur', 'Achats'),
+Map<String, (String, String)> get tablesJournal => <String, (String, String)>{
+  'ateliers': ('Paramètres de l\'entreprise'.tr, 'Paramètres'.tr),
+  'atelier_membres': ('Compte utilisateur'.tr, 'Paramètres'.tr),
+  'broderie_types': ('Type de travail'.tr, 'Paramètres'.tr),
+  'broderie_ouvriers': ('Ouvrier'.tr, 'Ouvriers & paie'.tr),
+  'broderie_pieces': ('Travail à la pièce'.tr, 'Ouvriers & paie'.tr),
+  'broderie_mouvements': ('Avance / paiement ouvrier'.tr, 'Ouvriers & paie'.tr),
+  'paie_clotures': ('Clôture de paie'.tr, 'Ouvriers & paie'.tr),
+  'broderie_dessins': ('Dessin'.tr, 'Broderie'.tr),
+  'broderie_machines': ('Machine'.tr, 'Broderie'.tr),
+  'broderie_production': ('Production broderie'.tr, 'Broderie'.tr),
+  'stock_produits': ('Article (robe)'.tr, 'Stock & ventes'.tr),
+  'stock_mouvements': ('Mouvement de stock manuel'.tr, 'Stock & ventes'.tr),
+  'stock_clients': ('Client'.tr, 'Stock & ventes'.tr),
+  'stock_ventes': ('Vente / facture'.tr, 'Stock & ventes'.tr),
+  'stock_versements': ('Versement client'.tr, 'Stock & ventes'.tr),
+  'stock_commandes': ('Commande / devis'.tr, 'Stock & ventes'.tr),
+  'stock_avoirs': ('Avoir'.tr, 'Stock & ventes'.tr),
+  'stock_prix_clients': ('Prix spécial client'.tr, 'Stock & ventes'.tr),
+  'stock_achats': ('Achat'.tr, 'Achats'.tr),
+  'stock_fournisseurs': ('Fournisseur'.tr, 'Achats'.tr),
+  'stock_matieres': ('Matière'.tr, 'Achats'.tr),
+  'stock_matiere_mvts': ('Mouvement de matière'.tr, 'Achats'.tr),
+  'stock_paiements_fournisseurs': ('Paiement fournisseur'.tr, 'Achats'.tr),
 };
 
 class Gestion {
@@ -231,9 +232,9 @@ class Gestion {
     final libMois = fmtMonthYear(mois);
     final rows = <Map<String, dynamic>>[
       for (final e in salairesAjoutes.entries)
-        Mouvement.toRow(ouvrierId: e.key, dateKey: fin, type: TypeMvt.salaire, montant: e.value, note: 'Salaire $libMois (clôture)'),
+        Mouvement.toRow(ouvrierId: e.key, dateKey: fin, type: TypeMvt.salaire, montant: e.value, note: 'Salaire {0} (clôture)'.trf([libMois])),
       for (final l in lignes.where((l) => l.paye > 0))
-        Mouvement.toRow(ouvrierId: l.ouvrierId, dateKey: fin, type: TypeMvt.paiement, montant: l.paye, note: 'Paie $libMois (clôture)'),
+        Mouvement.toRow(ouvrierId: l.ouvrierId, dateKey: fin, type: TypeMvt.paiement, montant: l.paye, note: 'Paie {0} (clôture)'.trf([libMois])),
     ];
     if (rows.isNotEmpty) await _db.from('broderie_mouvements').insert(rows);
     final gains = lignes.fold<double>(0, (s, l) => s + l.gains);

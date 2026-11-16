@@ -1,3 +1,4 @@
+import '../i18n.dart';
 double _toD(dynamic v) {
   if (v == null) return 0;
   if (v is num) return v.toDouble();
@@ -17,9 +18,9 @@ enum ModePaie { points, mois, piece }
 
 extension ModePaieX on ModePaie {
   String get label => switch (this) {
-        ModePaie.points => 'Points broderie',
-        ModePaie.mois => 'Au mois',
-        ModePaie.piece => 'À la pièce',
+        ModePaie.points => 'Points broderie'.tr,
+        ModePaie.mois => 'Au mois'.tr,
+        ModePaie.piece => 'À la pièce'.tr,
       };
   static ModePaie parse(String? s) => ModePaie.values.firstWhere((m) => m.name == s, orElse: () => ModePaie.points);
 }
@@ -180,11 +181,11 @@ enum TypeMvt { avance, paiement, salaire, prime, retenue }
 
 extension TypeMvtX on TypeMvt {
   String get label => switch (this) {
-        TypeMvt.avance => 'Avance',
-        TypeMvt.paiement => 'Paiement',
-        TypeMvt.salaire => 'Salaire',
-        TypeMvt.prime => 'Prime',
-        TypeMvt.retenue => 'Retenue',
+        TypeMvt.avance => 'Avance'.tr,
+        TypeMvt.paiement => 'Paiement'.tr,
+        TypeMvt.salaire => 'Salaire'.tr,
+        TypeMvt.prime => 'Prime'.tr,
+        TypeMvt.retenue => 'Retenue'.tr,
       };
 
   /// +1 : ajoute au montant dû à l'ouvrier ; −1 : le diminue.
@@ -369,8 +370,8 @@ class TypeTravail {
 enum Equipe { jour, nuit }
 
 extension EquipeX on Equipe {
-  String get label => this == Equipe.jour ? 'Jour' : 'Nuit';
-  String get horaire => this == Equipe.jour ? '8 h – 20 h' : '20 h – 8 h';
+  String get label => this == Equipe.jour ? 'Jour'.tr : 'Nuit'.tr;
+  String get horaire => this == Equipe.jour ? '8 h – 20 h'.tr : '20 h – 8 h'.tr;
   static Equipe parse(String? s) => s == 'nuit' ? Equipe.nuit : Equipe.jour;
 }
 

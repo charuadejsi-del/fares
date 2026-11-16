@@ -7,6 +7,7 @@ import '../pdf/documents.dart';
 import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
+import '../i18n.dart';
 
 // ====================================================================== clôture de la paie
 
@@ -93,15 +94,14 @@ class _CloturePaieScreenState extends State<CloturePaieScreen> {
     final nbSal = _ajouterSalaire.length, nbPay = lignes.where((l) => l.paye > 0).length;
     final ok = await confirmDialog(
       context,
-      'Clôturer ${fmtMonthYear(_mois)} ?',
+      'Clôturer {0} ?'.trf([fmtMonthYear(_mois)]),
       [
-        '${lignes.length} ouvrier(s).',
-        if (nbSal > 0) '$nbSal salaire(s) mensuel(s) seront ajoutés.',
-        if (nbPay > 0) '$nbPay paiement(s) seront enregistrés (${fmtDA(lignes.fold<double>(0, (s, l) => s + l.paye))}).',
-        'Ensuite, plus aucune saisie de production, pièce, avance ou paiement ne sera possible sur ce mois, '
-            'sauf si l\'administrateur le réouvre.',
+        '{0} ouvrier(s).'.trf([lignes.length]),
+        if (nbSal > 0) '{0} salaire(s) mensuel(s) seront ajoutés.'.trf([nbSal]),
+        if (nbPay > 0) '{0} paiement(s) seront enregistrés ({1}).'.trf([nbPay, fmtDA(lignes.fold<double>(0, (s, l) => s + l.paye))]),
+        'Ensuite, plus aucune saisie de production, pièce, avance ou paiement ne sera possible sur ce mois, sauf si l\'administrateur le réouvre.'.tr,
       ].join('\n\n'),
-      action: 'Clôturer',
+      action: 'Clôturer'.tr,
     );
     if (!ok) return;
     setState(() => _busy = true);
@@ -113,7 +113,7 @@ class _CloturePaieScreenState extends State<CloturePaieScreen> {
       final c = await gestion.cloturer(_mois, lignes, salairesAjoutes: salaires);
       if (!mounted) return;
       setState(() => _cloture = c);
-      showSnack(context, 'Mois clôturé. Impression des fiches de paie…');
+      showSnack(context, 'Mois clôturé. Impression des fiches de paie…'.tr);
       await _pdf(c.lignes);
     } catch (e) {
       if (mounted) showSnack(context, errorMessage(e), error: true);
@@ -126,10 +126,9 @@ class _CloturePaieScreenState extends State<CloturePaieScreen> {
     if (c == null) return;
     final ok = await confirmDialog(
       context,
-      'Réouvrir ${fmtMonthYear(_mois)} ?',
-      'Le mois redevient modifiable. Les salaires et paiements enregistrés à la clôture restent en place '
-          '(vous pouvez les supprimer depuis la fiche de l\'ouvrier si besoin).',
-      action: 'Réouvrir',
+      'Réouvrir {0} ?'.trf([fmtMonthYear(_mois)]),
+      'Le mois redevient modifiable. Les salaires et paiements enregistrés à la clôture restent en place (vous pouvez les supprimer depuis la fiche de l\'ouvrier si besoin).'.tr,
+      action: 'Réouvrir'.tr,
     );
     if (!ok) return;
     try {
@@ -149,7 +148,7 @@ class _CloturePaieScreenState extends State<CloturePaieScreen> {
     double tot(double Function(LignePaie) f) => lignes.fold<double>(0, (s, l) => s + f(l));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Clôture de la paie')),
+      appBar: AppBar(title: Text('Clôture de la paie'.tr)),
       bottomNavigationBar: c != null || _loading || _err != null || lignes.isEmpty
           ? null
           : SafeArea(
@@ -161,7 +160,7 @@ class _CloturePaieScreenState extends State<CloturePaieScreen> {
                   icon: _busy
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.lock_rounded),
-                  label: Text('Clôturer ${fmtMonthYear(_mois)} et imprimer les fiches'),
+                  label: Text('Clôturer {0} et imprimer les fiches'.trf([fmtMonthYear(_mois)])),
                 ),
               ),
             ),
@@ -180,7 +179,7 @@ class _CloturePaieScreenState extends State<CloturePaieScreen> {
                     Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(c != null ? Icons.lock_rounded : Icons.lock_open_rounded, size: 14, color: c != null ? AppColors.green : AppColors.gold),
                       const SizedBox(width: 4),
-                      Text(c != null ? 'Clôturé le ${fmtDate(c.creeLe)}' : 'Ouvert',
+                      Text(c != null ? 'Clôturé le {0}'.trf([fmtDate(c.creeLe)]) : 'Ouvert'.tr,
                           style: TextStyle(fontSize: 12, color: c != null ? AppColors.green : AppColors.gold, fontWeight: FontWeight.w700)),
                     ]),
                 ]),
@@ -194,24 +193,24 @@ class _CloturePaieScreenState extends State<CloturePaieScreen> {
           else if (_err != null)
             ErrorBanner(_err!, onRetry: _load)
           else if (lignes.isEmpty)
-            const EmptyState('Aucun ouvrier à payer : aucune activité ni solde sur ce mois.', icon: Icons.groups_outlined)
+            EmptyState('Aucun ouvrier à payer : aucune activité ni solde sur ce mois.'.tr, icon: Icons.groups_outlined)
           else ...[
             AutoGrid(minItemWidth: 170, children: [
-              StatTile(label: 'Gains du mois', value: fmtDA(tot((l) => l.gains)), icon: Icons.trending_up_rounded, color: AppColors.gold),
-              StatTile(label: 'Avances & retenues', value: fmtDA(tot((l) => l.avances + l.retenues)), icon: Icons.north_east_rounded, color: AppColors.rose),
-              StatTile(label: 'Net à payer', value: fmtDA(tot((l) => l.net)), icon: Icons.account_balance_wallet_rounded, color: AppColors.green),
+              StatTile(label: 'Gains du mois'.tr, value: fmtDA(tot((l) => l.gains)), icon: Icons.trending_up_rounded, color: AppColors.gold),
+              StatTile(label: 'Avances & retenues'.tr, value: fmtDA(tot((l) => l.avances + l.retenues)), icon: Icons.north_east_rounded, color: AppColors.rose),
+              StatTile(label: 'Net à payer'.tr, value: fmtDA(tot((l) => l.net)), icon: Icons.account_balance_wallet_rounded, color: AppColors.green),
               if (tot((l) => l.paye) > 0)
-                StatTile(label: 'Réglé à la clôture', value: fmtDA(tot((l) => l.paye)), icon: Icons.payments_rounded, color: AppColors.sky),
+                StatTile(label: 'Réglé à la clôture'.tr, value: fmtDA(tot((l) => l.paye)), icon: Icons.payments_rounded, color: AppColors.sky),
             ]),
             const SizedBox(height: 12),
             if (c != null)
               AppCard(
                 padding: const EdgeInsets.all(12),
                 child: Wrap(spacing: 10, runSpacing: 10, children: [
-                  FilledButton.icon(onPressed: () => _pdf(c.lignes), icon: const Icon(Icons.print_rounded), label: const Text('Imprimer état + fiches')),
-                  OutlinedButton.icon(onPressed: () => _pdf(c.lignes, partage: true), icon: const Icon(Icons.share_rounded), label: const Text('Partager')),
+                  FilledButton.icon(onPressed: () => _pdf(c.lignes), icon: const Icon(Icons.print_rounded), label: Text('Imprimer état + fiches'.tr)),
+                  OutlinedButton.icon(onPressed: () => _pdf(c.lignes, partage: true), icon: const Icon(Icons.share_rounded), label: Text('Partager'.tr)),
                   if (session.admin)
-                    TextButton.icon(onPressed: _reouvrir, icon: const Icon(Icons.lock_open_rounded), label: const Text('Réouvrir le mois')),
+                    TextButton.icon(onPressed: _reouvrir, icon: const Icon(Icons.lock_open_rounded), label: Text('Réouvrir le mois'.tr)),
                 ]),
               )
             else
@@ -223,8 +222,8 @@ class _CloturePaieScreenState extends State<CloturePaieScreen> {
                     _payer.clear();
                     if (v == true) _payer.addAll(lignes.where((l) => l.net > 0).map((l) => l.ouvrierId));
                   }),
-                  title: const Text('Payer tout le monde maintenant', style: TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: const Text('Enregistre un paiement du net pour chaque ouvrier (fiches marquées « PAYÉE »)'),
+                  title: Text('Payer tout le monde maintenant'.tr, style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text('Enregistre un paiement du net pour chaque ouvrier (fiches marquées « PAYÉE »)'.tr),
                 ),
               ),
             const SizedBox(height: 12),
@@ -238,9 +237,9 @@ class _CloturePaieScreenState extends State<CloturePaieScreen> {
   Widget _ligne(BuildContext context, LignePaie l, {required bool modifiable}) {
     final o = data.ouvrier(l.ouvrierId);
     final details = [
-      if (l.anterieur != 0) 'Report ${fmtDA(l.anterieur)}',
-      'Gains ${fmtDA(l.gains)}',
-      if (l.deductions != 0) 'Déductions ${fmtDA(l.deductions)}',
+      if (l.anterieur != 0) 'Report {0}'.trf([fmtDA(l.anterieur)]),
+      'Gains {0}'.trf([fmtDA(l.gains)]),
+      if (l.deductions != 0) 'Déductions {0}'.trf([fmtDA(l.deductions)]),
     ].join(' · ');
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -259,8 +258,8 @@ class _CloturePaieScreenState extends State<CloturePaieScreen> {
             ),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
               Text(fmtDA(l.net), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: l.net >= 0 ? AppColors.green : AppColors.rose)),
-              Text(l.net >= 0 ? 'net à payer' : 'avance à reporter', style: TextStyle(fontSize: 11, color: context.cs.onSurfaceVariant)),
-              if (l.paye > 0) Text('réglé ${fmtDA(l.paye)}', style: const TextStyle(fontSize: 11, color: AppColors.sky, fontWeight: FontWeight.w700)),
+              Text(l.net >= 0 ? 'net à payer'.tr : 'avance à reporter'.tr, style: TextStyle(fontSize: 11, color: context.cs.onSurfaceVariant)),
+              if (l.paye > 0) Text('réglé {0}'.trf([fmtDA(l.paye)]), style: const TextStyle(fontSize: 11, color: AppColors.sky, fontWeight: FontWeight.w700)),
             ]),
           ]),
           if (modifiable) ...[
@@ -270,13 +269,13 @@ class _CloturePaieScreenState extends State<CloturePaieScreen> {
                 FilterChip(
                   selected: _ajouterSalaire.contains(l.ouvrierId),
                   onSelected: (v) => setState(() => v ? _ajouterSalaire.add(l.ouvrierId) : _ajouterSalaire.remove(l.ouvrierId)),
-                  label: Text('Ajouter le salaire ${fmtDA(o?.salaireMensuel ?? 0)}'),
+                  label: Text('Ajouter le salaire {0}'.trf([fmtDA(o?.salaireMensuel ?? 0)])),
                 ),
               if (l.net > 0)
                 FilterChip(
                   selected: _payer.contains(l.ouvrierId),
                   onSelected: (v) => setState(() => v ? _payer.add(l.ouvrierId) : _payer.remove(l.ouvrierId)),
-                  label: const Text('Payer maintenant'),
+                  label: Text('Payer maintenant'.tr),
                 ),
             ]),
           ] else
@@ -289,43 +288,43 @@ class _CloturePaieScreenState extends State<CloturePaieScreen> {
 
 // ====================================================================== journal des actions
 
-const _champs = {
-  'nom': 'Nom',
-  'montant': 'Montant',
-  'quantite': 'Quantité',
-  'prix_unitaire': 'Prix unitaire',
-  'prix_gros': 'Prix de gros',
-  'prix_detail': 'Prix détail',
-  'cout_revient': 'Coût de revient',
-  'date_mvt': 'Date',
-  'date_prod': 'Date',
-  'date_vente': 'Date',
-  'date_travail': 'Date',
-  'type': 'Type',
-  'note': 'Note',
-  'actif': 'Actif',
-  'statut': 'Statut',
-  'remise': 'Remise',
-  'total_ttc': 'Total TTC',
-  'nb_robes': 'Nombre de robes',
-  'points_par_robe': 'Points par robe',
-  'tarif_1000': 'Tarif / 1000 points',
-  'salaire_mensuel': 'Salaire mensuel',
-  'prix_piece': 'Prix à la pièce',
-  'mode_paie': 'Mode de paie',
-  'telephone': 'Téléphone',
-  'role': 'Rôle',
-  'perm_broderie': 'Accès broderie',
-  'perm_paie': 'Accès paie',
-  'perm_stock': 'Accès stock',
-  'seuil_alerte': 'Seuil d\'alerte',
-  'couleur': 'Couleur',
-  'taille': 'Taille',
-  'designation': 'Désignation',
-  'reference': 'Référence',
+Map<String, String> get _champs => {
+  'nom': 'Nom'.tr,
+  'montant': 'Montant'.tr,
+  'quantite': 'Quantité'.tr,
+  'prix_unitaire': 'Prix unitaire'.tr,
+  'prix_gros': 'Prix de gros'.tr,
+  'prix_detail': 'Prix détail'.tr,
+  'cout_revient': 'Coût de revient'.tr,
+  'date_mvt': 'Date'.tr,
+  'date_prod': 'Date'.tr,
+  'date_vente': 'Date'.tr,
+  'date_travail': 'Date'.tr,
+  'type': 'Type'.tr,
+  'note': 'Note'.tr,
+  'actif': 'Actif'.tr,
+  'statut': 'Statut'.tr,
+  'remise': 'Remise'.tr,
+  'total_ttc': 'Total TTC'.tr,
+  'nb_robes': 'Nombre de robes'.tr,
+  'points_par_robe': 'Points par robe'.tr,
+  'tarif_1000': 'Tarif / 1000 points'.tr,
+  'salaire_mensuel': 'Salaire mensuel'.tr,
+  'prix_piece': 'Prix à la pièce'.tr,
+  'mode_paie': 'Mode de paie'.tr,
+  'telephone': 'Téléphone'.tr,
+  'role': 'Rôle'.tr,
+  'perm_broderie': 'Accès broderie'.tr,
+  'perm_paie': 'Accès paie'.tr,
+  'perm_stock': 'Accès stock'.tr,
+  'seuil_alerte': 'Seuil d\'alerte'.tr,
+  'couleur': 'Couleur'.tr,
+  'taille': 'Taille'.tr,
+  'designation': 'Désignation'.tr,
+  'reference': 'Référence'.tr,
 };
 
-const _periodes = [('Aujourd\'hui', 0), ('7 jours', 7), ('30 jours', 30), ('Tout', -1)];
+List<(String, int)> get _periodes => [('Aujourd\'hui'.tr, 0), ('7 jours'.tr, 7), ('30 jours'.tr, 30), ('Tout'.tr, -1)];
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
@@ -345,7 +344,7 @@ class _JournalScreenState extends State<JournalScreen> {
   bool _fin = false;
   String? _err;
 
-  static final _espaces = {for (final v in tablesJournal.values) v.$2}.toList();
+  static List<String> get _espaces => {for (final v in tablesJournal.values) v.$2}.toList();
 
   @override
   void initState() {
@@ -403,8 +402,8 @@ class _JournalScreenState extends State<JournalScreen> {
       rows.add(_tuile(context, a));
     }
     return Scaffold(
-      appBar: AppBar(title: const Text('Journal des actions'), actions: [
-        IconButton(tooltip: 'Actualiser', onPressed: () => _load(reset: true), icon: const Icon(Icons.refresh_rounded)),
+      appBar: AppBar(title: Text('Journal des actions'.tr), actions: [
+        IconButton(tooltip: 'Actualiser'.tr, onPressed: () => _load(reset: true), icon: const Icon(Icons.refresh_rounded)),
       ]),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -418,10 +417,10 @@ class _JournalScreenState extends State<JournalScreen> {
                 const SizedBox(width: 6),
                 DropdownButton<String?>(
                   value: _utilisateur,
-                  hint: const Text('Tous les utilisateurs'),
+                  hint: Text('Tous les utilisateurs'.tr),
                   underline: const SizedBox.shrink(),
                   items: [
-                    const DropdownMenuItem(value: null, child: Text('Tous les utilisateurs')),
+                    DropdownMenuItem(value: null, child: Text('Tous les utilisateurs'.tr)),
                     for (final u in _utilisateurs) DropdownMenuItem(value: u, child: Text(u)),
                   ],
                   onChanged: (v) => _filtre(() => _utilisateur = v),
@@ -429,12 +428,12 @@ class _JournalScreenState extends State<JournalScreen> {
               ]),
               const Divider(height: 20),
               Wrap(spacing: 8, runSpacing: 8, children: [
-                ChoiceChip(label: const Text('Tout'), selected: _espace == null, onSelected: (_) => _filtre(() => _espace = null)),
+                ChoiceChip(label: Text('Tout'.tr), selected: _espace == null, onSelected: (_) => _filtre(() => _espace = null)),
                 for (final e in _espaces) ChoiceChip(label: Text(e), selected: _espace == e, onSelected: (_) => _filtre(() => _espace = e)),
               ]),
               const SizedBox(height: 8),
               Wrap(spacing: 8, runSpacing: 8, children: [
-                for (final a in const [(null, 'Toutes les actions'), ('ajout', 'Ajouts'), ('modification', 'Modifications'), ('suppression', 'Suppressions')])
+                for (final a in [(null, 'Toutes les actions'.tr), ('ajout', 'Ajouts'.tr), ('modification', 'Modifications'.tr), ('suppression', 'Suppressions'.tr)])
                   ChoiceChip(
                     label: Text(a.$2),
                     selected: _action == a.$1,
@@ -446,9 +445,9 @@ class _JournalScreenState extends State<JournalScreen> {
           ),
           if (_err != null) ...[const SizedBox(height: 12), ErrorBanner(_err!, onRetry: () => _load(reset: true))],
           if (!_loading && _err == null && _items.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(top: 30),
-              child: EmptyState('Aucune action enregistrée pour ces filtres.', icon: Icons.history_rounded),
+              child: EmptyState('Aucune action enregistrée pour ces filtres.'.tr, icon: Icons.history_rounded),
             ),
           ...rows,
           if (_loading)
@@ -456,7 +455,7 @@ class _JournalScreenState extends State<JournalScreen> {
           else if (!_fin && _items.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 12),
-              child: OutlinedButton.icon(onPressed: _load, icon: const Icon(Icons.expand_more_rounded), label: const Text('Voir plus')),
+              child: OutlinedButton.icon(onPressed: _load, icon: const Icon(Icons.expand_more_rounded), label: Text('Voir plus'.tr)),
             ),
         ],
       ),
@@ -465,9 +464,9 @@ class _JournalScreenState extends State<JournalScreen> {
 
   Widget _tuile(BuildContext context, ActionJournal a) {
     final (couleur, icone, verbe) = switch (a.action) {
-      'ajout' => (AppColors.green, Icons.add_rounded, 'a ajouté'),
-      'modification' => (AppColors.sky, Icons.edit_rounded, 'a modifié'),
-      _ => (AppColors.rose, Icons.delete_rounded, 'a supprimé'),
+      'ajout' => (AppColors.green, Icons.add_rounded, 'a ajouté'.tr),
+      'modification' => (AppColors.sky, Icons.edit_rounded, 'a modifié'.tr),
+      _ => (AppColors.rose, Icons.delete_rounded, 'a supprimé'.tr),
     };
     final quoi = tablesJournal[a.table]?.$1 ?? a.table;
     final heure = '${a.date.hour.toString().padLeft(2, '0')}:${a.date.minute.toString().padLeft(2, '0')}';
@@ -488,7 +487,7 @@ class _JournalScreenState extends State<JournalScreen> {
             [
               if ((a.libelle ?? '').isNotEmpty) a.libelle!,
               if (a.montant != null) fmtDA(a.montant!),
-              if (champs != null && champs.isNotEmpty) 'champs : $champs',
+              if (champs != null && champs.isNotEmpty) 'champs : {0}'.trf([champs]),
             ].join(' · '),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -502,19 +501,19 @@ class _JournalScreenState extends State<JournalScreen> {
   void _details(BuildContext context, ActionJournal a, String quoi) {
     String v(Object? x) => switch (x) {
           null => '—',
-          true => 'Oui',
-          false => 'Non',
+          true => 'Oui'.tr,
+          false => 'Non'.tr,
           _ => '$x',
         };
     showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('$quoi modifié'),
+        title: Text('{0} modifié'.trf([quoi])),
         content: SizedBox(
           width: 460,
           child: SingleChildScrollView(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-              Text('${a.userNom ?? '—'} · ${fmtDate(a.date)} à ${a.date.hour.toString().padLeft(2, '0')}:${a.date.minute.toString().padLeft(2, '0')}',
+              Text('{0} · {1} à {2}:{3}'.trf([a.userNom ?? '—', fmtDate(a.date), a.date.hour.toString().padLeft(2, '0'), a.date.minute.toString().padLeft(2, '0')]),
                   style: TextStyle(color: context.cs.onSurfaceVariant)),
               const SizedBox(height: 12),
               for (final e in a.changements!.entries)
@@ -533,7 +532,7 @@ class _JournalScreenState extends State<JournalScreen> {
             ]),
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer'))],
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text('Fermer'.tr))],
       ),
     );
   }

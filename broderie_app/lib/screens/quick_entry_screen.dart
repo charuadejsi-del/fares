@@ -6,6 +6,7 @@ import '../data/models.dart';
 import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
+import '../i18n.dart';
 
 /// Équipe et date par défaut selon l'heure : 8 h–20 h = jour,
 /// après 20 h = nuit du jour, avant 8 h = nuit de la veille.
@@ -108,7 +109,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
       ));
       HapticFeedback.mediumImpact();
       if (mounted) {
-        showSnack(context, '✓ ${o.nom} · ${t.nom} : ${fmtInt(_pts)} points${o.brodeur ? ' = ${fmtDA(_pts * t.tarif1000 / 1000)}' : ' (payé au mois, sans montant)'}');
+        showSnack(context, '✓ {0} · {1} : {2} points{3}'.trf([o.nom, t.nom, fmtInt(_pts), o.brodeur ? ' = ${fmtDA(_pts * t.tarif1000 / 1000)}' : ' (payé au mois, sans montant)'.tr]));
         setState(() {
           _points.clear();
           _robes.clear();
@@ -133,11 +134,11 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
     if (ouvriers.isEmpty) {
       return ListView(padding: const EdgeInsets.all(16), children: [
         EmptyState(
-          'Aucun brodeur actif.\nAjoutez un ouvrier payé aux points, ou au mois dans le département « Broderie ».',
+          'Aucun brodeur actif.\nAjoutez un ouvrier payé aux points, ou au mois dans le département « Broderie ».'.tr,
           icon: Icons.rocket_launch_outlined,
           action: widget.onGoToRefs == null
               ? null
-              : FilledButton.icon(onPressed: widget.onGoToRefs, icon: const Icon(Icons.person_add_alt_1), label: const Text('Ajouter un ouvrier')),
+              : FilledButton.icon(onPressed: widget.onGoToRefs, icon: const Icon(Icons.person_add_alt_1), label: Text('Ajouter un ouvrier'.tr)),
         ),
       ]);
     }
@@ -154,7 +155,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
 
           // ---------------- 1. Ouvrier
           if (_step == 0) ...[
-            const SectionTitle('Qui a travaillé ?', subtitle: 'Choisissez l\'ouvrier'),
+            SectionTitle('Qui a travaillé ?'.tr, subtitle: 'Choisissez l\'ouvrier'.tr),
             AutoGrid(minItemWidth: 150, children: [
               for (final o in ouvriers)
                 AppCard(
@@ -173,7 +174,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
             ]),
           ] else
             _Selected(
-              label: 'Ouvrier',
+              label: 'Ouvrier'.tr,
               title: data.ouvrierNom(_ouvrierId!),
               leading: NameAvatar(data.ouvrierNom(_ouvrierId!), size: 40),
               onChange: () => setState(() => _ouvrierId = null),
@@ -182,7 +183,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
           // ---------------- 2. Type de broderie
           if (_step == 1) ...[
             const SizedBox(height: 16),
-            const SectionTitle('Type de broderie', subtitle: 'Le prix dépend du type'),
+            SectionTitle('Type de broderie'.tr, subtitle: 'Le prix dépend du type'.tr),
             AutoGrid(minItemWidth: 200, children: [
               for (var i = 0; i < types.length; i++)
                 _TypeCard(
@@ -199,9 +200,9 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
           ] else if (_step == 2) ...[
             const SizedBox(height: 10),
             _Selected(
-              label: 'Type de broderie',
+              label: 'Type de broderie'.tr,
               title: data.typeNom(_typeId),
-              subtitle: '${fmtDA(data.type(_typeId)?.tarif1000 ?? 0)} pour 1000 points',
+              subtitle: '{0} pour 1000 points'.trf([fmtDA(data.type(_typeId)?.tarif1000 ?? 0)]),
               leading: Container(
                 width: 40,
                 height: 40,
@@ -232,7 +233,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
                   ),
                   ActionChip(
                     avatar: const Icon(Icons.event_rounded, size: 18),
-                    label: Text(_date == dayOnly(DateTime.now()) ? 'Aujourd\'hui' : fmtDate(_date)),
+                    label: Text(_date == dayOnly(DateTime.now()) ? 'Aujourd\'hui'.tr : fmtDate(_date)),
                     onPressed: () async {
                       final d = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100));
                       if (d != null) setState(() => _date = d);
@@ -245,14 +246,14 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
                     for (final m in data.machines.where((m) => m.actif))
                       ChoiceChip(
                         avatar: const Icon(Icons.precision_manufacturing_outlined, size: 18),
-                        label: Text('${m.nom} · ${m.nbTetes} têtes'),
+                        label: Text('{0} · {1} têtes'.trf([m.nom, m.nbTetes])),
                         selected: _machineId == m.id,
                         onSelected: (s) => setState(() => _machineId = s ? m.id : null),
                       ),
                   ]),
                 ],
                 const SizedBox(height: 18),
-                Text('Points du compteur', style: context.tt.titleMedium),
+                Text('Points du compteur'.tr, style: context.tt.titleMedium),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _points,
@@ -271,13 +272,13 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
                   data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                   child: ExpansionTile(
                     tilePadding: EdgeInsets.zero,
-                    title: Text('Détails facultatifs', style: TextStyle(color: context.pal.muted, fontSize: 14)),
-                    subtitle: Text('Dessin, nombre de robes, remarque', style: TextStyle(color: context.pal.muted, fontSize: 12)),
+                    title: Text('Détails facultatifs'.tr, style: TextStyle(color: context.pal.muted, fontSize: 14)),
+                    subtitle: Text('Dessin, nombre de robes, remarque'.tr, style: TextStyle(color: context.pal.muted, fontSize: 12)),
                     children: [
                       DropdownButtonFormField<String?>(
                         value: _dessinId,
                         isExpanded: true,
-                        decoration: const InputDecoration(labelText: 'Dessin', prefixIcon: Icon(Icons.local_florist_outlined)),
+                        decoration: InputDecoration(labelText: 'Dessin'.tr, prefixIcon: Icon(Icons.local_florist_outlined)),
                         items: [
                           const DropdownMenuItem<String?>(value: null, child: Text('—')),
                           for (final d in data.dessins.where((d) => d.actif)) DropdownMenuItem<String?>(value: d.id, child: Text(d.nom)),
@@ -289,10 +290,10 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
                         controller: _robes,
                         keyboardType: TextInputType.number,
                         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        decoration: const InputDecoration(labelText: 'Nombre de robes', prefixIcon: Icon(Icons.checkroom_rounded)),
+                        decoration: InputDecoration(labelText: 'Nombre de robes'.tr, prefixIcon: Icon(Icons.checkroom_rounded)),
                       ),
                       const SizedBox(height: 10),
-                      TextField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque', prefixIcon: Icon(Icons.notes))),
+                      TextField(controller: _note, decoration: InputDecoration(labelText: 'Remarque'.tr, prefixIcon: Icon(Icons.notes))),
                       const SizedBox(height: 8),
                     ],
                   ),
@@ -308,8 +309,8 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.check_rounded),
                 label: Text(_pts <= 0
-                    ? 'Tapez les points du compteur'
-                    : (data.ouvrier(_ouvrierId)?.brodeur ?? true) ? 'Enregistrer · ${fmtDA(_pts * (data.type(_typeId)?.tarif1000 ?? 0) / 1000)}' : 'Enregistrer ${fmtInt(_pts)} points'),
+                    ? 'Tapez les points du compteur'.tr
+                    : (data.ouvrier(_ouvrierId)?.brodeur ?? true) ? 'Enregistrer · {0}'.trf([fmtDA(_pts * (data.type(_typeId)?.tarif1000 ?? 0) / 1000)]) : 'Enregistrer {0} points'.trf([fmtInt(_pts)])),
               ),
             ),
           ],
@@ -350,14 +351,14 @@ class _CalcBox extends StatelessWidget {
       gradient: AppColors.heroGradient,
       padding: const EdgeInsets.all(16),
       child: Column(children: [
-        if (!sansMontant) Text('${fmtInt(points)} pts × ${fmtDA(tarif)} / 1000', style: const TextStyle(color: Colors.white70)),
+        if (!sansMontant) Text('{0} pts × {1} / 1000'.trf([fmtInt(points), fmtDA(tarif)]), style: const TextStyle(color: Colors.white70)),
         const SizedBox(height: 4),
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Text(sansMontant ? '${fmtInt(points)} pts' : fmtDA(montant),
               style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w900)),
         ),
-        Text(sansMontant ? 'ouvrier payé au mois : points comptés, sans montant' : 'à payer pour ce relevé',
+        Text(sansMontant ? 'ouvrier payé au mois : points comptés, sans montant'.tr : 'à payer pour ce relevé'.tr,
             textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 12)),
       ]),
     );
@@ -389,8 +390,8 @@ class _TypeCard extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(type.nom, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
               const SizedBox(height: 2),
-              Text('${fmtDA(type.tarif1000)} / 1000 pts', style: TextStyle(color: color, fontWeight: FontWeight.w700)),
-              Text('300 000 pts = ${fmtDA(300 * type.tarif1000)}', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+              Text('{0} / 1000 pts'.trf([fmtDA(type.tarif1000)]), style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+              Text('300 000 pts = {0}'.trf([fmtDA(300 * type.tarif1000)]), style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
             ]),
           ),
           Icon(Icons.chevron_right_rounded, color: context.pal.muted),
@@ -410,8 +411,8 @@ class _TodayBanner extends StatelessWidget {
         child: Row(children: [
           const Icon(Icons.today_rounded, color: Colors.white, size: 28),
           const SizedBox(width: 12),
-          const Expanded(
-            child: Text("Aujourd'hui", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+          Expanded(
+            child: Text("Aujourd'hui".tr, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('${fmtInt(points)} pts', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
@@ -427,7 +428,7 @@ class _Steps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['Ouvrier', 'Type', 'Compteur'];
+    final labels = ['Ouvrier'.tr, 'Type'.tr, 'Compteur'];
     return Row(children: [
       for (var i = 0; i < 3; i++) ...[
         Expanded(
@@ -476,7 +477,7 @@ class _Selected extends StatelessWidget {
               if (subtitle != null) Text(subtitle!, style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
             ]),
           ),
-          TextButton.icon(onPressed: onChange, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: const Text('Changer')),
+          TextButton.icon(onPressed: onChange, icon: const Icon(Icons.swap_horiz_rounded, size: 18), label: Text('Changer'.tr)),
         ]),
       );
 }

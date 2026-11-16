@@ -9,6 +9,7 @@ import '../data/gestion.dart' show LignePaie;
 import '../data/session.dart';
 import '../data/stock.dart';
 import '../utils.dart';
+import '../i18n.dart';
 
 const _grey = PdfColor.fromInt(0xFF6B6F80);
 const _green = PdfColor.fromInt(0xFF047857);
@@ -40,13 +41,33 @@ void oublierLogo() {
   _logoPath = null;
 }
 
-Future<pw.ThemeData> _pdfTheme() async {
-  if (_theme != null) return _theme!;
+/// Polices des documents : Inter (latin) + Cairo (arabe), selon la langue.
+Future<pw.ThemeData> pdfThemeLangue() async {
   try {
-    _theme = pw.ThemeData.withFont(base: await PdfGoogleFonts.interRegular(), bold: await PdfGoogleFonts.interBold());
+    final arR = await PdfGoogleFonts.cairoRegular();
+    final arB = await PdfGoogleFonts.cairoBold();
+    if (langue.ar) return pw.ThemeData.withFont(base: arR, bold: arB, fontFallback: [await PdfGoogleFonts.interRegular()]);
+    return pw.ThemeData.withFont(
+      base: await PdfGoogleFonts.interRegular(),
+      bold: await PdfGoogleFonts.interBold(),
+      fontFallback: [arR, arB],
+    );
   } catch (_) {
-    _theme = pw.ThemeData.base();
+    return pw.ThemeData.base();
   }
+}
+
+/// Sens d'écriture des documents.
+pw.TextDirection get pdfSens => langue.ar ? pw.TextDirection.rtl : pw.TextDirection.ltr;
+
+String? _themeLangue;
+
+Future<pw.ThemeData> _pdfTheme() async {
+  if (_theme != null && _themeLangue == langue.value) return _theme!;
+  _theme = await pdfThemeLangue();
+  _themeLangue = langue.value;
+  return _theme!;
+}
   return _theme!;
 }
 
@@ -95,12 +116,65 @@ String nombreEnLettres(int n) {
   return parts.join(' ');
 }
 
-String montantEnLettres(double montant) {
+String _montantEnLettresFr(double montant) {
   final dinars = montant.floor();
   final centimes = ((montant - dinars) * 100).round();
-  var s = '${nombreEnLettres(dinars)} dinar${dinars > 1 ? 's' : ''} algérien${dinars > 1 ? 's' : ''}';
-  if (centimes > 0) s += ' et ${nombreEnLettres(centimes)} centime${centimes > 1 ? 's' : ''}';
+  var s = '{0} dinar{1} algérien{2}'.trf([nombreEnLettres(dinars), dinars > 1 ? 's' : '', dinars > 1 ? 's' : '']);
+  if (centimes > 0) s += ' et {0} centime{1}'.trf([nombreEnLettres(centimes), centimes > 1 ? 's' : '']);
   return s[0].toUpperCase() + s.substring(1);
+}
+
+
+// ---------------------------------------------------------------- en arabe
+const _arUnites = ['صفر', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة', 'عشرة',
+  'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر', 'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر'];
+const _arDizaines = ['', '', 'عشرون', 'ثلاثون', 'أربعون', 'خمسون', 'ستون', 'سبعون', 'ثمانون', 'تسعون'];
+const _arCentaines = ['', 'مائة', 'مائتان', 'ثلاثمائة', 'أربعمائة', 'خمسمائة', 'ستمائة', 'سبعمائة', 'ثمانمائة', 'تسعمائة'];
+
+String _arMoinsDeMille(int n) {
+  final c = n ~/ 100, r = n % 100;
+  final parts = <String>[];
+  if (c > 0) parts.add(_arCentaines[c]);
+  if (r > 0) {
+    if (r < 20) {
+      parts.add(_arUnites[r]);
+    } else {
+      final u = r % 10, d = r ~/ 10;
+      parts.add(u == 0 ? _arDizaines[d] : '${_arUnites[u]} و${_arDizaines[d]}');
+    }
+  }
+  return parts.join(' و');
+}
+
+String _arGroupe(int n, String un, String deux, String pluriel) {
+  if (n == 1) return un;
+  if (n == 2) return deux;
+  if (n <= 10) return '${_arMoinsDeMille(n)} $pluriel';
+  return '${_arMoinsDeMille(n)} $un';
+}
+
+String nombreEnLettresAr(int n) {
+  if (n == 0) return _arUnites[0];
+  final parts = <String>[];
+  final milliards = n ~/ 1000000000;
+  final millions = (n ~/ 1000000) % 1000;
+  final milliers = (n ~/ 1000) % 1000;
+  final reste = n % 1000;
+  if (milliards > 0) parts.add(_arGroupe(milliards, 'مليار', 'ملياران', 'مليارات'));
+  if (millions > 0) parts.add(_arGroupe(millions, 'مليون', 'مليونان', 'ملايين'));
+  if (milliers > 0) parts.add(_arGroupe(milliers, 'ألف', 'ألفان', 'آلاف'));
+  if (reste > 0) parts.add(_arMoinsDeMille(reste));
+  return parts.join(' و');
+}
+
+/// Montant en toutes lettres, dans la langue de l'application.
+String montantEnLettres(double montant) {
+  if (!langue.ar) return _montantEnLettresFr(montant);
+  final dinars = montant.floor();
+  final centimes = ((montant - dinars) * 100).round();
+  var s = 'فقط ${nombreEnLettresAr(dinars)} دينار جزائري';
+  if (centimes > 0) s += ' و${nombreEnLettresAr(centimes)} سنتيم';
+  return '$s لا غير';
 }
 
 // ============================================================== charte des documents
@@ -113,6 +187,7 @@ const _zebra = PdfColor.fromInt(0xFFF8F9FB);
 
 pw.PageTheme _page(pw.ThemeData theme) => pw.PageTheme(
       pageFormat: PdfPageFormat.a4,
+      textDirection: pdfSens,
       theme: theme,
       margin: const pw.EdgeInsets.fromLTRB(34, 30, 34, 24),
       buildBackground: (ctx) => pw.FullPage(
@@ -146,7 +221,7 @@ pw.Widget _entete(Atelier a, String titre, List<List<String>> infos) {
           pw.SizedBox(height: 6),
           if (a.adresse != null) pw.Text(a.adresse!, style: const pw.TextStyle(fontSize: 8.5, color: _grey)),
           if (a.telephone != null || a.email != null)
-            pw.Text([if (a.telephone != null) 'Tél. ${a.telephone}', if (a.email != null) a.email!].join('   |   '),
+            pw.Text([if (a.telephone != null) 'Tél. {0}'.trf([a.telephone]), if (a.email != null) a.email!].join('   |   '),
                 style: const pw.TextStyle(fontSize: 8.5, color: _grey)),
         ]),
       ),
@@ -159,7 +234,7 @@ pw.Widget _entete(Atelier a, String titre, List<List<String>> infos) {
           pw.Container(
             padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: pw.BoxDecoration(color: _ink, borderRadius: pw.BorderRadius.circular(12)),
-            child: pw.Text('N° $numero', style: pw.TextStyle(color: PdfColors.white, fontSize: 10, fontWeight: pw.FontWeight.bold, letterSpacing: 0.5)),
+            child: pw.Text('N° {0}'.trf([numero]), style: pw.TextStyle(color: PdfColors.white, fontSize: 10, fontWeight: pw.FontWeight.bold, letterSpacing: 0.5)),
           ),
         ],
       ]),
@@ -178,13 +253,13 @@ pw.Widget _parties(String titreClient, Client? c, List<List<String>> infos, {Str
         child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
           pw.Text(titreClient.toUpperCase(), style: _label()),
           pw.SizedBox(height: 4),
-          pw.Text(c?.nom ?? 'Client de passage', style: pw.TextStyle(fontSize: 13.5, fontWeight: pw.FontWeight.bold, color: _ink)),
+          pw.Text(c?.nom ?? 'Client de passage'.tr, style: pw.TextStyle(fontSize: 13.5, fontWeight: pw.FontWeight.bold, color: _ink)),
           if (c != null) ...[
             if (c.adresse != null || c.wilaya != null)
               pw.Text([if (c.adresse != null) c.adresse!, if (c.wilaya != null) c.wilaya!].join(', '), style: const pw.TextStyle(fontSize: 9)),
-            if (c.telephone != null) pw.Text('Tél. ${c.telephone}', style: const pw.TextStyle(fontSize: 9)),
+            if (c.telephone != null) pw.Text('Tél. {0}'.trf([c.telephone]), style: const pw.TextStyle(fontSize: 9)),
             if (c.rc != null || c.nif != null)
-              pw.Text([if (c.rc != null) 'RC ${c.rc}', if (c.nif != null) 'NIF ${c.nif}'].join('   '), style: const pw.TextStyle(fontSize: 8, color: _grey)),
+              pw.Text([if (c.rc != null) 'RC {0}'.trf([c.rc]), if (c.nif != null) 'NIF ${c.nif}'].join('   '), style: const pw.TextStyle(fontSize: 8, color: _grey)),
           ],
           if (extra != null) ...[pw.SizedBox(height: 3), pw.Text(extra, style: const pw.TextStyle(fontSize: 9))],
         ]),
@@ -299,10 +374,10 @@ List<pw.Widget> _tableLignes(List<_L> l, {bool prix = true}) {
   return [
     pw.Table(columnWidths: widths, children: [
       pw.TableRow(decoration: const pw.BoxDecoration(color: _ink), children: [
-        c('MODÈLE / COULEUR', st: h()),
-        c('QUANTITÉ', al: pw.Alignment.center, st: h()),
-        if (prix) c('PRIX UNIT.', al: pw.Alignment.centerRight, st: h()),
-        if (prix) c('MONTANT', al: pw.Alignment.centerRight, st: h()),
+        c('MODÈLE / COULEUR'.tr, st: h()),
+        c('QUANTITÉ'.tr, al: pw.Alignment.center, st: h()),
+        if (prix) c('PRIX UNIT.'.tr, al: pw.Alignment.centerRight, st: h()),
+        if (prix) c('MONTANT'.tr, al: pw.Alignment.centerRight, st: h()),
       ]),
     ]),
     for (final g in gs) ...[
@@ -327,7 +402,7 @@ List<pw.Widget> _tableLignes(List<_L> l, {bool prix = true}) {
             ],
           ),
         pw.TableRow(children: [
-          c('Total ${g.modele}', st: bold),
+          c('Total {0}'.trf([g.modele]), st: bold),
           c(fmtInt(g.quantite), al: pw.Alignment.center, st: bold),
           if (prix) pw.SizedBox(),
           if (prix) c(fmtDA(g.montant), al: pw.Alignment.centerRight, st: bold),
@@ -408,16 +483,16 @@ pw.Widget _annulee() => pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 10),
       padding: const pw.EdgeInsets.all(8),
       decoration: pw.BoxDecoration(border: pw.Border.all(color: _red, width: 2), borderRadius: pw.BorderRadius.circular(4)),
-      child: pw.Text('DOCUMENT ANNULÉ', textAlign: pw.TextAlign.center,
+      child: pw.Text('DOCUMENT ANNULÉ'.tr, textAlign: pw.TextAlign.center,
           style: pw.TextStyle(color: _red, fontSize: 16, fontWeight: pw.FontWeight.bold, letterSpacing: 3)),
     );
 
 pw.Widget _footer(pw.Context ctx, Atelier a) {
   final legal = [
-    if (a.rc != null) 'RC ${a.rc}',
-    if (a.nif != null) 'NIF ${a.nif}',
-    if (a.nis != null) 'NIS ${a.nis}',
-    if (a.art != null) 'ART ${a.art}',
+    if (a.rc != null) 'RC {0}'.trf([a.rc]),
+    if (a.nif != null) 'NIF {0}'.trf([a.nif]),
+    if (a.nis != null) 'NIS {0}'.trf([a.nis]),
+    if (a.art != null) 'ART {0}'.trf([a.art]),
   ].join('   ·   ');
   final lien = a.qrLien;
   return pw.Column(children: [
@@ -428,18 +503,18 @@ pw.Widget _footer(pw.Context ctx, Atelier a) {
         child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
           pw.Text(a.nom, style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold, color: _ink)),
           if (legal.isNotEmpty) pw.Text(legal, style: const pw.TextStyle(fontSize: 7.5, color: _grey)),
-          if (a.rib != null) pw.Text('RIB ${a.rib}', style: const pw.TextStyle(fontSize: 7.5, color: _grey)),
+          if (a.rib != null) pw.Text('RIB {0}'.trf([a.rib]), style: const pw.TextStyle(fontSize: 7.5, color: _grey)),
           if (a.mentions != null) pw.Text(a.mentions!, style: const pw.TextStyle(fontSize: 7, color: _grey)),
           pw.SizedBox(height: 3),
-          pw.Text('Page ${ctx.pageNumber} / ${ctx.pagesCount}', style: const pw.TextStyle(fontSize: 7.5, color: _grey)),
+          pw.Text('Page {0} / {1}'.trf([ctx.pageNumber, ctx.pagesCount]), style: const pw.TextStyle(fontSize: 7.5, color: _grey)),
         ]),
       ),
       if (lien != null) ...[
         pw.SizedBox(width: 10),
         pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-          pw.Text((a.qrLibelle ?? 'Suivez-nous').toUpperCase(), style: _label()),
+          pw.Text((a.qrLibelle ?? 'Suivez-nous'.tr).toUpperCase(), style: _label()),
           pw.SizedBox(height: 2),
-          pw.Text('Scannez le code', style: const pw.TextStyle(fontSize: 7, color: _grey)),
+          pw.Text('Scannez le code'.tr, style: const pw.TextStyle(fontSize: 7, color: _grey)),
         ]),
         pw.SizedBox(width: 8),
         pw.Container(
@@ -460,53 +535,53 @@ Future<pw.Document> _nouveau(Atelier a, String titre) async {
 // ============================================================== facture
 
 Future<Uint8List> buildFacture({required Atelier atelier, required Vente vente, required List<VenteLigne> lignes, Client? client}) async {
-  final doc = await _nouveau(atelier, 'Facture ${vente.numero}');
+  final doc = await _nouveau(atelier, 'Facture {0}'.trf([vente.numero]));
   final ls = [for (final l in lignes) _ligne(l.reference, l.designation, l.quantite, l.prixUnitaire, l.montant, produitId: l.produitId)];
   final qte = lignes.fold<int>(0, (s, l) => s + l.quantite);
   final infos = [
-    ['N°', vente.numero],
-    ['Date', fmtDate(vente.date)],
-    ['Bon de livraison', vente.numeroBl],
-    ['Articles', fmtInt(qte)],
+    ['N°'.tr, vente.numero],
+    ['Date'.tr, fmtDate(vente.date)],
+    ['Bon de livraison'.tr, vente.numeroBl],
+    ['Articles'.tr, fmtInt(qte)],
   ];
   doc.addPage(pw.MultiPage(
     pageTheme: _page(await _pdfTheme()),
     footer: (ctx) => _footer(ctx, atelier),
     build: (ctx) => [
       if (vente.annulee) _annulee(),
-      _entete(atelier, 'FACTURE', infos),
+      _entete(atelier, 'FACTURE'.tr, infos),
       pw.SizedBox(height: 18),
-      _parties('Facturé à', client, infos, extra: vente.adresseLivraison == null ? null : 'Livraison : ${vente.adresseLivraison}'),
+      _parties('Facturé à'.tr, client, infos, extra: vente.adresseLivraison == null ? null : 'Livraison : {0}'.trf([vente.adresseLivraison])),
       pw.SizedBox(height: 16),
       ..._tableLignes(ls),
       pw.SizedBox(height: 14),
       pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         pw.Expanded(
           child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            _lettres('Arrêtée la présente facture à la somme de :', vente.totalTtc),
-            if (vente.note != null) ...[pw.SizedBox(height: 8), pw.Text('Remarque : ${vente.note}', style: const pw.TextStyle(fontSize: 9))],
+            _lettres('Arrêtée la présente facture à la somme de :'.tr, vente.totalTtc),
+            if (vente.note != null) ...[pw.SizedBox(height: 8), pw.Text('Remarque : {0}'.trf([vente.note]), style: const pw.TextStyle(fontSize: 9))],
             pw.SizedBox(height: 18),
             if (!vente.annulee)
               pw.Padding(
                 padding: const pw.EdgeInsets.only(left: 20),
-                child: vente.reste <= 0.005 ? _tampon('PAYÉE', _green) : (vente.verse > 0 ? _tampon('ACOMPTE', _gold) : _tampon('À RÉGLER', _red)),
+                child: vente.reste <= 0.005 ? _tampon('PAYÉE'.tr, _green) : (vente.verse > 0 ? _tampon('ACOMPTE'.tr, _gold) : _tampon('À RÉGLER'.tr, _red)),
               ),
           ]),
         ),
         pw.SizedBox(width: 20),
         _totaux(
           [
-            if (vente.remise > 0) ('Total brut', vente.totalBrut, false),
-            if (vente.remise > 0) ('Remise', -vente.remise, false),
-            ('Total HT', vente.totalHt, false),
-            if (vente.tvaTaux > 0) ('TVA ${fmtNum(vente.tvaTaux)} %', vente.totalTva, false),
+            if (vente.remise > 0) ('Total brut'.tr, vente.totalBrut, false),
+            if (vente.remise > 0) ('Remise'.tr, -vente.remise, false),
+            ('Total HT'.tr, vente.totalHt, false),
+            if (vente.tvaTaux > 0) ('TVA {0} %'.trf([fmtNum(vente.tvaTaux)]), vente.totalTva, false),
           ],
-          net: (vente.tvaTaux > 0 ? 'Total TTC' : 'Net à payer', vente.totalTtc),
-          apres: vente.annulee ? const [] : [('Versé', vente.verse, _green), ('Reste à payer', vente.reste, vente.reste > 0.005 ? _red : _green)],
+          net: (vente.tvaTaux > 0 ? 'Total TTC'.tr : 'Net à payer'.tr, vente.totalTtc),
+          apres: vente.annulee ? const [] : [('Versé'.tr, vente.verse, _green), ('Reste à payer'.tr, vente.reste, vente.reste > 0.005 ? _red : _green)],
         ),
       ]),
       pw.SizedBox(height: 26),
-      _signatures(['Le client', 'Cachet et signature']),
+      _signatures(['Le client'.tr, 'Cachet et signature']),
     ],
   ));
   return doc.save();
@@ -515,23 +590,23 @@ Future<Uint8List> buildFacture({required Atelier atelier, required Vente vente, 
 // ============================================================== bon de livraison
 
 Future<Uint8List> buildBonLivraison({required Atelier atelier, required Vente vente, required List<VenteLigne> lignes, Client? client}) async {
-  final doc = await _nouveau(atelier, 'Bon de livraison ${vente.numeroBl}');
+  final doc = await _nouveau(atelier, 'Bon de livraison {0}'.trf([vente.numeroBl]));
   final ls = [for (final l in lignes) _ligne(l.reference, l.designation, l.quantite, l.prixUnitaire, l.montant, produitId: l.produitId)];
   final qte = lignes.fold<int>(0, (s, l) => s + l.quantite);
   final infos = [
-    ['N°', vente.numeroBl],
-    ['Date', fmtDate(vente.date)],
-    ['Facture', vente.numero],
-    ['Colis / articles', fmtInt(qte)],
+    ['N°'.tr, vente.numeroBl],
+    ['Date'.tr, fmtDate(vente.date)],
+    ['Facture'.tr, vente.numero],
+    ['Colis / articles'.tr, fmtInt(qte)],
   ];
   doc.addPage(pw.MultiPage(
     pageTheme: _page(await _pdfTheme()),
     footer: (ctx) => _footer(ctx, atelier),
     build: (ctx) => [
       if (vente.annulee) _annulee(),
-      _entete(atelier, 'BON DE LIVRAISON', infos),
+      _entete(atelier, 'BON DE LIVRAISON'.tr, infos),
       pw.SizedBox(height: 18),
-      _parties('Destinataire', client, infos, extra: vente.adresseLivraison == null ? null : 'Livraison : ${vente.adresseLivraison}'),
+      _parties('Destinataire'.tr, client, infos, extra: vente.adresseLivraison == null ? null : 'Livraison : {0}'.trf([vente.adresseLivraison])),
       pw.SizedBox(height: 16),
       ..._tableLignes(ls, prix: false),
       pw.Container(
@@ -539,15 +614,15 @@ Future<Uint8List> buildBonLivraison({required Atelier atelier, required Vente ve
         padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: pw.BoxDecoration(color: _ink, borderRadius: pw.BorderRadius.circular(4)),
         child: pw.Row(children: [
-          pw.Text('TOTAL DES ARTICLES LIVRÉS', style: pw.TextStyle(color: PdfColors.white, fontSize: 9.5, fontWeight: pw.FontWeight.bold, letterSpacing: 1)),
+          pw.Text('TOTAL DES ARTICLES LIVRÉS'.tr, style: pw.TextStyle(color: PdfColors.white, fontSize: 9.5, fontWeight: pw.FontWeight.bold, letterSpacing: 1)),
           pw.Spacer(),
           pw.Text(fmtInt(qte), style: pw.TextStyle(color: const PdfColor.fromInt(0xFFE9C46A), fontSize: 15, fontWeight: pw.FontWeight.bold)),
         ]),
       ),
       pw.SizedBox(height: 10),
-      pw.Text('Marchandise reçue en bon état, conforme en nombre, couleurs et tailles au présent bon.', style: const pw.TextStyle(fontSize: 9, color: _grey)),
+      pw.Text('Marchandise reçue en bon état, conforme en nombre, couleurs et tailles au présent bon.'.tr, style: const pw.TextStyle(fontSize: 9, color: _grey)),
       pw.SizedBox(height: 22),
-      _signatures(['Expéditeur', 'Réceptionnaire (nom, date, signature)']),
+      _signatures(['Expéditeur'.tr, 'Réceptionnaire (nom, date, signature)']),
     ],
   ));
   return doc.save();
@@ -562,10 +637,10 @@ Future<Uint8List> buildReleveClient({
   required List<Versement> versements,
   List<(DateTime, String, double)> avoirs = const [],
 }) async {
-  final doc = await _nouveau(atelier, 'Relevé ${client.nom}');
+  final doc = await _nouveau(atelier, 'Relevé {0}'.trf([client.nom]));
   final ops = <(DateTime, String, double, double)>[
-    for (final v in ventes.where((v) => !v.annulee)) (v.date, 'Facture ${v.numero}', v.totalTtc, 0),
-    for (final x in versements) (x.date, 'Versement (${x.modeTexte})${x.note != null ? ' — ${x.note}' : ''}', 0, x.montant),
+    for (final v in ventes.where((v) => !v.annulee)) (v.date, 'Facture {0}'.trf([v.numero]), v.totalTtc, 0),
+    for (final x in versements) (x.date, 'Versement ({0}){1}'.trf([x.modeTexte, x.note != null ? ' — ${x.note}' : '']), 0, x.montant),
     for (final a in avoirs) (a.$1, a.$2, 0, a.$3),
   ]..sort((a, b) => a.$1.compareTo(b.$1));
   var solde = 0.0;
@@ -575,19 +650,19 @@ Future<Uint8List> buildReleveClient({
     rows.add([fmtDate(o.$1), o.$2, o.$3 > 0 ? fmtDA(o.$3) : '', o.$4 > 0 ? fmtDA(o.$4) : '', fmtDA(solde)]);
   }
   final infos = [
-    ['Date', fmtDate(DateTime.now())],
-    ['Opérations', '${ops.length}'],
+    ['Date'.tr, fmtDate(DateTime.now())],
+    ['Opérations'.tr, '${ops.length}'],
   ];
   doc.addPage(pw.MultiPage(
     pageTheme: _page(await _pdfTheme()),
     footer: (ctx) => _footer(ctx, atelier),
     build: (ctx) => [
-      _entete(atelier, 'RELEVÉ DE COMPTE', infos),
+      _entete(atelier, 'RELEVÉ DE COMPTE'.tr, infos),
       pw.SizedBox(height: 18),
-      _parties('Client', client, infos),
+      _parties('Client'.tr, client, infos),
       pw.SizedBox(height: 16),
       _tableau(
-        ['Date', 'Opération', 'Débit', 'Crédit', 'Solde'],
+        ['Date'.tr, 'Opération'.tr, 'Débit'.tr, 'Crédit'.tr, 'Solde'],
         rows,
         widths: const {0: pw.FixedColumnWidth(62), 1: pw.FlexColumnWidth(), 2: pw.FixedColumnWidth(78), 3: pw.FixedColumnWidth(78), 4: pw.FixedColumnWidth(84)},
         droite: {2, 3, 4},
@@ -596,8 +671,8 @@ Future<Uint8List> buildReleveClient({
       pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         pw.Spacer(),
         _totaux(
-          [('Total des achats', client.totalAchats, false), ('Total versé', client.totalVerse, false), if (client.totalAvoirs > 0) ('Avoirs', client.totalAvoirs, false)],
-          net: (client.solde >= 0 ? 'Reste à payer' : 'Crédit client', client.solde.abs()),
+          [('Total des achats'.tr, client.totalAchats, false), ('Total versé'.tr, client.totalVerse, false), if (client.totalAvoirs > 0) ('Avoirs'.tr, client.totalAvoirs, false)],
+          net: (client.solde >= 0 ? 'Reste à payer'.tr : 'Crédit client'.tr, client.solde.abs()),
         ),
       ]),
     ],
@@ -620,7 +695,7 @@ Future<Uint8List> buildDocumentCommercial({
   double? montantLettres,
   String? phraseLettres,
   String? note,
-  List<String> signatures = const ['Le client', 'Cachet et signature'],
+  List<String> signatures = ['Le client'.tr, 'Cachet et signature'],
   bool annule = false,
 }) async {
   final doc = await _nouveau(atelier, titre);
@@ -628,7 +703,7 @@ Future<Uint8List> buildDocumentCommercial({
   final qte = lignes.fold<int>(0, (s, l) => s + l.quantite);
   final net = totaux.where((t) => t.$3).toList();
   final autres = totaux.where((t) => !t.$3).toList();
-  final infosPlus = [...infos, ['Articles', fmtInt(qte)]];
+  final infosPlus = [...infos, ['Articles'.tr, fmtInt(qte)]];
   doc.addPage(pw.MultiPage(
     pageTheme: _page(await _pdfTheme()),
     footer: (ctx) => _footer(ctx, atelier),
@@ -643,7 +718,7 @@ Future<Uint8List> buildDocumentCommercial({
       pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         pw.Expanded(
           child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            if (montantLettres != null) _lettres(phraseLettres ?? 'Arrêté le présent document à la somme de :', montantLettres),
+            if (montantLettres != null) _lettres(phraseLettres ?? 'Arrêté le présent document à la somme de :'.tr, montantLettres),
             if (note != null) ...[pw.SizedBox(height: 8), pw.Text(note, style: const pw.TextStyle(fontSize: 9))],
           ]),
         ),
@@ -663,14 +738,14 @@ enum FormatEtiquette { a4Grand, a4, thermique }
 
 extension FormatEtiquetteX on FormatEtiquette {
   String get label => switch (this) {
-        FormatEtiquette.a4Grand => 'Grand QR : 1 par feuille A4',
-        FormatEtiquette.a4 => 'Feuille A4 (24 étiquettes 70 × 37 mm)',
-        FormatEtiquette.thermique => 'Imprimante d\'étiquettes (50 × 30 mm)',
+        FormatEtiquette.a4Grand => 'Grand QR : 1 par feuille A4'.tr,
+        FormatEtiquette.a4 => 'Feuille A4 (24 étiquettes 70 × 37 mm)'.tr,
+        FormatEtiquette.thermique => 'Imprimante d\'étiquettes (50 × 30 mm)'.tr,
       };
 }
 
 Future<Uint8List> buildEtiquettes(List<(Produit, int)> items, {FormatEtiquette format = FormatEtiquette.a4, bool prix = true}) async {
-  final doc = pw.Document(title: 'Étiquettes', theme: await _pdfTheme());
+  final doc = pw.Document(title: 'Étiquettes'.tr, theme: await _pdfTheme());
   final etiquettes = <Produit>[for (final it in items) for (var i = 0; i < it.$2; i++) it.$1];
   final qr = pw.Barcode.qrCode();
 
@@ -698,6 +773,7 @@ Future<Uint8List> buildEtiquettes(List<(Produit, int)> items, {FormatEtiquette f
   if (format == FormatEtiquette.a4Grand) {
     for (final p in etiquettes) {
       doc.addPage(pw.Page(
+        textDirection: pdfSens,
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
         build: (_) => pw.Column(
@@ -712,7 +788,7 @@ Future<Uint8List> buildEtiquettes(List<(Produit, int)> items, {FormatEtiquette f
             if (p.variante.isNotEmpty) pw.Text(p.variante, textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 20, color: _grey)),
             if (prix && p.prixGros > 0) ...[
               pw.SizedBox(height: 10),
-              pw.Text('Prix de gros : ${fmtDA(p.prixGros)}', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: _ink)),
+              pw.Text('Prix de gros : {0}'.trf([fmtDA(p.prixGros)]), style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: _ink)),
             ],
           ],
         ),
@@ -721,7 +797,7 @@ Future<Uint8List> buildEtiquettes(List<(Produit, int)> items, {FormatEtiquette f
   } else if (format == FormatEtiquette.thermique) {
     const w = 50 * PdfPageFormat.mm, h = 30 * PdfPageFormat.mm;
     for (final p in etiquettes) {
-      doc.addPage(pw.Page(pageFormat: const PdfPageFormat(w, h), margin: pw.EdgeInsets.zero, build: (_) => etiquette(p, w, h)));
+      doc.addPage(pw.Page(textDirection: pdfSens, pageFormat: const PdfPageFormat(w, h), margin: pw.EdgeInsets.zero, build: (_) => etiquette(p, w, h)));
     }
   } else {
     const cols = 3, rows = 8;
@@ -729,6 +805,7 @@ Future<Uint8List> buildEtiquettes(List<(Produit, int)> items, {FormatEtiquette f
     for (var start = 0; start < etiquettes.length; start += cols * rows) {
       final page = etiquettes.skip(start).take(cols * rows).toList();
       doc.addPage(pw.Page(
+        textDirection: pdfSens,
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.symmetric(vertical: 0.5 * PdfPageFormat.mm),
         build: (_) => pw.Wrap(children: [
@@ -741,7 +818,7 @@ Future<Uint8List> buildEtiquettes(List<(Produit, int)> items, {FormatEtiquette f
       ));
     }
   }
-  if (etiquettes.isEmpty) doc.addPage(pw.Page(build: (_) => pw.Text('Aucune étiquette')));
+  if (etiquettes.isEmpty) doc.addPage(pw.Page(textDirection: pdfSens, build: (_) => pw.Text('Aucune étiquette'.tr)));
   return doc.save();
 }
 
@@ -753,16 +830,16 @@ Future<void> partager(Uint8List bytes, String nom) => Printing.sharePdf(bytes: b
 // ============================================================== clôture de paie
 
 String _modePaie(String m) => switch (m) {
-      'points' => 'Payé aux points',
-      'mois' => 'Salaire mensuel',
-      'piece' => 'Payé à la pièce',
+      'points' => 'Payé aux points'.tr,
+      'mois' => 'Salaire mensuel'.tr,
+      'piece' => 'Payé à la pièce'.tr,
       _ => '',
     };
 
 /// État global de la paie du mois + une fiche de paie par ouvrier, dans un seul PDF.
 Future<Uint8List> buildCloturePaie({required Atelier atelier, required DateTime mois, required List<LignePaie> lignes}) async {
   final libMois = fmtMonthYear(mois);
-  final doc = await _nouveau(atelier, 'Paie $libMois');
+  final doc = await _nouveau(atelier, 'Paie {0}'.trf([libMois]));
   final theme = await _pdfTheme();
   double tot(double Function(LignePaie) f) => lignes.fold<double>(0, (s, l) => s + f(l));
 
@@ -770,14 +847,14 @@ Future<Uint8List> buildCloturePaie({required Atelier atelier, required DateTime 
     pageTheme: _page(theme),
     footer: (ctx) => _footer(ctx, atelier),
     build: (ctx) => [
-      _entete(atelier, 'ÉTAT DE PAIE', [
-        ['Mois', libMois],
-        ['Ouvriers', '${lignes.length}'],
-        ['Édité le', fmtDate(DateTime.now())],
+      _entete(atelier, 'ÉTAT DE PAIE'.tr, [
+        ['Mois'.tr, libMois],
+        ['Ouvriers'.tr, '${lignes.length}'],
+        ['Édité le'.tr, fmtDate(DateTime.now())],
       ]),
       pw.SizedBox(height: 18),
       _tableau(
-        ['Ouvrier', 'Report', 'Gains', 'Avances', 'Retenues', 'Payé (mois)', 'Net', 'Réglé', 'Reste'],
+        ['Ouvrier'.tr, 'Report'.tr, 'Gains'.tr, 'Avances'.tr, 'Retenues'.tr, 'Payé (mois)'.tr, 'Net'.tr, 'Réglé'.tr, 'Reste'],
         [
           for (final l in lignes)
             [
@@ -800,20 +877,20 @@ Future<Uint8List> buildCloturePaie({required Atelier atelier, required DateTime 
         pw.Spacer(),
         _totaux(
           [
-            ('Total des gains', tot((l) => l.gains), false),
-            ('Avances', tot((l) => l.avances), false),
-            ('Retenues', tot((l) => l.retenues), false),
-            ('Déjà payé dans le mois', tot((l) => l.paiements), false),
+            ('Total des gains'.tr, tot((l) => l.gains), false),
+            ('Avances'.tr, tot((l) => l.avances), false),
+            ('Retenues'.tr, tot((l) => l.retenues), false),
+            ('Déjà payé dans le mois'.tr, tot((l) => l.paiements), false),
           ],
-          net: ('Net à payer', tot((l) => l.net)),
+          net: ('Net à payer'.tr, tot((l) => l.net)),
           apres: [
-            if (tot((l) => l.paye) > 0) ('Réglé à la clôture', tot((l) => l.paye), _green),
-            ('Reste dû', tot((l) => l.reste), _red),
+            if (tot((l) => l.paye) > 0) ('Réglé à la clôture'.tr, tot((l) => l.paye), _green),
+            ('Reste dû'.tr, tot((l) => l.reste), _red),
           ],
         ),
       ]),
       pw.SizedBox(height: 24),
-      _signatures(['Établi par', 'Visa de la direction']),
+      _signatures(['Établi par'.tr, 'Visa de la direction']),
     ],
   ));
 
@@ -838,51 +915,51 @@ Future<Uint8List> buildCloturePaie({required Atelier atelier, required DateTime 
     doc.addPage(pw.Page(
       pageTheme: _page(theme),
       build: (ctx) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.stretch, children: [
-        _entete(atelier, 'FICHE DE PAIE', [
-          ['Mois', libMois],
-          ['Ouvrier', l.nom],
-          if (l.departement.isNotEmpty) ['Département', l.departement],
-          if (_modePaie(l.mode).isNotEmpty) ['Mode', _modePaie(l.mode)],
+        _entete(atelier, 'FICHE DE PAIE'.tr, [
+          ['Mois'.tr, libMois],
+          ['Ouvrier'.tr, l.nom],
+          if (l.departement.isNotEmpty) ['Département'.tr, l.departement],
+          if (_modePaie(l.mode).isNotEmpty) ['Mode'.tr, _modePaie(l.mode)],
         ]),
         pw.SizedBox(height: 20),
-        bloc('Gains du mois', [
-          if (l.broderie != 0) ligne('Broderie (points)', l.broderie),
-          if (l.pieces != 0) ligne('Travaux à la pièce', l.pieces),
-          if (l.salaires != 0) ligne('Salaire', l.salaires),
-          if (l.primes != 0) ligne('Primes', l.primes),
-          ligne('Total des gains', l.gains, gras: true),
+        bloc('Gains du mois'.tr, [
+          if (l.broderie != 0) ligne('Broderie (points)'.tr, l.broderie),
+          if (l.pieces != 0) ligne('Travaux à la pièce'.tr, l.pieces),
+          if (l.salaires != 0) ligne('Salaire'.tr, l.salaires),
+          if (l.primes != 0) ligne('Primes'.tr, l.primes),
+          ligne('Total des gains'.tr, l.gains, gras: true),
         ]),
         pw.SizedBox(height: 12),
-        bloc('Déductions du mois', [
-          if (l.avances != 0) ligne('Avances', l.avances, signe: '− '),
-          if (l.retenues != 0) ligne('Retenues', l.retenues, signe: '− '),
-          if (l.paiements != 0) ligne('Déjà payé dans le mois', l.paiements, signe: '− '),
-          ligne('Total des déductions', l.deductions, gras: true, signe: '− '),
+        bloc('Déductions du mois'.tr, [
+          if (l.avances != 0) ligne('Avances'.tr, l.avances, signe: '− '),
+          if (l.retenues != 0) ligne('Retenues'.tr, l.retenues, signe: '− '),
+          if (l.paiements != 0) ligne('Déjà payé dans le mois'.tr, l.paiements, signe: '− '),
+          ligne('Total des déductions'.tr, l.deductions, gras: true, signe: '− '),
         ]),
         if (l.anterieur != 0) ...[
           pw.SizedBox(height: 12),
-          bloc('Report', [ligne(l.anterieur > 0 ? 'Reste dû des mois précédents' : 'Avance non couverte des mois précédents', l.anterieur)]),
+          bloc('Report'.tr, [ligne(l.anterieur > 0 ? 'Reste dû des mois précédents'.tr : 'Avance non couverte des mois précédents'.tr, l.anterieur)]),
         ],
         pw.SizedBox(height: 16),
         pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
           pw.Expanded(
             child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-              if (l.net > 0) _lettres('Net à payer :', l.net),
-              if (regle) ...[pw.SizedBox(height: 16), pw.Padding(padding: const pw.EdgeInsets.only(left: 30), child: _tampon('PAYÉE', _green))],
+              if (l.net > 0) _lettres('Net à payer :'.tr, l.net),
+              if (regle) ...[pw.SizedBox(height: 16), pw.Padding(padding: const pw.EdgeInsets.only(left: 30), child: _tampon('PAYÉE'.tr, _green))],
             ]),
           ),
           pw.SizedBox(width: 16),
           _totaux(
             [],
-            net: (l.net >= 0 ? 'Net à payer' : 'Avance à reporter', l.net.abs()),
+            net: (l.net >= 0 ? 'Net à payer'.tr : 'Avance à reporter'.tr, l.net.abs()),
             apres: [
-              if (l.paye > 0) ('Réglé', l.paye, _green),
-              if (l.paye > 0) ('Reste dû', l.reste, l.reste.abs() < 0.5 ? _grey : _red),
+              if (l.paye > 0) ('Réglé'.tr, l.paye, _green),
+              if (l.paye > 0) ('Reste dû'.tr, l.reste, l.reste.abs() < 0.5 ? _grey : _red),
             ],
           ),
         ]),
         pw.Spacer(),
-        _signatures(['Signature de l\'ouvrier', 'L\'employeur']),
+        _signatures(['Signature de l\'ouvrier'.tr, 'L\'employeur']),
         pw.SizedBox(height: 10),
         _footer(ctx, atelier),
       ]),

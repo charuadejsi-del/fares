@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/session.dart';
 import '../theme.dart';
 import '../utils.dart';
+import '../i18n.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -35,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (_signup) {
         final res = await auth.signUp(email: _email.text.trim().toLowerCase(), password: _pass.text);
         if (res.session == null && mounted) {
-          showSnack(context, 'Compte créé. Confirmez votre adresse via l\'email reçu, puis connectez-vous.');
+          showSnack(context, 'Compte créé. Confirmez votre adresse via l\'email reçu, puis connectez-vous.'.tr);
           setState(() => _signup = false);
         }
       } else {
@@ -44,8 +45,8 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         var msg = errorMessage(e);
-        if (msg.contains('Invalid login credentials')) msg = 'Email ou mot de passe incorrect.';
-        if (msg.contains('Email not confirmed')) msg = 'Adresse email pas encore confirmée (voir votre boîte mail).';
+        if (msg.contains('Invalid login credentials')) msg = 'Email ou mot de passe incorrect.'.tr;
+        if (msg.contains('Email not confirmed')) msg = 'Adresse email pas encore confirmée (voir votre boîte mail).'.tr;
         showSnack(context, msg, error: true);
       }
     } finally {
@@ -64,16 +65,16 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Icon(Icons.diamond_rounded, size: grand ? 46 : 36, color: AppColors.ink),
         ),
         SizedBox(height: grand ? 26 : 14),
-        Text('Atelier', style: TextStyle(color: Colors.white, fontSize: grand ? 44 : 30, fontWeight: FontWeight.w900, letterSpacing: -1, height: 1)),
-        Text('Broderie · Couture · Gros',
+        Text('Atelier'.tr, style: TextStyle(color: Colors.white, fontSize: grand ? 44 : 30, fontWeight: FontWeight.w900, letterSpacing: -1, height: 1)),
+        Text('Broderie · Couture · Gros'.tr,
             style: TextStyle(color: AppColors.gold, fontSize: grand ? 15 : 12.5, fontWeight: FontWeight.w800, letterSpacing: 2.4)),
       ]);
 
-  static const _atouts = [
-    (Icons.blur_on_rounded, 'Production broderie', 'Points, robes et paie des brodeurs'),
-    (Icons.groups_rounded, 'Ouvriers & paie', 'Avances, salaires, clôture du mois'),
-    (Icons.point_of_sale_rounded, 'Stock & ventes en gros', 'Factures, clients, versements'),
-    (Icons.shield_moon_rounded, 'Contrôle total', 'Accès par employé et journal des actions'),
+  static List<(IconData, String, String)> get _atouts => [
+    (Icons.blur_on_rounded, 'Production broderie'.tr, 'Points, robes et paie des brodeurs'.tr),
+    (Icons.groups_rounded, 'Ouvriers & paie'.tr, 'Avances, salaires, clôture du mois'.tr),
+    (Icons.point_of_sale_rounded, 'Stock & ventes en gros'.tr, 'Factures, clients, versements'.tr),
+    (Icons.shield_moon_rounded, 'Contrôle total'.tr, 'Accès par employé et journal des actions'.tr),
   ];
 
   @override
@@ -93,9 +94,9 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Form(
                   key: _form,
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Text(_signup ? 'Nouvel atelier' : 'Bienvenue', style: t.textTheme.headlineSmall),
+                    Text(_signup ? 'Nouvel atelier'.tr : 'Bienvenue'.tr, style: t.textTheme.headlineSmall),
                     const SizedBox(height: 4),
-                    Text(_signup ? 'Créer le compte administrateur de l\'atelier' : 'Connectez-vous pour ouvrir votre atelier',
+                    Text(_signup ? 'Créer le compte administrateur de l\'atelier'.tr : 'Connectez-vous pour ouvrir votre atelier'.tr,
                         style: t.textTheme.bodyMedium?.copyWith(color: t.extension<AppPalette>()?.muted)),
                     const SizedBox(height: 24),
                     TextFormField(
@@ -103,13 +104,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       keyboardType: TextInputType.emailAddress,
                       autofillHints: const [AutofillHints.username],
                       decoration: InputDecoration(
-                        labelText: _signup ? 'Email' : 'Email ou identifiant employé',
+                        labelText: _signup ? 'Email'.tr : 'Email ou identifiant employé'.tr,
                         prefixIcon: const Icon(Icons.person_outline),
                       ),
                       validator: (v) {
                         final s = (v ?? '').trim();
-                        if (_signup) return s.contains('@') ? null : 'Email invalide';
-                        return s.length < 3 ? 'Identifiant trop court' : null;
+                        if (_signup) return s.contains('@') ? null : 'Email invalide'.tr;
+                        return s.length < 3 ? 'Identifiant trop court'.tr : null;
                       },
                     ),
                     const SizedBox(height: 12),
@@ -118,14 +119,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       obscureText: _hide,
                       autofillHints: const [AutofillHints.password],
                       decoration: InputDecoration(
-                        labelText: 'Mot de passe',
+                        labelText: 'Mot de passe'.tr,
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
                           icon: Icon(_hide ? Icons.visibility : Icons.visibility_off),
                           onPressed: () => setState(() => _hide = !_hide),
                         ),
                       ),
-                      validator: (v) => (v == null || v.length < 6) ? '6 caractères minimum' : null,
+                      validator: (v) => (v == null || v.length < 6) ? '6 caractères minimum'.tr : null,
                       onFieldSubmitted: (_) => _submit(),
                     ),
                     const SizedBox(height: 20),
@@ -135,13 +136,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         child: _busy
                             ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                            : Text(_signup ? 'Créer le compte' : 'Se connecter'),
+                            : Text(_signup ? 'Créer le compte'.tr : 'Se connecter'.tr),
                       ),
                     ),
                     const SizedBox(height: 8),
                     TextButton(
                       onPressed: _busy ? null : () => setState(() => _signup = !_signup),
-                      child: Text(_signup ? 'J\'ai déjà un compte' : 'Première utilisation ? Créer un compte'),
+                      child: Text(_signup ? 'J\'ai déjà un compte'.tr : 'Première utilisation ? Créer un compte'.tr),
                     ),
                   ]),
                 ),
@@ -187,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ]),
                   ),
                 const Spacer(),
-                const Text('© Gestion d\'atelier — application native Windows & Android',
+                Text('© Gestion d\'atelier — application native Windows & Android'.tr,
                     style: TextStyle(color: Color(0xFF6B7286), fontSize: 12)),
               ]),
             ),

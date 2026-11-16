@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
 import 'quick_entry_screen.dart';
+import '../i18n.dart';
 
 /// Historique de production, regroupé par jour.
 class ProductionScreen extends StatefulWidget {
@@ -76,7 +77,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
         heroTag: 'fab-hist',
         onPressed: () => openProductionForm(context),
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Nouveau relevé'),
+        label: Text('Nouveau relevé'.tr),
       ),
       body: RefreshIndicator(
         onRefresh: _load,
@@ -106,7 +107,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
             if (_loading) const LinearProgressIndicator(minHeight: 2),
             if (_error != null) ErrorBanner(_error!, onRetry: _load),
             if (!_loading && _rows.isEmpty && _error == null)
-              const EmptyState('Aucune saisie sur cette période.', icon: Icons.history_rounded),
+              EmptyState('Aucune saisie sur cette période.'.tr, icon: Icons.history_rounded),
             for (final d in days) ...[
               Padding(
                 padding: const EdgeInsets.only(top: 18, bottom: 8, left: 4, right: 4),
@@ -119,7 +120,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(color: context.cs.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
                     child: Text(
-                      '${fmtCompact(byDay[d]!.fold<int>(0, (s, p) => s + p.totalPoints))} pts · ${fmtDA(byDay[d]!.fold<double>(0, (s, p) => s + p.montant))}',
+                      '{0} pts · {1}'.trf([fmtCompact(byDay[d]!.fold<int>(0, (s, p) => s + p.totalPoints)), fmtDA(byDay[d]!.fold<double>(0, (s, p) => s + p.montant))]),
                       style: TextStyle(color: context.cs.primary, fontWeight: FontWeight.w700, fontSize: 12),
                     ),
                   ),
@@ -147,20 +148,20 @@ class _ProductionScreenState extends State<ProductionScreen> {
 /// Ouvre le formulaire détaillé (ajout ou modification).
 Future<void> openProductionForm(BuildContext context, [Production? p]) async {
   if (p == null && data.ouvriers.where((o) => o.actif && o.brodeur).isEmpty) {
-    showSnack(context, 'Ajoutez d\'abord un brodeur (mode de paie « Points »).', error: true);
+    showSnack(context, 'Ajoutez d\'abord un brodeur (mode de paie « Points »).'.tr, error: true);
     return;
   }
   final saved = await showDialog<bool>(context: context, builder: (_) => ProductionForm(existing: p));
-  if (saved == true && context.mounted) showSnack(context, p == null ? 'Saisie enregistrée' : 'Saisie modifiée');
+  if (saved == true && context.mounted) showSnack(context, p == null ? 'Saisie enregistrée'.tr : 'Saisie modifiée'.tr);
 }
 
 Future<void> deleteProductionWithConfirm(BuildContext context, Production p) async {
-  final ok = await confirmDialog(context, 'Supprimer la saisie',
-      '${data.ouvrierNom(p.ouvrierId)} — ${data.typeNom(p.typeId)} — ${fmtInt(p.totalPoints)} points (${p.equipe.label}, ${fmtDate(p.dateProd)}) ?');
+  final ok = await confirmDialog(context, 'Supprimer la saisie'.tr,
+      '{0} — {1} — {2} points ({3}, {4}) ?'.trf([data.ouvrierNom(p.ouvrierId), data.typeNom(p.typeId), fmtInt(p.totalPoints), p.equipe.label, fmtDate(p.dateProd)]));
   if (!ok) return;
   try {
     await data.deleteProduction(p.id);
-    if (context.mounted) showSnack(context, 'Saisie supprimée');
+    if (context.mounted) showSnack(context, 'Saisie supprimée'.tr);
   } catch (e) {
     if (context.mounted) showSnack(context, errorMessage(e), error: true);
   }
@@ -223,9 +224,9 @@ class ProductionTile extends StatelessWidget {
           ]),
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert, color: context.pal.muted),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'edit', child: Text('Modifier')),
-              PopupMenuItem(value: 'del', child: Text('Supprimer')),
+            itemBuilder: (_) => [
+              PopupMenuItem(value: 'edit', child: Text('Modifier'.tr)),
+              PopupMenuItem(value: 'del', child: Text('Supprimer'.tr)),
             ],
             onSelected: (v) => v == 'edit' ? openProductionForm(context, p) : deleteProductionWithConfirm(context, p),
           ),
@@ -329,7 +330,7 @@ class _ProductionFormState extends State<ProductionForm> {
     final pts = parseInt(_points.text) ?? 0;
 
     return AlertDialog(
-      title: Text(_ex == null ? 'Nouveau relevé' : 'Modifier le relevé'),
+      title: Text(_ex == null ? 'Nouveau relevé'.tr : 'Modifier le relevé'.tr),
       content: SizedBox(
         width: 480,
         child: Form(
@@ -344,7 +345,7 @@ class _ProductionFormState extends State<ProductionForm> {
                       if (d != null) setState(() => _date = d);
                     },
                     child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.event)),
+                      decoration: InputDecoration(labelText: 'Date'.tr, prefixIcon: Icon(Icons.event)),
                       child: Text(fmtDate(_date)),
                     ),
                   ),
@@ -352,9 +353,9 @@ class _ProductionFormState extends State<ProductionForm> {
                 const SizedBox(width: 10),
                 SegmentedButton<Equipe>(
                   showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: Equipe.jour, icon: Icon(Icons.wb_sunny_rounded), label: Text('Jour')),
-                    ButtonSegment(value: Equipe.nuit, icon: Icon(Icons.nightlight_round), label: Text('Nuit')),
+                  segments: [
+                    ButtonSegment(value: Equipe.jour, icon: Icon(Icons.wb_sunny_rounded), label: Text('Jour'.tr)),
+                    ButtonSegment(value: Equipe.nuit, icon: Icon(Icons.nightlight_round), label: Text('Nuit'.tr)),
                   ],
                   selected: {_equipe},
                   onSelectionChanged: (s) => setState(() => _equipe = s.first),
@@ -364,31 +365,31 @@ class _ProductionFormState extends State<ProductionForm> {
               DropdownButtonFormField<String>(
                 value: _ouvrierId,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Ouvrier', prefixIcon: Icon(Icons.person_outline)),
+                decoration: InputDecoration(labelText: 'Ouvrier'.tr, prefixIcon: Icon(Icons.person_outline)),
                 items: [for (final o in ouvriers) DropdownMenuItem(value: o.id, child: Text(o.nom))],
                 onChanged: (v) => setState(() => _ouvrierId = v),
-                validator: (v) => v == null ? 'Choisissez un ouvrier' : null,
+                validator: (v) => v == null ? 'Choisissez un ouvrier'.tr : null,
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: _typeId,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Type de broderie', prefixIcon: Icon(Icons.gesture_rounded)),
+                decoration: InputDecoration(labelText: 'Type de broderie'.tr, prefixIcon: Icon(Icons.gesture_rounded)),
                 items: [
-                  for (final t in types) DropdownMenuItem(value: t.id, child: Text('${t.nom} — ${fmtDA(t.tarif1000)} / 1000 pts')),
+                  for (final t in types) DropdownMenuItem(value: t.id, child: Text('{0} — {1} / 1000 pts'.trf([t.nom, fmtDA(t.tarif1000)]))),
                 ],
                 onChanged: (v) => setState(() => _typeId = v),
-                validator: (v) => v == null ? 'Choisissez le type' : null,
+                validator: (v) => v == null ? 'Choisissez le type'.tr : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _points,
                 keyboardType: TextInputType.number,
                 inputFormatters: [ThousandsFormatter()],
-                decoration: const InputDecoration(labelText: 'Points du compteur', prefixIcon: Icon(Icons.blur_on_rounded), suffixText: 'pts'),
+                decoration: InputDecoration(labelText: 'Points du compteur'.tr, prefixIcon: Icon(Icons.blur_on_rounded), suffixText: 'pts'),
                 validator: (v) {
                   final n = parseInt(v ?? '');
-                  return (n == null || n <= 0) ? 'Nombre de points supérieur à 0' : null;
+                  return (n == null || n <= 0) ? 'Nombre de points supérieur à 0'.tr : null;
                 },
               ),
               const SizedBox(height: 12),
@@ -396,10 +397,10 @@ class _ProductionFormState extends State<ProductionForm> {
                 DropdownButtonFormField<String?>(
                   value: _machineId,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Machine', prefixIcon: Icon(Icons.precision_manufacturing_outlined)),
+                  decoration: InputDecoration(labelText: 'Machine'.tr, prefixIcon: Icon(Icons.precision_manufacturing_outlined)),
                   items: [
                     const DropdownMenuItem<String?>(value: null, child: Text('—')),
-                    for (final m in machines) DropdownMenuItem<String?>(value: m.id, child: Text('${m.nom} · ${m.nbTetes} têtes')),
+                    for (final m in machines) DropdownMenuItem<String?>(value: m.id, child: Text('{0} · {1} têtes'.trf([m.nom, m.nbTetes]))),
                   ],
                   onChanged: (v) => setState(() => _machineId = v),
                 ),
@@ -408,7 +409,7 @@ class _ProductionFormState extends State<ProductionForm> {
               DropdownButtonFormField<String?>(
                 value: _dessinId,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Dessin (facultatif)', prefixIcon: Icon(Icons.local_florist_outlined)),
+                decoration: InputDecoration(labelText: 'Dessin (facultatif)'.tr, prefixIcon: Icon(Icons.local_florist_outlined)),
                 items: [
                   const DropdownMenuItem<String?>(value: null, child: Text('—')),
                   for (final d in data.dessins.where((d) => d.actif || d.id == _ex?.dessinId))
@@ -421,10 +422,10 @@ class _ProductionFormState extends State<ProductionForm> {
                 controller: _robes,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(labelText: 'Nombre de robes (facultatif)', prefixIcon: Icon(Icons.checkroom_rounded)),
+                decoration: InputDecoration(labelText: 'Nombre de robes (facultatif)'.tr, prefixIcon: Icon(Icons.checkroom_rounded)),
               ),
               const SizedBox(height: 12),
-              TextFormField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque (facultatif)', prefixIcon: Icon(Icons.notes))),
+              TextFormField(controller: _note, decoration: InputDecoration(labelText: 'Remarque (facultatif)'.tr, prefixIcon: Icon(Icons.notes))),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(14),
@@ -432,10 +433,10 @@ class _ProductionFormState extends State<ProductionForm> {
                 child: Column(children: [
                   if (data.ouvrier(_ouvrierId) case final o? when !o.brodeur) ...[
                     Text('${fmtInt(pts)} points', style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
-                    Text('${o.nom} est payé ${o.modePaie == ModePaie.mois ? 'au mois' : 'à la pièce'} : points comptés, sans montant',
+                    Text('{0} est payé {1} : points comptés, sans montant'.trf([o.nom, o.modePaie == ModePaie.mois ? 'au mois'.tr : 'à la pièce'.tr]),
                         textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
                   ] else ...[
-                    Text('${fmtInt(pts)} pts × ${fmtDA(_tarif)} / 1000', style: const TextStyle(color: Colors.white70)),
+                    Text('{0} pts × {1} / 1000'.trf([fmtInt(pts), fmtDA(_tarif)]), style: const TextStyle(color: Colors.white70)),
                     Text(fmtDA(pts * _tarif / 1000),
                         style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
                   ],
@@ -446,10 +447,10 @@ class _ProductionFormState extends State<ProductionForm> {
         ),
       ),
       actions: [
-        TextButton(onPressed: _busy ? null : () => Navigator.pop(context, false), child: const Text('Annuler')),
+        TextButton(onPressed: _busy ? null : () => Navigator.pop(context, false), child: Text('Annuler'.tr)),
         FilledButton(
           onPressed: _busy ? null : _save,
-          child: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Enregistrer'),
+          child: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Text('Enregistrer'.tr),
         ),
       ],
     );

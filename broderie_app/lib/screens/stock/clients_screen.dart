@@ -10,12 +10,13 @@ import '../refs_screens.dart' show FormDialog;
 import '../../data/commerce.dart';
 import 'avoirs_screen.dart';
 import 'ventes_screen.dart';
+import '../../i18n.dart';
 
 Color soldeClientColor(double s) => s > 0.005 ? AppColors.rose : (s < -0.005 ? AppColors.green : const Color(0xFF9AA0B4));
 
 String soldeClientTexte(double s) {
-  if (s.abs() < 0.005) return 'À jour';
-  return s > 0 ? 'Reste ${fmtDA(s)}' : 'Crédit ${fmtDA(-s)}';
+  if (s.abs() < 0.005) return 'À jour'.tr;
+  return s > 0 ? 'Reste {0}'.trf([fmtDA(s)]) : 'Crédit {0}'.trf([fmtDA(-s)]);
 }
 
 class ClientsScreen extends StatefulWidget {
@@ -44,7 +45,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
               heroTag: 'fab-client',
               onPressed: () => ouvrirClientForm(context),
               icon: const Icon(Icons.person_add_alt_1_rounded),
-              label: const Text('Nouveau client'),
+              label: Text('Nouveau client'.tr),
             ),
             body: RefreshIndicator(
               onRefresh: stock.load,
@@ -52,24 +53,24 @@ class _ClientsScreenState extends State<ClientsScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                 children: [
                   AutoGrid(minItemWidth: 190, children: [
-                    StatTile(label: 'Reste à encaisser (clients)', value: fmtDA(stock.totalCreances), icon: Icons.account_balance_wallet_rounded, color: AppColors.rose),
-                    StatTile(label: 'Clients', value: '${stock.clients.length}', icon: Icons.storefront_rounded, color: AppColors.sky),
-                    StatTile(label: 'Clients qui doivent', value: '${stock.clients.where((c) => c.solde > 0.005).length}', icon: Icons.warning_amber_rounded, color: const Color(0xFFF97316)),
+                    StatTile(label: 'Reste à encaisser (clients)'.tr, value: fmtDA(stock.totalCreances), icon: Icons.account_balance_wallet_rounded, color: AppColors.rose),
+                    StatTile(label: 'Clients'.tr, value: '${stock.clients.length}', icon: Icons.storefront_rounded, color: AppColors.sky),
+                    StatTile(label: 'Clients qui doivent'.tr, value: '${stock.clients.where((c) => c.solde > 0.005).length}', icon: Icons.warning_amber_rounded, color: const Color(0xFFF97316)),
                   ]),
                   const SizedBox(height: 14),
                   Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                     SizedBox(
                       width: 300,
                       child: TextField(
-                        decoration: const InputDecoration(hintText: 'Nom, téléphone, wilaya…', prefixIcon: Icon(Icons.search)),
+                        decoration: InputDecoration(hintText: 'Nom, téléphone, wilaya…'.tr, prefixIcon: Icon(Icons.search)),
                         onChanged: (v) => setState(() => _q = v),
                       ),
                     ),
-                    FilterChip(label: const Text('Seulement ceux qui doivent'), selected: _dettes, onSelected: (v) => setState(() => _dettes = v)),
+                    FilterChip(label: Text('Seulement ceux qui doivent'.tr), selected: _dettes, onSelected: (v) => setState(() => _dettes = v)),
                   ]),
                   const SizedBox(height: 14),
                   if (list.isEmpty)
-                    EmptyState(stock.clients.isEmpty ? 'Aucun client.\nAjoutez vos clients de gros.' : 'Aucun résultat.', icon: Icons.storefront_outlined)
+                    EmptyState(stock.clients.isEmpty ? 'Aucun client.\nAjoutez vos clients de gros.'.tr : 'Aucun résultat.'.tr, icon: Icons.storefront_outlined)
                   else
                     AutoGrid(minItemWidth: 320, children: [
                       for (final c in list)
@@ -151,7 +152,7 @@ class _ClientFormState extends State<ClientForm> {
 
   @override
   Widget build(BuildContext context) => FormDialog(
-        title: widget.client == null ? 'Nouveau client' : 'Modifier le client',
+        title: widget.client == null ? 'Nouveau client'.tr : 'Modifier le client'.tr,
         formKey: _form,
         busy: _busy,
         onSave: _save,
@@ -160,18 +161,18 @@ class _ClientFormState extends State<ClientForm> {
             controller: _nom,
             autofocus: widget.client == null,
             textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(labelText: 'Nom / raison sociale', prefixIcon: Icon(Icons.storefront_outlined)),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+            decoration: InputDecoration(labelText: 'Nom / raison sociale'.tr, prefixIcon: Icon(Icons.storefront_outlined)),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
           ),
-          TextFormField(controller: _tel, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Téléphone', prefixIcon: Icon(Icons.phone_outlined))),
-          TextFormField(controller: _adr, decoration: const InputDecoration(labelText: 'Adresse', prefixIcon: Icon(Icons.place_outlined))),
-          TextFormField(controller: _wil, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Wilaya', prefixIcon: Icon(Icons.map_outlined))),
+          TextFormField(controller: _tel, keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'Téléphone'.tr, prefixIcon: Icon(Icons.phone_outlined))),
+          TextFormField(controller: _adr, decoration: InputDecoration(labelText: 'Adresse'.tr, prefixIcon: Icon(Icons.place_outlined))),
+          TextFormField(controller: _wil, textCapitalization: TextCapitalization.words, decoration: InputDecoration(labelText: 'Wilaya'.tr, prefixIcon: Icon(Icons.map_outlined))),
           Row(children: [
-            Expanded(child: TextFormField(controller: _rc, decoration: const InputDecoration(labelText: 'RC'))),
+            Expanded(child: TextFormField(controller: _rc, decoration: InputDecoration(labelText: 'RC'.tr))),
             const SizedBox(width: 10),
-            Expanded(child: TextFormField(controller: _nif, decoration: const InputDecoration(labelText: 'NIF'))),
+            Expanded(child: TextFormField(controller: _nif, decoration: InputDecoration(labelText: 'NIF'.tr))),
           ]),
-          TextFormField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque', prefixIcon: Icon(Icons.notes))),
+          TextFormField(controller: _note, decoration: InputDecoration(labelText: 'Remarque'.tr, prefixIcon: Icon(Icons.notes))),
         ],
       );
 }
@@ -180,7 +181,7 @@ class _ClientFormState extends State<ClientForm> {
 
 Future<void> ouvrirVersementForm(BuildContext context, Client c, {Vente? vente, Versement? existant}) async {
   final ok = await showDialog<bool>(context: context, builder: (_) => VersementForm(client: c, vente: vente, existant: existant));
-  if (ok == true && context.mounted) showSnack(context, 'Versement enregistré');
+  if (ok == true && context.mounted) showSnack(context, 'Versement enregistré'.tr);
 }
 
 class VersementForm extends StatefulWidget {
@@ -248,7 +249,7 @@ class _VersementFormState extends State<VersementForm> {
 
   @override
   Widget build(BuildContext context) => FormDialog(
-        title: 'Versement · ${widget.client.nom}',
+        title: 'Versement · {0}'.trf([widget.client.nom]),
         formKey: _form,
         busy: _busy,
         onSave: _save,
@@ -257,7 +258,7 @@ class _VersementFormState extends State<VersementForm> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: context.pal.surface2, borderRadius: BorderRadius.circular(14)),
             child: Row(children: [
-              const Expanded(child: Text('Solde du client')),
+              Expanded(child: Text('Solde du client'.tr)),
               Text(soldeClientTexte(widget.client.solde), style: TextStyle(fontWeight: FontWeight.w900, color: soldeClientColor(widget.client.solde))),
             ]),
           ),
@@ -266,24 +267,24 @@ class _VersementFormState extends State<VersementForm> {
             autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.green),
-            decoration: const InputDecoration(labelText: 'Montant versé', suffixText: 'DA', prefixIcon: Icon(Icons.payments_rounded)),
+            decoration: InputDecoration(labelText: 'Montant versé'.tr, suffixText: 'DA'.tr, prefixIcon: Icon(Icons.payments_rounded)),
             validator: (v) {
               final n = parseNum(v ?? '');
-              return (n == null || n <= 0) ? 'Montant supérieur à 0' : null;
+              return (n == null || n <= 0) ? 'Montant supérieur à 0'.tr : null;
             },
           ),
           Wrap(spacing: 6, runSpacing: 6, children: [
             for (final m in modesPaiement.entries)
-              ChoiceChip(label: Text(m.value), selected: _mode == m.key, onSelected: (_) => setState(() => _mode = m.key)),
+              ChoiceChip(label: Text(m.value.tr), selected: _mode == m.key, onSelected: (_) => setState(() => _mode = m.key)),
           ]),
           DropdownButtonFormField<String?>(
             value: _impayees.any((v) => v.id == _venteId) ? _venteId : null,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Pour la facture', prefixIcon: Icon(Icons.receipt_long_outlined)),
+            decoration: InputDecoration(labelText: 'Pour la facture'.tr, prefixIcon: Icon(Icons.receipt_long_outlined)),
             items: [
-              const DropdownMenuItem<String?>(value: null, child: Text('Acompte sur le compte (sans facture précise)')),
+              DropdownMenuItem<String?>(value: null, child: Text('Acompte sur le compte (sans facture précise)'.tr)),
               for (final v in _impayees)
-                DropdownMenuItem<String?>(value: v.id, child: Text('${v.numero} · ${fmtDate(v.date)} · reste ${fmtDA(v.reste)}')),
+                DropdownMenuItem<String?>(value: v.id, child: Text('{0} · {1} · reste {2}'.trf([v.numero, fmtDate(v.date), fmtDA(v.reste)]))),
             ],
             onChanged: (v) => setState(() => _venteId = v),
           ),
@@ -292,9 +293,9 @@ class _VersementFormState extends State<VersementForm> {
               final d = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100));
               if (d != null) setState(() => _date = d);
             },
-            child: InputDecorator(decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.event)), child: Text(fmtDate(_date))),
+            child: InputDecorator(decoration: InputDecoration(labelText: 'Date'.tr, prefixIcon: Icon(Icons.event)), child: Text(fmtDate(_date))),
           ),
-          TextFormField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque (n° de chèque…)', prefixIcon: Icon(Icons.notes))),
+          TextFormField(controller: _note, decoration: InputDecoration(labelText: 'Remarque (n° de chèque…)'.tr, prefixIcon: Icon(Icons.notes))),
         ],
       );
 }
@@ -363,7 +364,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
         client: c,
         ventes: _ventes,
         versements: _versements,
-        avoirs: [for (final a in _avoirs) (a.date, 'Avoir ${a.numero} (retour)', a.total)],
+        avoirs: [for (final a in _avoirs) (a.date, 'Avoir {0} (retour)'.trf([a.numero]), a.total)],
       );
       final nom = 'releve_${c.nom.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')}.pdf';
       share ? await partager(bytes, nom) : await imprimer(bytes, nom);
@@ -375,12 +376,12 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
   }
 
   Future<void> _supprimer(Client c) async {
-    if (!await confirmDialog(context, 'Supprimer', 'Supprimer le client ${c.nom} ?')) return;
+    if (!await confirmDialog(context, 'Supprimer'.tr, 'Supprimer le client {0} ?'.trf([c.nom]))) return;
     try {
       await stock.deleteClient(c.id);
       if (mounted) Navigator.pop(context);
     } catch (_) {
-      if (mounted) showSnack(context, 'Impossible : ce client a des ventes ou des versements.', error: true);
+      if (mounted) showSnack(context, 'Impossible : ce client a des ventes ou des versements.'.tr, error: true);
     }
   }
 
@@ -389,15 +390,15 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
         listenable: stock,
         builder: (context, _) {
           final c = stock.client(widget.clientId);
-          if (c == null) return Scaffold(appBar: AppBar(), body: const EmptyState('Client introuvable.'));
+          if (c == null) return Scaffold(appBar: AppBar(), body: EmptyState('Client introuvable.'.tr));
           final grad = c.solde > 0.005
               ? const LinearGradient(colors: [Color(0xFFBE123C), Color(0xFFF43F5E)])
               : const LinearGradient(colors: [Color(0xFF047857), Color(0xFF10B981)]);
           return Scaffold(
             appBar: AppBar(title: Text(c.nom), actions: [
-              IconButton(tooltip: 'Modifier', icon: const Icon(Icons.edit_outlined), onPressed: () => ouvrirClientForm(context, client: c)),
+              IconButton(tooltip: 'Modifier'.tr, icon: const Icon(Icons.edit_outlined), onPressed: () => ouvrirClientForm(context, client: c)),
               PopupMenuButton<String>(
-                itemBuilder: (_) => const [PopupMenuItem(value: 'del', child: Text('Supprimer'))],
+                itemBuilder: (_) => [PopupMenuItem(value: 'del', child: Text('Supprimer'.tr))],
                 onSelected: (_) => _supprimer(c),
               ),
             ]),
@@ -407,33 +408,33 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                 AppCard(
                   gradient: grad,
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    Text(c.solde > 0.005 ? 'Reste à payer' : (c.solde < -0.005 ? 'Crédit du client' : 'Compte à jour'),
+                    Text(c.solde > 0.005 ? 'Reste à payer'.tr : (c.solde < -0.005 ? 'Crédit du client'.tr : 'Compte à jour'.tr),
                         style: const TextStyle(color: Colors.white70)),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(fmtDA(c.solde.abs()), style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w900)),
                     ),
-                    Text('Achats ${fmtDA(c.totalAchats)} · Versé ${fmtDA(c.totalVerse)}${c.totalAvoirs > 0 ? ' · Avoirs ${fmtDA(c.totalAvoirs)}' : ''} · ${c.nbVentes} vente(s)',
+                    Text('Achats {0} · Versé {1}{2} · {3} vente(s)'.trf([fmtDA(c.totalAchats), fmtDA(c.totalVerse), c.totalAvoirs > 0 ? ' · Avoirs {0}'.trf([fmtDA(c.totalAvoirs)]) : '', c.nbVentes]),
                         style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
                     const SizedBox(height: 12),
                     Wrap(spacing: 8, runSpacing: 8, children: [
-                      _btn(Icons.payments_rounded, 'Versement', () => ouvrirVersementForm(context, c)),
-                      _btn(Icons.add_shopping_cart_rounded, 'Nouvelle vente',
+                      _btn(Icons.payments_rounded, 'Versement'.tr, () => ouvrirVersementForm(context, c)),
+                      _btn(Icons.add_shopping_cart_rounded, 'Nouvelle vente'.tr,
                           () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => NouvelleVenteScreen(clientId: c.id)))),
-                      _btn(Icons.undo_rounded, 'Retour', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AvoirEditorScreen(client: c)))),
-                      _btn(Icons.print_rounded, _pdf ? '…' : 'Relevé PDF', _pdf ? null : () => _releve(c)),
-                      _btn(Icons.share_rounded, 'Partager', _pdf ? null : () => _releve(c, share: true)),
+                      _btn(Icons.undo_rounded, 'Retour'.tr, () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AvoirEditorScreen(client: c)))),
+                      _btn(Icons.print_rounded, _pdf ? '…' : 'Relevé PDF'.tr, _pdf ? null : () => _releve(c)),
+                      _btn(Icons.share_rounded, 'Partager'.tr, _pdf ? null : () => _releve(c, share: true)),
                     ]),
                   ]),
                 ),
                 const SizedBox(height: 12),
                 AppCard(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const SectionTitle('Coordonnées'),
+                    SectionTitle('Coordonnées'.tr),
                     if (c.telephone != null) _info(Icons.phone_outlined, c.telephone!),
                     if (c.adresse != null || c.wilaya != null) _info(Icons.place_outlined, [if (c.adresse != null) c.adresse!, if (c.wilaya != null) c.wilaya!].join(', ')),
-                    if (c.rc != null || c.nif != null) _info(Icons.badge_outlined, [if (c.rc != null) 'RC ${c.rc}', if (c.nif != null) 'NIF ${c.nif}'].join(' · ')),
+                    if (c.rc != null || c.nif != null) _info(Icons.badge_outlined, [if (c.rc != null) 'RC {0}'.trf([c.rc]), if (c.nif != null) 'NIF ${c.nif}'].join(' · ')),
                     if (c.note != null) _info(Icons.notes, c.note!),
                     if (c.telephone == null && c.adresse == null && c.wilaya == null) Text('—', style: TextStyle(color: context.pal.muted)),
                   ]),
@@ -442,11 +443,11 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                 AppCard(
                   padding: const EdgeInsets.fromLTRB(16, 18, 8, 8),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    const SectionTitle('Ventes'),
+                    SectionTitle('Ventes'.tr),
                     if (_loading)
                       const LinearProgressIndicator()
                     else if (_ventes.isEmpty)
-                      const EmptyState('Aucune vente.', icon: Icons.receipt_long_outlined)
+                      EmptyState('Aucune vente.'.tr, icon: Icons.receipt_long_outlined)
                     else
                       for (final v in _ventes) VenteTile(v, showClient: false),
                   ]),
@@ -458,7 +459,7 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                   AppCard(
                     padding: const EdgeInsets.fromLTRB(16, 18, 8, 8),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      const SectionTitle('Retours (avoirs)'),
+                      SectionTitle('Retours (avoirs)'.tr),
                       for (final a in _avoirs) AvoirTile(a),
                     ]),
                   ),
@@ -467,9 +468,9 @@ class _ClientDetailScreenState extends State<ClientDetailScreen> {
                 AppCard(
                   padding: const EdgeInsets.fromLTRB(16, 18, 8, 8),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                    const SectionTitle('Versements'),
+                    SectionTitle('Versements'.tr),
                     if (_versements.isEmpty && !_loading)
-                      const EmptyState('Aucun versement.', icon: Icons.payments_outlined)
+                      EmptyState('Aucun versement.'.tr, icon: Icons.payments_outlined)
                     else
                       for (final x in _versements) VersementTile(x, client: c, ventes: _ventes),
                   ]),
@@ -527,21 +528,21 @@ class VersementTile extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${x.modeTexte}${numero != null ? ' · $numero' : ' · acompte'}', style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text('${x.modeTexte}${numero != null ? ' · $numero' : ' · acompte'.tr}', style: const TextStyle(fontWeight: FontWeight.w700)),
             Text('${fmtDate(x.date)}${x.note != null ? ' · ${x.note}' : ''}', style: context.tt.bodySmall?.copyWith(color: context.pal.muted), overflow: TextOverflow.ellipsis),
           ]),
         ),
         Text('+ ${fmtDA(x.montant)}', style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.green)),
         PopupMenuButton<String>(
           icon: Icon(Icons.more_vert, color: context.pal.muted, size: 20),
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'edit', child: Text('Modifier')),
-            PopupMenuItem(value: 'del', child: Text('Supprimer')),
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'edit', child: Text('Modifier'.tr)),
+            PopupMenuItem(value: 'del', child: Text('Supprimer'.tr)),
           ],
           onSelected: (v) async {
             if (v == 'edit') {
               await ouvrirVersementForm(context, client, existant: x);
-            } else if (await confirmDialog(context, 'Supprimer', 'Supprimer ce versement de ${fmtDA(x.montant)} ?')) {
+            } else if (await confirmDialog(context, 'Supprimer'.tr, 'Supprimer ce versement de {0} ?'.trf([fmtDA(x.montant)]))) {
               try {
                 await stock.deleteVersement(x.id);
               } catch (e) {
@@ -570,21 +571,21 @@ class _PrixSpeciaux extends StatelessWidget {
     final v = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Prix spécial · ${prod.reference}'),
+        title: Text('Prix spécial · {0}'.trf([prod.reference])),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('${prod.libelle}\nPrix de gros normal : ${fmtDA(prod.prixGros)}'),
+          Text('{0}\nPrix de gros normal : {1}'.trf([prod.libelle, fmtDA(prod.prixGros)])),
           const SizedBox(height: 12),
           TextField(
             controller: c,
             autofocus: true,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(labelText: 'Prix pour ${client.nom}', suffixText: 'DA'),
+            decoration: InputDecoration(labelText: 'Prix pour {0}'.trf([client.nom]), suffixText: 'DA'.tr),
           ),
         ]),
         actions: [
-          if (actuel != null) TextButton(onPressed: () => Navigator.pop(ctx, ''), child: const Text('Retirer')),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('Enregistrer')),
+          if (actuel != null) TextButton(onPressed: () => Navigator.pop(ctx, ''), child: Text('Retirer'.tr)),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: Text('Enregistrer'.tr)),
         ],
       ),
     );
@@ -601,10 +602,10 @@ class _PrixSpeciaux extends StatelessWidget {
     final prix = stock.prixClients[client.id] ?? {};
     return AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SectionTitle('Prix spéciaux', subtitle: 'Appliqués automatiquement dans ses ventes et commandes',
-            trailing: IconButton.filledTonal(tooltip: 'Ajouter', onPressed: () => _edit(context), icon: const Icon(Icons.add_rounded))),
+        SectionTitle('Prix spéciaux'.tr, subtitle: 'Appliqués automatiquement dans ses ventes et commandes'.tr,
+            trailing: IconButton.filledTonal(tooltip: 'Ajouter'.tr, onPressed: () => _edit(context), icon: const Icon(Icons.add_rounded))),
         if (prix.isEmpty)
-          Text('Aucun : ce client paie le prix de gros normal.', style: TextStyle(color: context.pal.muted))
+          Text('Aucun : ce client paie le prix de gros normal.'.tr, style: TextStyle(color: context.pal.muted))
         else
           for (final e in prix.entries)
             Builder(builder: (context) {

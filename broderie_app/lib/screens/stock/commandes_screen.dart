@@ -11,6 +11,7 @@ import 'clients_screen.dart';
 import 'modeles_screen.dart' show choisirArticles;
 import 'scan_screen.dart';
 import 'ventes_screen.dart';
+import '../../i18n.dart';
 
 Color commandeColor(Commande c) {
   if (c.venteId != null) return AppColors.green;
@@ -95,43 +96,43 @@ class _CommandesScreenState extends State<CommandesScreen> {
           foregroundColor: Colors.black,
           onPressed: () => _nouveau(true),
           icon: const Icon(Icons.request_quote_rounded),
-          label: const Text('Nouveau devis'),
+          label: Text('Nouveau devis'.tr),
         ),
         const SizedBox(height: 10),
         FloatingActionButton.extended(
           heroTag: 'fab-cmd',
           onPressed: () => _nouveau(false),
           icon: const Icon(Icons.assignment_add),
-          label: const Text('Nouvelle commande'),
+          label: Text('Nouvelle commande'.tr),
         ),
       ]),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 160), children: [
           AutoGrid(minItemWidth: 165, children: [
-            StatTile(label: 'Commandes en cours', value: '${cmdOuvertes.length}', icon: Icons.assignment_rounded, color: AppColors.sky,
+            StatTile(label: 'Commandes en cours'.tr, value: '${cmdOuvertes.length}', icon: Icons.assignment_rounded, color: AppColors.sky,
                 sub: fmtDA(cmdOuvertes.fold<double>(0, (s, c) => s + c.total))),
-            StatTile(label: 'Pièces réservées', value: fmtInt(stock.totalReserve), icon: Icons.lock_clock_rounded, color: AppColors.violet),
-            StatTile(label: 'Devis en attente', value: '${devisOuverts.length}', icon: Icons.request_quote_rounded, color: AppColors.gold),
-            StatTile(label: 'En retard', value: '$retard', icon: Icons.alarm_rounded, color: AppColors.rose),
+            StatTile(label: 'Pièces réservées'.tr, value: fmtInt(stock.totalReserve), icon: Icons.lock_clock_rounded, color: AppColors.violet),
+            StatTile(label: 'Devis en attente'.tr, value: '${devisOuverts.length}', icon: Icons.request_quote_rounded, color: AppColors.gold),
+            StatTile(label: 'En retard'.tr, value: '$retard', icon: Icons.alarm_rounded, color: AppColors.rose),
           ]),
           const SizedBox(height: 14),
           Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
             SegmentedButton<bool?>(
               showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: null, label: Text('Tous')),
-                ButtonSegment(value: false, label: Text('Commandes')),
-                ButtonSegment(value: true, label: Text('Devis')),
+              segments: [
+                ButtonSegment(value: null, label: Text('Tous'.tr)),
+                ButtonSegment(value: false, label: Text('Commandes'.tr)),
+                ButtonSegment(value: true, label: Text('Devis'.tr)),
               ],
               selected: {_devis},
               onSelectionChanged: (s) => setState(() => _devis = s.first),
             ),
-            FilterChip(label: const Text('En cours seulement'), selected: _ouverts, onSelected: (v) => setState(() => _ouverts = v)),
+            FilterChip(label: Text('En cours seulement'.tr), selected: _ouverts, onSelected: (v) => setState(() => _ouverts = v)),
             SizedBox(
               width: 260,
               child: TextField(
-                decoration: const InputDecoration(hintText: 'N° ou client', prefixIcon: Icon(Icons.search)),
+                decoration: InputDecoration(hintText: 'N° ou client'.tr, prefixIcon: Icon(Icons.search)),
                 onChanged: (v) => setState(() => _q = v),
               ),
             ),
@@ -140,7 +141,7 @@ class _CommandesScreenState extends State<CommandesScreen> {
           if (_loading) const LinearProgressIndicator(minHeight: 2),
           if (_error != null) ErrorBanner(_error!, onRetry: _load),
           if (!_loading && list.isEmpty)
-            const EmptyState('Aucun devis ni commande.\nCréez un devis pour un client, puis transformez-le en commande ou en vente.',
+            EmptyState('Aucun devis ni commande.\nCréez un devis pour un client, puis transformez-le en commande ou en vente.'.tr,
                 icon: Icons.assignment_outlined),
           if (list.isNotEmpty)
             AppCard(
@@ -180,11 +181,11 @@ class _CommandeTile extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${c.numero} · ${c.clientNom ?? 'Sans client'}', style: const TextStyle(fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis),
+              Text('${c.numero} · ${c.clientNom ?? 'Sans client'.tr}', style: const TextStyle(fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis),
               Text(
                 [
                   fmtDate(c.date),
-                  '${fmtInt(c.nbArticles)} pièces',
+                  '{0} pièces'.trf([fmtInt(c.nbArticles)]),
                   c.statutTexte,
                   if (c.echeance != null && c.modifiable) '${c.devis ? 'valable' : 'livraison'} ${fmtDate(c.echeance!)}',
                 ].join(' · '),
@@ -253,11 +254,11 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
 
   Future<void> _save() async {
     if (_panier.isEmpty) {
-      showSnack(context, 'Ajoutez au moins un article', error: true);
+      showSnack(context, 'Ajoutez au moins un article'.tr, error: true);
       return;
     }
     if (!widget.devis && _clientId == null) {
-      showSnack(context, 'Choisissez le client de la commande', error: true);
+      showSnack(context, 'Choisissez le client de la commande'.tr, error: true);
       return;
     }
     setState(() => _busy = true);
@@ -293,7 +294,7 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
   @override
   Widget build(BuildContext context) {
     final clients = stock.clients.where((c) => c.actif || c.id == _clientId).toList()..sort((a, b) => a.nom.toLowerCase().compareTo(b.nom.toLowerCase()));
-    final titre = widget.existant != null ? 'Modifier ${widget.existant!.numero}' : (widget.devis ? 'Nouveau devis' : 'Nouvelle commande');
+    final titre = widget.existant != null ? 'Modifier {0}'.trf([widget.existant!.numero]) : (widget.devis ? 'Nouveau devis'.tr : 'Nouvelle commande'.tr);
     return Scaffold(
       appBar: AppBar(title: Text(titre)),
       body: ListView(padding: const EdgeInsets.all(16), children: [
@@ -302,9 +303,9 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
             DropdownButtonFormField<String?>(
               value: _clientId,
               isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Client', prefixIcon: Icon(Icons.storefront_outlined)),
+              decoration: InputDecoration(labelText: 'Client'.tr, prefixIcon: Icon(Icons.storefront_outlined)),
               items: [
-                if (widget.devis) const DropdownMenuItem<String?>(value: null, child: Text('Sans client (prospect)')),
+                if (widget.devis) DropdownMenuItem<String?>(value: null, child: Text('Sans client (prospect)'.tr)),
                 for (final c in clients) DropdownMenuItem<String?>(value: c.id, child: Text(c.nom, overflow: TextOverflow.ellipsis)),
               ],
               onChanged: (v) => setState(() {
@@ -322,7 +323,7 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
                   if (id != null) setState(() => _clientId = id);
                 },
                 icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-                label: const Text('Nouveau client'),
+                label: Text('Nouveau client'.tr),
               ),
             ),
             Row(children: [
@@ -332,7 +333,7 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
                     final d = await _pick(_date);
                     if (d != null) setState(() => _date = d);
                   },
-                  child: InputDecorator(decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.event)), child: Text(fmtDate(_date))),
+                  child: InputDecorator(decoration: InputDecoration(labelText: 'Date'.tr, prefixIcon: Icon(Icons.event)), child: Text(fmtDate(_date))),
                 ),
               ),
               const SizedBox(width: 10),
@@ -344,7 +345,7 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
                   },
                   child: InputDecorator(
                     decoration: InputDecoration(
-                      labelText: widget.devis ? 'Valable jusqu\'au' : 'Livraison prévue',
+                      labelText: widget.devis ? 'Valable jusqu\'au'.tr : 'Livraison prévue'.tr,
                       prefixIcon: const Icon(Icons.event_available_outlined),
                     ),
                     child: Text(_echeance == null ? '—' : fmtDate(_echeance!)),
@@ -358,16 +359,16 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
         AppCard(
           padding: const EdgeInsets.fromLTRB(16, 16, 10, 10),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            SectionTitle('Articles', trailing: Wrap(spacing: 6, children: [
+            SectionTitle('Articles'.tr, trailing: Wrap(spacing: 6, children: [
               FilledButton.tonalIcon(
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => ScanScreen(
-                    titre: 'Scanner les articles',
-                    aide: 'Chaque scan ajoute 1 pièce',
+                    titre: 'Scanner les articles'.tr,
+                    aide: 'Chaque scan ajoute 1 pièce'.tr,
                     onCode: (ctx, code) async {
                       final p = stock.parReference(code);
                       if (p == null) {
-                        showSnack(ctx, 'Référence inconnue : $code', error: true);
+                        showSnack(ctx, 'Référence inconnue : {0}'.trf([code]), error: true);
                       } else {
                         _ajouter(p);
                         showSnack(ctx, '+1 ${p.reference}');
@@ -377,7 +378,7 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
                   ),
                 )),
                 icon: const Icon(Icons.qr_code_scanner_rounded),
-                label: const Text('Scanner'),
+                label: Text('Scanner'.tr),
               ),
               OutlinedButton.icon(
                 onPressed: () async {
@@ -388,11 +389,11 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
                   }
                 },
                 icon: const Icon(Icons.search_rounded),
-                label: const Text('Chercher'),
+                label: Text('Chercher'.tr),
               ),
             ])),
             if (_panier.isEmpty)
-              const EmptyState('Ajoutez les articles.', icon: Icons.shopping_cart_outlined)
+              EmptyState('Ajoutez les articles.'.tr, icon: Icons.shopping_cart_outlined)
             else
               for (final l in _panier) LigneEditor(ligne: l, onChanged: () => setState(() {}), onRemove: () => setState(() => _panier.remove(l))),
           ]),
@@ -400,24 +401,24 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
         const SizedBox(height: 12),
         AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(children: [const Expanded(child: Text('Total articles')), Text(fmtDA(_brut), style: const TextStyle(fontWeight: FontWeight.w700))]),
+            Row(children: [Expanded(child: Text('Total articles'.tr)), Text(fmtDA(_brut), style: const TextStyle(fontWeight: FontWeight.w700))]),
             const SizedBox(height: 8),
             TextField(
               controller: _remise,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Remise', suffixText: 'DA', prefixIcon: Icon(Icons.discount_outlined)),
+              decoration: InputDecoration(labelText: 'Remise'.tr, suffixText: 'DA'.tr, prefixIcon: Icon(Icons.discount_outlined)),
             ),
             const SizedBox(height: 8),
-            TextField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque / conditions', prefixIcon: Icon(Icons.notes))),
+            TextField(controller: _note, decoration: InputDecoration(labelText: 'Remarque / conditions'.tr, prefixIcon: Icon(Icons.notes))),
             const Divider(height: 22),
             Row(children: [
-              Expanded(child: Text(widget.devis ? 'TOTAL DU DEVIS (HT)' : 'TOTAL (HT)', style: const TextStyle(fontWeight: FontWeight.w900))),
+              Expanded(child: Text(widget.devis ? 'TOTAL DU DEVIS (HT)'.tr : 'TOTAL (HT)'.tr, style: const TextStyle(fontWeight: FontWeight.w900))),
               Text(fmtDA(_total), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: context.cs.primary)),
             ]),
             if (!widget.devis)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: Text('Les articles seront réservés dans le stock jusqu\'à la livraison.',
+                child: Text('Les articles seront réservés dans le stock jusqu\'à la livraison.'.tr,
                     style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
               ),
             const SizedBox(height: 12),
@@ -428,7 +429,7 @@ class _CommandeEditorScreenState extends State<CommandeEditorScreen> {
                 icon: _busy
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.check_rounded),
-                label: Text(widget.existant != null ? 'Enregistrer' : (widget.devis ? 'Créer le devis' : 'Créer la commande')),
+                label: Text(widget.existant != null ? 'Enregistrer'.tr : (widget.devis ? 'Créer le devis'.tr : 'Créer la commande'.tr)),
               ),
             ),
           ]),
@@ -494,32 +495,32 @@ class _CommandeDetailScreenState extends State<CommandeDetailScreen> {
     try {
       final bytes = await buildDocumentCommercial(
         atelier: session.atelier!,
-        titre: c.devis ? 'DEVIS' : 'BON DE COMMANDE',
+        titre: c.devis ? 'DEVIS'.tr : 'BON DE COMMANDE'.tr,
         infos: [
-          ['N°', c.numero],
-          ['Date', fmtDate(c.date)],
-          if (c.echeance != null) [c.devis ? 'Valable jusqu\'au' : 'Livraison', fmtDate(c.echeance!)],
+          ['N°'.tr, c.numero],
+          ['Date'.tr, fmtDate(c.date)],
+          if (c.echeance != null) [c.devis ? 'Valable jusqu\'au'.tr : 'Livraison'.tr, fmtDate(c.echeance!)],
         ],
-        titreClient: 'Client',
+        titreClient: 'Client'.tr,
         client: stock.client(c.clientId),
         lignes: [
           for (final l in _lignes)
             (
               reference: stock.produit(l.produitId)?.reference ?? '',
-              designation: stock.produit(l.produitId)?.libelle ?? '(produit supprimé)',
+              designation: stock.produit(l.produitId)?.libelle ?? '(produit supprimé)'.tr,
               quantite: l.quantite,
               prix: l.prixUnitaire,
               montant: l.montant,
             ),
         ],
         totaux: [
-          if (c.remise > 0) ...[('Total articles', c.totalBrut, false), ('Remise', -c.remise, false)],
-          (c.devis ? 'TOTAL DU DEVIS' : 'TOTAL DE LA COMMANDE', c.total, true),
+          if (c.remise > 0) ...[('Total articles'.tr, c.totalBrut, false), ('Remise'.tr, -c.remise, false)],
+          (c.devis ? 'TOTAL DU DEVIS'.tr : 'TOTAL DE LA COMMANDE'.tr, c.total, true),
         ],
         montantLettres: c.total,
-        phraseLettres: c.devis ? 'Arrêté le présent devis à la somme de :' : 'Arrêté le présent bon de commande à la somme de :',
+        phraseLettres: c.devis ? 'Arrêté le présent devis à la somme de :'.tr : 'Arrêté le présent bon de commande à la somme de :'.tr,
         note: c.note,
-        signatures: c.devis ? ['Bon pour accord (client)', 'Cachet et signature'] : ['Le client', 'Cachet et signature'],
+        signatures: c.devis ? ['Bon pour accord (client)'.tr, 'Cachet et signature'] : ['Le client'.tr, 'Cachet et signature'],
         annule: c.statut == StatutDoc.annulee || c.statut == StatutDoc.refusee,
       );
       final nom = '${c.numero}.pdf';
@@ -534,7 +535,7 @@ class _CommandeDetailScreenState extends State<CommandeDetailScreen> {
   Future<void> _facturer() async {
     final c = _c!;
     if (c.clientId == null) {
-      showSnack(context, 'Choisissez d\'abord un client (Modifier)', error: true);
+      showSnack(context, 'Choisissez d\'abord un client (Modifier)'.tr, error: true);
       return;
     }
     final verse = TextEditingController();
@@ -543,28 +544,28 @@ class _CommandeDetailScreenState extends State<CommandeDetailScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setD) => AlertDialog(
-          title: Text(c.devis ? 'Facturer le devis' : 'Livrer et facturer'),
+          title: Text(c.devis ? 'Facturer le devis'.tr : 'Livrer et facturer'.tr),
           content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('Une facture et un bon de livraison seront créés, et le stock sera déduit.\nTotal : ${fmtDA(c.total)}${(session.atelier?.tva ?? 0) > 0 ? ' HT (+ TVA)' : ''}'),
+            Text('Une facture et un bon de livraison seront créés, et le stock sera déduit.\nTotal : {0}{1}'.trf([fmtDA(c.total), (session.atelier?.tva ?? 0) > 0 ? ' HT (+ TVA)'.tr : ''])),
             const SizedBox(height: 12),
             TextField(
               controller: verse,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                labelText: 'Versement maintenant',
-                suffixText: 'DA',
-                suffixIcon: TextButton(onPressed: () => verse.text = c.total.toStringAsFixed(0), child: const Text('Tout')),
+                labelText: 'Versement maintenant'.tr,
+                suffixText: 'DA'.tr,
+                suffixIcon: TextButton(onPressed: () => verse.text = c.total.toStringAsFixed(0), child: Text('Tout'.tr)),
               ),
             ),
             const SizedBox(height: 8),
             Wrap(spacing: 6, runSpacing: 6, children: [
               for (final m in modesPaiement.entries)
-                ChoiceChip(label: Text(m.value), selected: mode == m.key, onSelected: (_) => setD(() => mode = m.key)),
+                ChoiceChip(label: Text(m.value.tr), selected: mode == m.key, onSelected: (_) => setD(() => mode = m.key)),
             ]),
           ]),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Facturer')),
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Facturer'.tr)),
           ],
         ),
       ),
@@ -578,7 +579,7 @@ class _CommandeDetailScreenState extends State<CommandeDetailScreen> {
       } catch (e) {
         final m = errorMessage(e);
         if (!m.contains('Stock insuffisant') || !mounted) rethrow;
-        final force = await confirmDialog(context, 'Stock insuffisant', '$m\n\nFacturer quand même ? (le stock deviendra négatif)', action: 'Facturer quand même');
+        final force = await confirmDialog(context, 'Stock insuffisant'.tr, '{0}\n\nFacturer quand même ? (le stock deviendra négatif)'.trf([m]), action: 'Facturer quand même'.tr);
         if (!force) {
           setState(() => _busy = false);
           return;
@@ -611,30 +612,30 @@ class _CommandeDetailScreenState extends State<CommandeDetailScreen> {
   Widget build(BuildContext context) {
     final c = _c;
     if (c == null) {
-      return Scaffold(appBar: AppBar(), body: _loading ? const Center(child: CircularProgressIndicator()) : EmptyState(_error ?? 'Introuvable.'));
+      return Scaffold(appBar: AppBar(), body: _loading ? const Center(child: CircularProgressIndicator()) : EmptyState(_error ?? 'Introuvable.'.tr));
     }
     final col = commandeColor(c);
     return Scaffold(
       appBar: AppBar(title: Text(c.numero), actions: [
         if (c.modifiable)
           IconButton(
-            tooltip: 'Modifier',
+            tooltip: 'Modifier'.tr,
             icon: const Icon(Icons.edit_outlined),
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
                 builder: (_) => CommandeEditorScreen(devis: c.devis, existant: c, lignesExistantes: _lignes))),
           ),
         PopupMenuButton<String>(
           itemBuilder: (_) => [
-            if (c.modifiable) PopupMenuItem(value: 'annuler', child: Text(c.devis ? 'Refuser le devis' : 'Annuler la commande')),
-            if (c.venteId == null) const PopupMenuItem(value: 'suppr', child: Text('Supprimer')),
+            if (c.modifiable) PopupMenuItem(value: 'annuler', child: Text(c.devis ? 'Refuser le devis'.tr : 'Annuler la commande'.tr)),
+            if (c.venteId == null) PopupMenuItem(value: 'suppr', child: Text('Supprimer'.tr)),
           ],
           onSelected: (v) async {
             if (v == 'annuler') {
-              if (await confirmDialog(context, c.devis ? 'Refuser' : 'Annuler', '${c.numero} : confirmer ?', action: 'Confirmer')) {
-                await _action(() => commerce.statutCommande(c.id, c.devis ? StatutDoc.refusee : StatutDoc.annulee), 'Mis à jour');
+              if (await confirmDialog(context, c.devis ? 'Refuser'.tr : 'Annuler'.tr, '{0} : confirmer ?'.trf([c.numero]), action: 'Confirmer'.tr)) {
+                await _action(() => commerce.statutCommande(c.id, c.devis ? StatutDoc.refusee : StatutDoc.annulee), 'Mis à jour'.tr);
               }
             } else if (v == 'suppr') {
-              if (await confirmDialog(context, 'Supprimer', 'Supprimer définitivement ${c.numero} ?')) {
+              if (await confirmDialog(context, 'Supprimer'.tr, 'Supprimer définitivement {0} ?'.trf([c.numero]))) {
                 try {
                   await commerce.supprimerCommande(c.id);
                   if (context.mounted) Navigator.pop(context);
@@ -653,10 +654,10 @@ class _CommandeDetailScreenState extends State<CommandeDetailScreen> {
             Row(children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(c.devis ? 'Devis ${c.numero}' : 'Commande ${c.numero}', style: TextStyle(color: c.modifiable ? Colors.white70 : null)),
-                  Text(c.clientNom ?? 'Sans client', style: TextStyle(color: c.modifiable ? Colors.white : null, fontSize: 20, fontWeight: FontWeight.w900)),
+                  Text(c.devis ? 'Devis {0}'.trf([c.numero]) : 'Commande {0}'.trf([c.numero]), style: TextStyle(color: c.modifiable ? Colors.white70 : null)),
+                  Text(c.clientNom ?? 'Sans client'.tr, style: TextStyle(color: c.modifiable ? Colors.white : null, fontSize: 20, fontWeight: FontWeight.w900)),
                   Text(
-                    '${fmtDate(c.date)}${c.echeance != null ? ' · ${c.devis ? 'valable jusqu\'au' : 'livraison'} ${fmtDate(c.echeance!)}' : ''}',
+                    '${fmtDate(c.date)}${c.echeance != null ? ' · ${c.devis ? 'valable jusqu\'au'.tr : 'livraison'} ${fmtDate(c.echeance!)}' : ''}',
                     style: TextStyle(color: c.modifiable ? Colors.white70 : null),
                   ),
                 ]),
@@ -675,14 +676,14 @@ class _CommandeDetailScreenState extends State<CommandeDetailScreen> {
                 style: c.modifiable ? FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.violetDeep) : null,
                 onPressed: _busy ? null : () => _pdf(),
                 icon: const Icon(Icons.picture_as_pdf_rounded),
-                label: Text(c.devis ? 'Devis PDF' : 'Bon de commande PDF'),
+                label: Text(c.devis ? 'Devis PDF'.tr : 'Bon de commande PDF'.tr),
               ),
-              IconButton.filledTonal(tooltip: 'Partager', onPressed: _busy ? null : () => _pdf(share: true), icon: const Icon(Icons.share_rounded)),
+              IconButton.filledTonal(tooltip: 'Partager'.tr, onPressed: _busy ? null : () => _pdf(share: true), icon: const Icon(Icons.share_rounded)),
               if (c.venteId != null)
                 FilledButton.tonalIcon(
                   onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => VenteDetailScreen(venteId: c.venteId!))),
                   icon: const Icon(Icons.receipt_long_rounded),
-                  label: const Text('Voir la facture'),
+                  label: Text('Voir la facture'.tr),
                 ),
             ]),
           ]),
@@ -691,7 +692,7 @@ class _CommandeDetailScreenState extends State<CommandeDetailScreen> {
           const SizedBox(height: 12),
           AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const SectionTitle('Étapes suivantes'),
+              SectionTitle('Étapes suivantes'.tr),
               Wrap(spacing: 10, runSpacing: 10, children: [
                 if (c.devis)
                   FilledButton.icon(
@@ -702,27 +703,27 @@ class _CommandeDetailScreenState extends State<CommandeDetailScreen> {
                               if (mounted) {
                                 Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => CommandeDetailScreen(commandeId: id)));
                               }
-                            }, 'Commande créée, articles réservés'),
+                            }, 'Commande créée, articles réservés'.tr),
                     icon: const Icon(Icons.assignment_turned_in_rounded),
-                    label: const Text('Accepté → commande'),
+                    label: Text('Accepté → commande'.tr),
                   ),
                 if (!c.devis && c.statut == StatutDoc.enCours)
                   FilledButton.tonalIcon(
-                    onPressed: _busy ? null : () => _action(() => commerce.statutCommande(c.id, StatutDoc.prete), 'Commande prête'),
+                    onPressed: _busy ? null : () => _action(() => commerce.statutCommande(c.id, StatutDoc.prete), 'Commande prête'.tr),
                     icon: const Icon(Icons.inventory_rounded),
-                    label: const Text('Marquer prête'),
+                    label: Text('Marquer prête'.tr),
                   ),
                 FilledButton.icon(
                   style: FilledButton.styleFrom(backgroundColor: AppColors.green),
                   onPressed: _busy ? null : _facturer,
                   icon: const Icon(Icons.local_shipping_rounded),
-                  label: Text(c.devis ? 'Facturer directement' : 'Livrer et facturer'),
+                  label: Text(c.devis ? 'Facturer directement'.tr : 'Livrer et facturer'.tr),
                 ),
               ]),
               if (c.devis && c.clientId == null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text('Ajoutez un client (Modifier) pour transformer ce devis.', style: TextStyle(color: context.pal.muted, fontSize: 12.5)),
+                  child: Text('Ajoutez un client (Modifier) pour transformer ce devis.'.tr, style: TextStyle(color: context.pal.muted, fontSize: 12.5)),
                 ),
             ]),
           ),
@@ -730,7 +731,7 @@ class _CommandeDetailScreenState extends State<CommandeDetailScreen> {
         const SizedBox(height: 12),
         AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            SectionTitle('Articles', subtitle: '${fmtInt(c.nbArticles)} pièces'),
+            SectionTitle('Articles'.tr, subtitle: '{0} pièces'.trf([fmtInt(c.nbArticles)])),
             for (final l in _lignes)
               Builder(builder: (context) {
                 final p = stock.produit(l.produitId);
@@ -741,11 +742,11 @@ class _CommandeDetailScreenState extends State<CommandeDetailScreen> {
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(p?.reference ?? '?', style: TextStyle(fontWeight: FontWeight.w900, color: context.cs.primary)),
-                        Text(p?.libelle ?? '(produit supprimé)', overflow: TextOverflow.ellipsis),
-                        if (manque) Text('Stock : ${fmtInt(p!.stock)} — insuffisant', style: const TextStyle(color: AppColors.rose, fontSize: 12, fontWeight: FontWeight.w700)),
+                        Text(p?.libelle ?? '(produit supprimé)'.tr, overflow: TextOverflow.ellipsis),
+                        if (manque) Text('Stock : {0} — insuffisant'.trf([fmtInt(p!.stock)]), style: const TextStyle(color: AppColors.rose, fontSize: 12, fontWeight: FontWeight.w700)),
                       ]),
                     ),
-                    Text('${fmtInt(l.quantite)} × ${fmtDA(l.prixUnitaire)}', style: TextStyle(color: context.pal.muted)),
+                    Text('{0} × {1}'.trf([fmtInt(l.quantite), fmtDA(l.prixUnitaire)]), style: TextStyle(color: context.pal.muted)),
                     const SizedBox(width: 12),
                     SizedBox(width: 110, child: Text(fmtDA(l.montant), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w800))),
                   ]),
@@ -753,14 +754,14 @@ class _CommandeDetailScreenState extends State<CommandeDetailScreen> {
               }),
             const Divider(height: 22),
             if (c.remise > 0) ...[
-              Row(children: [const Expanded(child: Text('Total articles')), Text(fmtDA(c.totalBrut))]),
-              Row(children: [const Expanded(child: Text('Remise')), Text('−${fmtDA(c.remise)}')]),
+              Row(children: [Expanded(child: Text('Total articles'.tr)), Text(fmtDA(c.totalBrut))]),
+              Row(children: [Expanded(child: Text('Remise'.tr)), Text('−${fmtDA(c.remise)}')]),
             ],
             Row(children: [
-              const Expanded(child: Text('Total', style: TextStyle(fontWeight: FontWeight.w900))),
+              Expanded(child: Text('Total'.tr, style: TextStyle(fontWeight: FontWeight.w900))),
               Text(fmtDA(c.total), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
             ]),
-            if (c.note != null) ...[const SizedBox(height: 10), Text('Remarque : ${c.note}')],
+            if (c.note != null) ...[const SizedBox(height: 10), Text('Remarque : {0}'.trf([c.note]))],
           ]),
         ),
       ]),

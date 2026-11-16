@@ -17,6 +17,8 @@ import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
 import 'refs_screens.dart' show FormDialog;
+import '../i18n.dart';
+import '../pin.dart';
 
 // ======================================================================= vue d'ensemble (admin)
 
@@ -130,8 +132,8 @@ class _VueEnsembleScreenState extends State<VueEnsembleScreen> {
           child: Row(children: [
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(session.atelier?.nom ?? 'Atelier', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-                Text('Bonjour ${session.membre?.nom ?? ''} · vue d\'ensemble de l\'atelier', style: const TextStyle(color: Colors.white70)),
+                Text(session.atelier?.nom ?? 'Atelier'.tr, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+                Text('Bonjour {0} · vue d\'ensemble de l\'atelier'.trf([session.membre?.nom ?? '']), style: const TextStyle(color: Colors.white70)),
               ]),
             ),
             const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 40),
@@ -154,34 +156,34 @@ class _VueEnsembleScreenState extends State<VueEnsembleScreen> {
         if (_error != null) ErrorBanner(_error!, onRetry: _load),
         const SizedBox(height: 6),
         AutoGrid(minItemWidth: 170, children: [
-          StatTile(label: 'Ventes (CA)', value: fmtDA(ca), icon: Icons.trending_up_rounded, color: AppColors.violet),
-          StatTile(label: 'Encaissé', value: fmtDA(encaisse), icon: Icons.payments_rounded, color: AppColors.green),
-          StatTile(label: 'Clients doivent', value: fmtDA(stock.totalCreances), icon: Icons.storefront_rounded, color: AppColors.rose),
-          StatTile(label: 'À payer aux ouvriers', value: fmtDA(data.totalResteAPayer), icon: Icons.groups_rounded, color: const Color(0xFFF97316)),
+          StatTile(label: 'Ventes (CA)'.tr, value: fmtDA(ca), icon: Icons.trending_up_rounded, color: AppColors.violet),
+          StatTile(label: 'Encaissé'.tr, value: fmtDA(encaisse), icon: Icons.payments_rounded, color: AppColors.green),
+          StatTile(label: 'Clients doivent'.tr, value: fmtDA(stock.totalCreances), icon: Icons.storefront_rounded, color: AppColors.rose),
+          StatTile(label: 'À payer aux ouvriers'.tr, value: fmtDA(data.totalResteAPayer), icon: Icons.groups_rounded, color: const Color(0xFFF97316)),
         ]),
         const SizedBox(height: 14),
         AutoGrid(minItemWidth: 300, children: [
-          module('Broderie', Icons.blur_on_rounded, AppColors.heroGradient, 1, [
-            ('Points brodés', fmtInt(pts)),
-            ('Relevés', '${_prod.length}'),
-            ('Coût broderie', fmtDA(mtBroderie)),
+          module('Broderie'.tr, Icons.blur_on_rounded, AppColors.heroGradient, 1, [
+            ('Points brodés'.tr, fmtInt(pts)),
+            ('Relevés'.tr, '${_prod.length}'),
+            ('Coût broderie'.tr, fmtDA(mtBroderie)),
           ]),
-          module('Paie & avances', Icons.account_balance_wallet_rounded, const LinearGradient(colors: [Color(0xFF047857), Color(0xFF10B981)]), 2, [
-            ('Avances données', fmtDA(mv(TypeMvt.avance))),
-            ('Paiements faits', fmtDA(mv(TypeMvt.paiement))),
-            ('Pièces + salaires', fmtDA(gainsAutres)),
-            ('Reste à payer (total)', fmtDA(data.totalResteAPayer)),
+          module('Paie & avances'.tr, Icons.account_balance_wallet_rounded, const LinearGradient(colors: [Color(0xFF047857), Color(0xFF10B981)]), 2, [
+            ('Avances données'.tr, fmtDA(mv(TypeMvt.avance))),
+            ('Paiements faits'.tr, fmtDA(mv(TypeMvt.paiement))),
+            ('Pièces + salaires'.tr, fmtDA(gainsAutres)),
+            ('Reste à payer (total)'.tr, fmtDA(data.totalResteAPayer)),
           ]),
-          module('Stock', Icons.inventory_2_rounded, AppColors.goldGradient, 3, [
-            ('Pièces en stock', fmtInt(stock.totalPieces)),
-            ('Valeur du stock', fmtDA(stock.valeurStock)),
-            ('Produits en alerte', '${stock.nbAlertes}'),
+          module('Stock'.tr, Icons.inventory_2_rounded, AppColors.goldGradient, 3, [
+            ('Pièces en stock'.tr, fmtInt(stock.totalPieces)),
+            ('Valeur du stock'.tr, fmtDA(stock.valeurStock)),
+            ('Produits en alerte'.tr, '${stock.nbAlertes}'),
           ]),
-          module('Ventes', Icons.receipt_long_rounded, const LinearGradient(colors: [Color(0xFF0369A1), Color(0xFF38BDF8)]), 3, [
-            ('Ventes', '${_ventes.length}'),
-            ('Pièces vendues', fmtInt(piecesVendues)),
-            ('Chiffre d\'affaires', fmtDA(ca)),
-            ('Créances clients', fmtDA(stock.totalCreances)),
+          module('Ventes'.tr, Icons.receipt_long_rounded, const LinearGradient(colors: [Color(0xFF0369A1), Color(0xFF38BDF8)]), 3, [
+            ('Ventes'.tr, '${_ventes.length}'),
+            ('Pièces vendues'.tr, fmtInt(piecesVendues)),
+            ('Chiffre d\'affaires'.tr, fmtDA(ca)),
+            ('Créances clients'.tr, fmtDA(stock.totalCreances)),
           ]),
         ]),
         const SizedBox(height: 14),
@@ -189,20 +191,20 @@ class _VueEnsembleScreenState extends State<VueEnsembleScreen> {
         const SizedBox(height: 14),
         AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const SectionTitle('Résultat simplifié de la période', subtitle: 'Ventes − coût de la main-d\'œuvre enregistrée'),
-            _ligne(context, 'Chiffre d\'affaires', ca),
-            _ligne(context, '− Main-d\'œuvre (broderie, pièces, salaires, primes)', -cout),
+            SectionTitle('Résultat simplifié de la période'.tr, subtitle: 'Ventes − coût de la main-d\'œuvre enregistrée'.tr),
+            _ligne(context, 'Chiffre d\'affaires'.tr, ca),
+            _ligne(context, '− Main-d\'œuvre (broderie, pièces, salaires, primes)'.tr, -cout),
             const Divider(height: 20),
-            _ligne(context, 'Marge brute', ca - cout, bold: true),
+            _ligne(context, 'Marge brute'.tr, ca - cout, bold: true),
             const SizedBox(height: 6),
-            Text('Indicatif : n\'inclut ni le tissu ni les autres charges.', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+            Text('Indicatif : n\'inclut ni le tissu ni les autres charges.'.tr, style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
           ]),
         ),
         if (stock.nbAlertes > 0) ...[
           const SizedBox(height: 14),
           AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SectionTitle('Stock en alerte', subtitle: '${stock.nbAlertes} produit(s)'),
+              SectionTitle('Stock en alerte'.tr, subtitle: '{0} produit(s)'.trf([stock.nbAlertes])),
               for (final p in stock.produits.where((p) => p.actif && p.enAlerte).take(10))
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
@@ -269,14 +271,28 @@ class _EmployesScreenState extends State<EmployesScreen> {
     if (ok == true) _load();
   }
 
+  Future<void> _reinitialiserPin(Membre m) async {
+    if (!await confirmDialog(context, 'Réinitialiser le code PIN'.tr,
+        '{0} devra créer un nouveau code PIN à sa prochaine ouverture du logiciel.'.trf([m.nom]),
+        action: 'Réinitialiser'.tr)) {
+      return;
+    }
+    try {
+      await verrou.reinitialiser(m.userId);
+      if (mounted) showSnack(context, 'Code PIN réinitialisé'.tr);
+    } catch (e) {
+      if (mounted) showSnack(context, errorMessage(e), error: true);
+    }
+  }
+
   Future<void> _supprimer(Membre m) async {
-    if (!await confirmDialog(context, 'Supprimer le compte',
-        'Supprimer le compte de ${m.nom} ? Il ne pourra plus se connecter. Ses saisies restent enregistrées.')) {
+    if (!await confirmDialog(context, 'Supprimer le compte'.tr,
+        'Supprimer le compte de {0} ? Il ne pourra plus se connecter. Ses saisies restent enregistrées.'.trf([m.nom]))) {
       return;
     }
     try {
       await session.employe({'action': 'supprimer', 'user_id': m.userId});
-      if (mounted) showSnack(context, 'Compte supprimé');
+      if (mounted) showSnack(context, 'Compte supprimé'.tr);
       _load();
     } catch (e) {
       if (mounted) showSnack(context, errorMessage(e), error: true);
@@ -285,12 +301,12 @@ class _EmployesScreenState extends State<EmployesScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Employés et accès')),
+        appBar: AppBar(title: Text('Employés et accès'.tr)),
         floatingActionButton: FloatingActionButton.extended(
           heroTag: 'fab-emp',
           onPressed: () => _form(),
           icon: const Icon(Icons.person_add_alt_1_rounded),
-          label: const Text('Nouvel employé'),
+          label: Text('Nouvel employé'.tr),
         ),
         body: RefreshIndicator(
           onRefresh: _load,
@@ -299,10 +315,8 @@ class _EmployesScreenState extends State<EmployesScreen> {
               child: Row(children: [
                 Icon(Icons.info_outline_rounded, color: context.cs.primary),
                 const SizedBox(width: 12),
-                const Expanded(
-                  child: Text('Comptes de connexion au logiciel (gérant, magasinier, caissier…). '
-                      'Chacun ne voit que les espaces cochés.\n'
-                      'Les ouvriers sans accès (brodeurs, ouvriers au mois) s\'ajoutent dans l\'onglet « Ouvriers ».'),
+                Expanded(
+                  child: Text('Comptes de connexion au logiciel (gérant, magasinier, caissier…). Chacun ne voit que les espaces cochés.\nLes ouvriers sans accès (brodeurs, ouvriers au mois) s\'ajoutent dans l\'onglet « Ouvriers ».'.tr),
                 ),
               ]),
             ),
@@ -324,22 +338,27 @@ class _EmployesScreenState extends State<EmployesScreen> {
                           Flexible(child: Text(m.nom.isEmpty ? m.identifiantCourt : m.nom, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5))),
                           if (m.userId == session.membre?.userId) ...[
                             const SizedBox(width: 6),
-                            Text('(vous)', style: TextStyle(color: context.pal.muted)),
+                            Text('(vous)'.tr, style: TextStyle(color: context.pal.muted)),
                           ],
                         ]),
-                        Text('Identifiant : ${m.identifiantCourt}', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+                        Text('Identifiant : {0}'.trf([m.identifiantCourt]), style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
                         const SizedBox(height: 4),
-                        Text(m.actif ? m.droitsTexte : 'Compte désactivé',
+                        Text(m.actif ? m.droitsTexte : 'Compte désactivé'.tr,
                             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: m.actif ? (m.admin ? AppColors.gold : context.cs.primary) : AppColors.rose)),
                       ]),
                     ),
                     if (m.userId != session.membre?.userId)
                       PopupMenuButton<String>(
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'edit', child: Text('Modifier / mot de passe')),
-                          PopupMenuItem(value: 'del', child: Text('Supprimer le compte')),
+                        itemBuilder: (_) => [
+                          PopupMenuItem(value: 'edit', child: Text('Modifier / mot de passe'.tr)),
+                          PopupMenuItem(value: 'pin', child: Text('Réinitialiser le code PIN'.tr)),
+                          PopupMenuItem(value: 'del', child: Text('Supprimer le compte'.tr)),
                         ],
-                        onSelected: (v) => v == 'edit' ? _form(m) : _supprimer(m),
+                        onSelected: (v) => switch (v) {
+                          'edit' => _form(m),
+                          'pin' => _reinitialiserPin(m),
+                          _ => _supprimer(m),
+                        },
                       ),
                   ]),
                 ),
@@ -383,7 +402,7 @@ class _EmployeFormState extends State<EmployeForm> {
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
     if (!_admin && !_broderie && !_paie && !_stock) {
-      showSnack(context, 'Cochez au moins un espace', error: true);
+      showSnack(context, 'Cochez au moins un espace'.tr, error: true);
       return;
     }
     setState(() => _busy = true);
@@ -413,7 +432,7 @@ class _EmployeFormState extends State<EmployeForm> {
         });
       }
       if (mounted) {
-        showSnack(context, widget.membre == null ? 'Compte créé : ${_id.text.trim().toLowerCase()}' : 'Compte mis à jour');
+        showSnack(context, widget.membre == null ? 'Compte créé : {0}'.trf([_id.text.trim().toLowerCase()]) : 'Compte mis à jour'.tr);
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -435,7 +454,7 @@ class _EmployeFormState extends State<EmployeForm> {
 
   @override
   Widget build(BuildContext context) => FormDialog(
-        title: widget.membre == null ? 'Nouvel employé' : 'Modifier ${widget.membre!.nom}',
+        title: widget.membre == null ? 'Nouvel employé'.tr : 'Modifier {0}'.trf([widget.membre!.nom]),
         formKey: _form,
         busy: _busy,
         onSave: _save,
@@ -443,56 +462,56 @@ class _EmployeFormState extends State<EmployeForm> {
           TextFormField(
             controller: _nom,
             textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(labelText: 'Nom et prénom', prefixIcon: Icon(Icons.badge_outlined)),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+            decoration: InputDecoration(labelText: 'Nom et prénom'.tr, prefixIcon: Icon(Icons.badge_outlined)),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
           ),
           TextFormField(
             controller: _id,
             enabled: widget.membre == null,
-            decoration: const InputDecoration(
-              labelText: 'Identifiant de connexion',
-              helperText: 'ex. karim.stock (lettres, chiffres, point)',
+            decoration: InputDecoration(
+              labelText: 'Identifiant de connexion'.tr,
+              helperText: 'ex. karim.stock (lettres, chiffres, point)'.tr,
               prefixIcon: Icon(Icons.alternate_email_rounded),
             ),
             validator: (v) {
               if (widget.membre != null) return null;
               final s = (v ?? '').trim().toLowerCase();
-              return RegExp(r'^[a-z0-9._@-]{3,60}$').hasMatch(s) ? null : '3 caractères min. : lettres, chiffres, point, tiret';
+              return RegExp(r'^[a-z0-9._@-]{3,60}$').hasMatch(s) ? null : '3 caractères min. : lettres, chiffres, point, tiret'.tr;
             },
           ),
           TextFormField(
             controller: _mdp,
             obscureText: !_voir,
             decoration: InputDecoration(
-              labelText: widget.membre == null ? 'Mot de passe' : 'Nouveau mot de passe (laisser vide pour garder)',
+              labelText: widget.membre == null ? 'Mot de passe'.tr : 'Nouveau mot de passe (laisser vide pour garder)'.tr,
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: IconButton(icon: Icon(_voir ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _voir = !_voir)),
             ),
             validator: (v) {
               final s = v ?? '';
-              if (widget.membre == null && s.length < 6) return '6 caractères minimum';
-              if (widget.membre != null && s.isNotEmpty && s.length < 6) return '6 caractères minimum';
+              if (widget.membre == null && s.length < 6) return '6 caractères minimum'.tr;
+              if (widget.membre != null && s.isNotEmpty && s.length < 6) return '6 caractères minimum'.tr;
               return null;
             },
           ),
           const Divider(),
-          Text('Accès', style: context.tt.titleSmall),
+          Text('Accès'.tr, style: context.tt.titleSmall),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             secondary: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.gold),
-            title: const Text('Administrateur', style: TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: const Text('Voit et contrôle tout, gère les employés'),
+            title: Text('Administrateur'.tr, style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text('Voit et contrôle tout, gère les employés'.tr),
             value: _admin,
             onChanged: _soi ? null : (v) => setState(() => _admin = v),
           ),
-          _espace('Broderie', 'Saisie des points, historique, dessins', Icons.blur_on_rounded, _broderie, (v) => setState(() => _broderie = v)),
-          _espace('Paie & avances', 'Ouvriers, avances, paiements, fiches de paie', Icons.account_balance_wallet_rounded, _paie, (v) => setState(() => _paie = v)),
-          _espace('Stock & ventes', 'Produits, QR, scan, ventes, clients, factures', Icons.inventory_2_rounded, _stock, (v) => setState(() => _stock = v)),
+          _espace('Broderie'.tr, 'Saisie des points, historique, dessins'.tr, Icons.blur_on_rounded, _broderie, (v) => setState(() => _broderie = v)),
+          _espace('Paie & avances'.tr, 'Ouvriers, avances, paiements, fiches de paie'.tr, Icons.account_balance_wallet_rounded, _paie, (v) => setState(() => _paie = v)),
+          _espace('Stock & ventes'.tr, 'Produits, QR, scan, ventes, clients, factures'.tr, Icons.inventory_2_rounded, _stock, (v) => setState(() => _stock = v)),
           if (widget.membre != null && !_soi)
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Compte actif'),
-              subtitle: const Text('Désactivé : il ne peut plus se connecter'),
+              title: Text('Compte actif'.tr),
+              subtitle: Text('Désactivé : il ne peut plus se connecter'.tr),
               value: _actif,
               onChanged: (v) => setState(() => _actif = v),
             ),
@@ -525,7 +544,7 @@ class _SocieteScreenState extends State<SocieteScreen> {
   late final _tva = TextEditingController(text: fmtNum(a.tva));
   late final _ment = TextEditingController(text: a.mentions);
   late final _qrLien = TextEditingController(text: a.qrLien);
-  late final _qrLib = TextEditingController(text: a.qrLibelle ?? 'Suivez-nous sur Facebook');
+  late final _qrLib = TextEditingController(text: a.qrLibelle ?? 'Suivez-nous sur Facebook'.tr);
   late final _vUrl = TextEditingController(text: a.vitrineUrl);
   late final _vSlogan = TextEditingController(text: a.vitrineSlogan);
   late final _wa = TextEditingController(text: a.whatsapp);
@@ -560,7 +579,7 @@ class _SocieteScreenState extends State<SocieteScreen> {
         'vitrine_slogan': _n(_vSlogan),
         'whatsapp': _n(_wa),
       });
-      if (mounted) showSnack(context, 'Informations enregistrées');
+      if (mounted) showSnack(context, 'Informations enregistrées'.tr);
     } catch (e) {
       if (mounted) showSnack(context, errorMessage(e), error: true);
     } finally {
@@ -575,7 +594,7 @@ class _SocieteScreenState extends State<SocieteScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Entreprise (factures)')),
+        appBar: AppBar(title: Text('Entreprise (factures)'.tr)),
         body: Form(
           key: _form,
           child: ListView(padding: const EdgeInsets.all(16), children: [
@@ -583,55 +602,55 @@ class _SocieteScreenState extends State<SocieteScreen> {
             const SizedBox(height: 12),
             AppCard(
               child: Column(children: [
-                const SectionTitle('Identité', subtitle: 'Apparaît en haut des factures et bons de livraison'),
+                SectionTitle('Identité'.tr, subtitle: 'Apparaît en haut des factures et bons de livraison'.tr),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: TextFormField(
                     controller: _nom,
-                    decoration: const InputDecoration(labelText: 'Nom de l\'entreprise', prefixIcon: Icon(Icons.business_rounded)),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+                    decoration: InputDecoration(labelText: 'Nom de l\'entreprise'.tr, prefixIcon: Icon(Icons.business_rounded)),
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
                   ),
                 ),
-                _f(_act, 'Activité', Icons.work_outline),
-                _f(_adr, 'Adresse', Icons.place_outlined),
-                _f(_tel, 'Téléphone', Icons.phone_outlined, k: TextInputType.phone),
-                _f(_mail, 'Email', Icons.mail_outline, k: TextInputType.emailAddress),
+                _f(_act, 'Activité'.tr, Icons.work_outline),
+                _f(_adr, 'Adresse'.tr, Icons.place_outlined),
+                _f(_tel, 'Téléphone'.tr, Icons.phone_outlined, k: TextInputType.phone),
+                _f(_mail, 'Email'.tr, Icons.mail_outline, k: TextInputType.emailAddress),
               ]),
             ),
             const SizedBox(height: 12),
             AppCard(
               child: Column(children: [
-                const SectionTitle('Identifiants fiscaux', subtitle: 'Facultatifs'),
-                _f(_rc, 'Registre de commerce (RC)', Icons.badge_outlined),
-                _f(_nif, 'NIF', Icons.badge_outlined),
-                _f(_nis, 'NIS', Icons.badge_outlined),
-                _f(_art, 'Article d\'imposition (ART)', Icons.badge_outlined),
-                _f(_rib, 'RIB / compte bancaire', Icons.account_balance_outlined),
-                _f(_tva, 'TVA (%)', Icons.percent_rounded, k: const TextInputType.numberWithOptions(decimal: true),
-                    helper: '0 si non assujetti. S\'applique aux nouvelles ventes.'),
-                _f(_ment, 'Mention en bas des documents', Icons.notes, helper: 'ex. Merci pour votre confiance'),
+                SectionTitle('Identifiants fiscaux'.tr, subtitle: 'Facultatifs'.tr),
+                _f(_rc, 'Registre de commerce (RC)'.tr, Icons.badge_outlined),
+                _f(_nif, 'NIF'.tr, Icons.badge_outlined),
+                _f(_nis, 'NIS'.tr, Icons.badge_outlined),
+                _f(_art, 'Article d\'imposition (ART)'.tr, Icons.badge_outlined),
+                _f(_rib, 'RIB / compte bancaire'.tr, Icons.account_balance_outlined),
+                _f(_tva, 'TVA (%)'.tr, Icons.percent_rounded, k: const TextInputType.numberWithOptions(decimal: true),
+                    helper: '0 si non assujetti. S\'applique aux nouvelles ventes.'.tr),
+                _f(_ment, 'Mention en bas des documents'.tr, Icons.notes, helper: 'ex. Merci pour votre confiance'.tr),
               ]),
             ),
             const SizedBox(height: 12),
             AppCard(
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                const SectionTitle('Site vitrine de la collection',
-                    subtitle: 'Vos modèles en stock et leurs photos sont publiés automatiquement. Les clients voient les couleurs et tailles, jamais les quantités.'),
+                SectionTitle('Site vitrine de la collection'.tr,
+                    subtitle: 'Vos modèles en stock et leurs photos sont publiés automatiquement. Les clients voient les couleurs et tailles, jamais les quantités.'.tr),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Site en ligne'),
+                  title: Text('Site en ligne'.tr),
                   value: _vActive,
                   onChanged: (v) => setState(() => _vActive = v),
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Afficher le prix de gros'),
+                  title: Text('Afficher le prix de gros'.tr),
                   value: _vPrix,
                   onChanged: (v) => setState(() => _vPrix = v),
                 ),
-                _f(_vSlogan, 'Phrase d\'accueil du site', Icons.auto_awesome_outlined, helper: 'ex. L\'élégance algérienne, brodée à la main'),
-                _f(_wa, 'Numéro WhatsApp pour les commandes', Icons.chat_outlined, k: TextInputType.phone, helper: 'ex. 213559013738 (indicatif sans +)'),
-                _f(_vUrl, 'Adresse du site (après mise en ligne)', Icons.language_rounded, k: TextInputType.url),
+                _f(_vSlogan, 'Phrase d\'accueil du site'.tr, Icons.auto_awesome_outlined, helper: 'ex. L\'élégance algérienne, brodée à la main'.tr),
+                _f(_wa, 'Numéro WhatsApp pour les commandes'.tr, Icons.chat_outlined, k: TextInputType.phone, helper: 'ex. 213559013738 (indicatif sans +)'.tr),
+                _f(_vUrl, 'Adresse du site (après mise en ligne)'.tr, Icons.language_rounded, k: TextInputType.url),
                 if ((_vUrl.text).trim().startsWith('http'))
                   Row(children: [
                     Container(
@@ -648,15 +667,15 @@ class _SocieteScreenState extends State<SocieteScreen> {
                           OutlinedButton.icon(
                             onPressed: () {
                               Clipboard.setData(ClipboardData(text: _vUrl.text.trim()));
-                              showSnack(context, 'Lien copié');
+                              showSnack(context, 'Lien copié'.tr);
                             },
                             icon: const Icon(Icons.copy_rounded),
-                            label: const Text('Copier le lien'),
+                            label: Text('Copier le lien'.tr),
                           ),
                           OutlinedButton.icon(
                             onPressed: () => setState(() => _qrLien.text = _vUrl.text.trim()),
                             icon: const Icon(Icons.qr_code_2_rounded),
-                            label: const Text('Mettre ce QR sur les factures'),
+                            label: Text('Mettre ce QR sur les factures'.tr),
                           ),
                         ]),
                       ]),
@@ -666,8 +685,8 @@ class _SocieteScreenState extends State<SocieteScreen> {
             ),            const SizedBox(height: 12),
             AppCard(
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                const SectionTitle('QR code sur les documents',
-                    subtitle: 'Collez le lien de votre page Facebook (ou Instagram, site, WhatsApp) : un QR code est ajouté en bas à droite de chaque facture, BL, bon de commande, devis et avoir.'),
+                SectionTitle('QR code sur les documents'.tr,
+                    subtitle: 'Collez le lien de votre page Facebook (ou Instagram, site, WhatsApp) : un QR code est ajouté en bas à droite de chaque facture, BL, bon de commande, devis et avoir.'.tr),
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(
                     child: Column(children: [
@@ -683,7 +702,7 @@ class _SocieteScreenState extends State<SocieteScreen> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(controller: _qrLib, decoration: const InputDecoration(labelText: 'Texte à côté du QR', prefixIcon: Icon(Icons.short_text_rounded))),
+                      TextFormField(controller: _qrLib, decoration: InputDecoration(labelText: 'Texte à côté du QR'.tr, prefixIcon: Icon(Icons.short_text_rounded))),
                     ]),
                   ),
                   if (_qrLien.text.trim().startsWith('http')) ...[
@@ -703,7 +722,7 @@ class _SocieteScreenState extends State<SocieteScreen> {
               child: FilledButton.icon(
                 onPressed: _busy ? null : _save,
                 icon: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.save_rounded),
-                label: const Text('Enregistrer'),
+                label: Text('Enregistrer'.tr),
               ),
             ),
           ]),
@@ -778,7 +797,7 @@ class _AnalyseVentes extends StatelessWidget {
     return Column(children: [
       AppCard(
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          SectionTitle('Ventes des 12 derniers mois', subtitle: 'Chiffre d\'affaires par mois',
+          SectionTitle('Ventes des 12 derniers mois'.tr, subtitle: 'Chiffre d\'affaires par mois'.tr,
               trailing: evol == null
                   ? null
                   : Container(
@@ -787,7 +806,7 @@ class _AnalyseVentes extends StatelessWidget {
                         color: (evol >= 0 ? AppColors.green : AppColors.rose).withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text('${evol >= 0 ? '+' : ''}${evol.toStringAsFixed(0)} % vs mois dernier',
+                      child: Text('{0}{1} % vs mois dernier'.trf([evol >= 0 ? '+' : '', evol.toStringAsFixed(0)]),
                           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: evol >= 0 ? AppColors.green : AppColors.rose)),
                     )),
           SimpleBarChart(labels: [for (final m in mois) fmtShortMonth(m)], values: caMois),
@@ -795,28 +814,28 @@ class _AnalyseVentes extends StatelessWidget {
       ),
       const SizedBox(height: 14),
       AutoGrid(minItemWidth: 300, children: [
-        top('Meilleurs clients (période)', Icons.storefront_rounded, [
+        top('Meilleurs clients (période)'.tr, Icons.storefront_rounded, [
           for (final e in topClients.take(5)) (stock.client(e.key)?.nom ?? '?', fmtDA(e.value), e.value),
         ]),
-        top('Robes les plus vendues (période)', Icons.checkroom_rounded, [
+        top('Robes les plus vendues (période)'.tr, Icons.checkroom_rounded, [
           for (final e in topProduits.take(5))
-            ('${stock.produit(e.key)?.reference ?? '?'} · ${stock.produit(e.key)?.designation ?? ''}', '${fmtInt(e.value.$1)} pcs · ${fmtCompact(e.value.$2)}', e.value.$2),
+            ('${stock.produit(e.key)?.reference ?? '?'} · ${stock.produit(e.key)?.designation ?? ''}', '{0} pcs · {1}'.trf([fmtInt(e.value.$1), fmtCompact(e.value.$2)]), e.value.$2),
         ]),
         AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const SectionTitle('Rentabilité des ventes (période)', subtitle: 'Prix de vente − coût de revient des robes'),
-            Row(children: [const Expanded(child: Text('Chiffre d\'affaires')), Text(fmtDA(caPeriode), style: const TextStyle(fontWeight: FontWeight.w800))]),
+            SectionTitle('Rentabilité des ventes (période)'.tr, subtitle: 'Prix de vente − coût de revient des robes'.tr),
+            Row(children: [Expanded(child: Text('Chiffre d\'affaires'.tr)), Text(fmtDA(caPeriode), style: const TextStyle(fontWeight: FontWeight.w800))]),
             const SizedBox(height: 4),
             Row(children: [
-              const Expanded(child: Text('Marge estimée', style: TextStyle(fontWeight: FontWeight.w900))),
+              Expanded(child: Text('Marge estimée'.tr, style: TextStyle(fontWeight: FontWeight.w900))),
               Text(fmtDA(marge), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: marge >= 0 ? AppColors.green : AppColors.rose)),
             ]),
             if (caPeriode > 0)
-              Text('Taux de marge : ${(marge * 100 / caPeriode).toStringAsFixed(0)} %', style: TextStyle(color: context.pal.muted)),
+              Text('Taux de marge : {0} %'.trf([(marge * 100 / caPeriode).toStringAsFixed(0)]), style: TextStyle(color: context.pal.muted)),
             if (!coutsConnus)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text('Renseignez la composition (matières) et le coût de revient des robes pour une marge exacte.',
+                child: Text('Renseignez la composition (matières) et le coût de revient des robes pour une marge exacte.'.tr,
                     style: context.tt.bodySmall?.copyWith(color: const Color(0xFFF97316))),
               ),
           ]),
@@ -841,10 +860,10 @@ Future<List<Alerte>> calculerAlertes() async {
   final today = dayOnly(DateTime.now());
   if (session.peut(Espace.stock)) {
     for (final p in stock.produits.where((p) => p.actif && p.rupture)) {
-      out.add(Alerte(Icons.remove_shopping_cart_rounded, AppColors.rose, 'Rupture : ${p.reference}', '${p.libelle} · ${fmtInt(p.stock)} en stock'));
+      out.add(Alerte(Icons.remove_shopping_cart_rounded, AppColors.rose, 'Rupture : {0}'.trf([p.reference]), '{0} · {1} en stock'.trf([p.libelle, fmtInt(p.stock)])));
     }
     for (final p in stock.produits.where((p) => p.actif && !p.rupture && p.enAlerte)) {
-      out.add(Alerte(Icons.warning_amber_rounded, const Color(0xFFF97316), 'Stock bas : ${p.reference}', '${p.libelle} · ${fmtInt(p.stock)} restantes (alerte ≤ ${p.seuilAlerte})'));
+      out.add(Alerte(Icons.warning_amber_rounded, const Color(0xFFF97316), 'Stock bas : {0}'.trf([p.reference]), '{0} · {1} restantes (alerte ≤ {2})'.trf([p.libelle, fmtInt(p.stock), p.seuilAlerte])));
     }
     if (!commerce.loaded) {
       try {
@@ -852,26 +871,26 @@ Future<List<Alerte>> calculerAlertes() async {
       } catch (_) {}
     }
     for (final m in commerce.matieres.where((m) => m.actif && m.enAlerte)) {
-      out.add(Alerte(Icons.layers_rounded, const Color(0xFFF97316), 'Matière à racheter : ${m.nom}', '${fmtNum(m.stock)} ${m.unite} restants'));
+      out.add(Alerte(Icons.layers_rounded, const Color(0xFFF97316), 'Matière à racheter : {0}'.trf([m.nom]), '${fmtNum(m.stock)} ${m.unite} restants'));
     }
     try {
       final ventes = await stock.ventes(to: today.subtract(const Duration(days: 30)), limit: 500);
       for (final v in ventes.where((v) => !v.annulee && v.reste > 0.005)) {
-        out.add(Alerte(Icons.hourglass_bottom_rounded, AppColors.rose, 'Impayé depuis plus de 30 jours : ${v.numero}',
-            '${v.clientNom ?? 'Client'} · reste ${fmtDA(v.reste)} · vendu le ${fmtDate(v.date)}'));
+        out.add(Alerte(Icons.hourglass_bottom_rounded, AppColors.rose, 'Impayé depuis plus de 30 jours : {0}'.trf([v.numero]),
+            '{0} · reste {1} · vendu le {2}'.trf([v.clientNom ?? 'Client'.tr, fmtDA(v.reste), fmtDate(v.date)])));
       }
       final docs = await commerce.commandes();
       for (final c in docs.where((c) => c.enRetard)) {
         out.add(Alerte(c.devis ? Icons.request_quote_rounded : Icons.alarm_rounded, c.devis ? AppColors.gold : AppColors.rose,
-            c.devis ? 'Devis expiré : ${c.numero}' : 'Commande en retard : ${c.numero}',
-            '${c.clientNom ?? ''} · prévue le ${fmtDate(c.echeance!)}'));
+            c.devis ? 'Devis expiré : {0}'.trf([c.numero]) : 'Commande en retard : {0}'.trf([c.numero]),
+            '{0} · prévue le {1}'.trf([c.clientNom ?? '', fmtDate(c.echeance!)])));
       }
     } catch (_) {}
   }
   if (session.peut(Espace.paie)) {
     for (final o in data.ouvriers) {
       final s = data.solde(o.id).solde;
-      if (s < -0.005) out.add(Alerte(Icons.north_east_rounded, AppColors.rose, 'Avance non couverte : ${o.nom}', 'A pris ${fmtDA(-s)} de plus que son travail'));
+      if (s < -0.005) out.add(Alerte(Icons.north_east_rounded, AppColors.rose, 'Avance non couverte : {0}'.trf([o.nom]), 'A pris {0} de plus que son travail'.trf([fmtDA(-s)])));
     }
   }
   return out;
@@ -883,9 +902,9 @@ class AlertesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text('Alertes (${alertes.length})')),
+        appBar: AppBar(title: Text('Alertes ({0})'.trf([alertes.length]))),
         body: alertes.isEmpty
-            ? const EmptyState('Tout va bien : aucune alerte.', icon: Icons.verified_rounded)
+            ? EmptyState('Tout va bien : aucune alerte.'.tr, icon: Icons.verified_rounded)
             : ListView(padding: const EdgeInsets.all(16), children: [
                 for (final a in alertes)
                   Padding(
@@ -951,7 +970,7 @@ class _LogoEditorState extends State<LogoEditor> {
         } catch (_) {}
       }
       oublierLogo();
-      if (mounted) showSnack(context, 'Logo enregistré : il apparaîtra sur les factures');
+      if (mounted) showSnack(context, 'Logo enregistré : il apparaîtra sur les factures'.tr);
     } catch (e) {
       if (mounted) showSnack(context, errorMessage(e), error: true);
     } finally {
@@ -1000,16 +1019,16 @@ class _LogoEditorState extends State<LogoEditor> {
         const SizedBox(width: 16),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Logo de l\'entreprise', style: context.tt.titleMedium),
-            Text('Affiché en haut des factures, bons de livraison, devis et avoirs.', style: TextStyle(color: context.pal.muted)),
+            Text('Logo de l\'entreprise'.tr, style: context.tt.titleMedium),
+            Text('Affiché en haut des factures, bons de livraison, devis et avoirs.'.tr, style: TextStyle(color: context.pal.muted)),
             const SizedBox(height: 8),
             Wrap(spacing: 8, children: [
               FilledButton.tonalIcon(
                 onPressed: _busy ? null : _choisir,
                 icon: _busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.upload_rounded),
-                label: Text(path == null ? 'Ajouter' : 'Changer'),
+                label: Text(path == null ? 'Ajouter'.tr : 'Changer'.tr),
               ),
-              if (path != null) TextButton(onPressed: _busy ? null : _retirer, child: const Text('Retirer')),
+              if (path != null) TextButton(onPressed: _busy ? null : _retirer, child: Text('Retirer'.tr)),
             ]),
           ]),
         ),

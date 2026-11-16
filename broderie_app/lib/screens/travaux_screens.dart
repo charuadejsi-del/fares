@@ -9,6 +9,7 @@ import '../widgets.dart';
 import 'ouvrier_detail_screen.dart';
 import 'paie_forms.dart';
 import 'refs_screens.dart' show FormDialog;
+import '../i18n.dart';
 
 /// Ouvriers dont on saisit le travail ici : tous sauf les brodeurs payés aux points.
 List<Ouvrier> _ouvriersTravail() => data.ouvriers.where((o) => o.actif && !o.brodeur).toList()
@@ -94,7 +95,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
   void _choisirTache(Tache? t, {bool rebuild = true}) {
     _tache = t;
     if (t != null) _libelle.text = t.nom;
-    if (_libelle.text.trim().isEmpty) _libelle.text = 'Robe';
+    if (_libelle.text.trim().isEmpty) _libelle.text = 'Robe'.tr;
     final o = _o;
     if (o != null) _prix.text = _fmt(data.prixTravail(o, t, extra: _extra));
     if (rebuild) setState(() {});
@@ -109,11 +110,11 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
     final o = _o;
     if (o == null) return;
     if (_qteN <= 0) {
-      showSnack(context, 'Indiquez la quantité', error: true);
+      showSnack(context, 'Indiquez la quantité'.tr, error: true);
       return;
     }
     if (_libelle.text.trim().isEmpty) {
-      showSnack(context, 'Indiquez le travail', error: true);
+      showSnack(context, 'Indiquez le travail'.tr, error: true);
       return;
     }
     setState(() => _busy = true);
@@ -125,10 +126,10 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
         quantite: _qteN,
         prixUnitaire: _prixN,
         tacheId: _tache != null && _tache!.nom.trim() == _libelle.text.trim() ? _tache!.id : null,
-        note: _auMois && _extra ? 'Extra' : null,
+        note: _auMois && _extra ? 'Extra'.tr : null,
       ));
       if (!mounted) return;
-      showSnack(context, '✓ ${o.nom} · ${_libelle.text.trim()} × ${_q(_qteN)}${_prixN > 0 ? ' = ${fmtDA(_qteN * _prixN)}' : ' (sans montant)'}');
+      showSnack(context, '✓ {0} · {1} × {2}{3}'.trf([o.nom, _libelle.text.trim(), _q(_qteN), _prixN > 0 ? ' = ${fmtDA(_qteN * _prixN)}' : ' (sans montant)'.tr]));
       _qte.clear();
     } catch (e) {
       if (mounted) showSnack(context, errorMessage(e), error: true);
@@ -140,8 +141,8 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
   Widget build(BuildContext context) {
     final ouvriers = _ouvriersTravail();
     if (ouvriers.isEmpty) {
-      return const EmptyState(
-        'Aucun ouvrier hors broderie.\nAjoutez un ouvrier payé à la pièce ou au mois (Couture, Coupe, Repassage…) dans l\'onglet Équipe.',
+      return EmptyState(
+        'Aucun ouvrier hors broderie.\nAjoutez un ouvrier payé à la pièce ou au mois (Couture, Coupe, Repassage…) dans l\'onglet Équipe.'.tr,
         icon: Icons.groups_outlined,
       );
     }
@@ -150,7 +151,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
 
     final choixOuvrier = AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const SectionTitle('1 · Ouvrier', subtitle: 'Payés à la pièce, au mois ou en extra'),
+        SectionTitle('1 · Ouvrier'.tr, subtitle: 'Payés à la pièce, au mois ou en extra'.tr),
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final x in ouvriers)
             ChoiceChip(
@@ -166,7 +167,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
     final taches = o == null ? <Tache>[] : data.tachesPour(o.departement);
     final formulaire = AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const SectionTitle('2 · Travail réalisé'),
+        SectionTitle('2 · Travail réalisé'.tr),
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final t in taches)
             ChoiceChip(
@@ -179,7 +180,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
         TextField(
           controller: _libelle,
           onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(labelText: 'Travail (modifiable)', prefixIcon: Icon(Icons.checkroom_rounded)),
+          decoration: InputDecoration(labelText: 'Travail (modifiable)'.tr, prefixIcon: Icon(Icons.checkroom_rounded)),
         ),
         if (_auMois) ...[
           const SizedBox(height: 6),
@@ -190,14 +191,14 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
               setState(() => _extra = v);
               _prix.text = _fmt(data.prixTravail(o!, _tache, extra: v));
             },
-            title: const Text('Payé en extra', style: TextStyle(fontWeight: FontWeight.w700)),
+            title: Text('Payé en extra'.tr, style: TextStyle(fontWeight: FontWeight.w700)),
             subtitle: Text(_extra
-                ? 'Montant ajouté en plus de son salaire'
-                : '${o!.nom} est payé au mois : travail compté sans montant'),
+                ? 'Montant ajouté en plus de son salaire'.tr
+                : '{0} est payé au mois : travail compté sans montant'.trf([o!.nom])),
           ),
         ],
         const SizedBox(height: 12),
-        const SectionTitle('3 · Quantité'),
+        SectionTitle('3 · Quantité'.tr),
         Row(children: [
           IconButton.filledTonal(
             onPressed: _qteN >= 1 ? () => _ajouter(-1) : null,
@@ -210,7 +211,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
               textAlign: TextAlign.center,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900),
-              decoration: const InputDecoration(hintText: '0', suffixText: 'pièces'),
+              decoration: InputDecoration(hintText: '0', suffixText: 'pièces'.tr),
               onSubmitted: (_) => _enregistrer(),
             ),
           ),
@@ -228,7 +229,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
               child: TextField(
                 controller: _prix,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Prix / pièce', suffixText: 'DA', prefixIcon: Icon(Icons.sell_outlined)),
+                decoration: InputDecoration(labelText: 'Prix / pièce'.tr, suffixText: 'DA'.tr, prefixIcon: Icon(Icons.sell_outlined)),
               ),
             ),
             const SizedBox(width: 10),
@@ -244,7 +245,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
                 }
               },
               child: InputDecorator(
-                decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.event)),
+                decoration: InputDecoration(labelText: 'Date'.tr, prefixIcon: Icon(Icons.event)),
                 child: Text(fmtDate(_date)),
               ),
             ),
@@ -255,13 +256,13 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(gradient: AppColors.heroGradient, borderRadius: BorderRadius.circular(16)),
           child: Column(children: [
-            Text(_prixN > 0 ? '${_q(_qteN)} × ${fmtDA(_prixN)}' : '${_q(_qteN)} pièce(s)', style: const TextStyle(color: Colors.white70)),
+            Text(_prixN > 0 ? '{0} × {1}'.trf([_q(_qteN), fmtDA(_prixN)]) : '{0} pièce(s)'.trf([_q(_qteN)]), style: const TextStyle(color: Colors.white70)),
             FittedBox(
               fit: BoxFit.scaleDown,
-              child: Text(_prixN > 0 ? fmtDA(_qteN * _prixN) : 'Sans montant',
+              child: Text(_prixN > 0 ? fmtDA(_qteN * _prixN) : 'Sans montant'.tr,
                   style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900)),
             ),
-            Text(_prixN > 0 ? 'ajouté à la paie de ${o?.nom ?? ''}' : 'travail suivi, payé par le salaire mensuel',
+            Text(_prixN > 0 ? 'ajouté à la paie de {0}'.trf([o?.nom ?? '']) : 'travail suivi, payé par le salaire mensuel'.tr,
                 style: const TextStyle(color: Colors.white70, fontSize: 12)),
           ]),
         ),
@@ -272,7 +273,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
           icon: _busy
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
               : const Icon(Icons.check_rounded),
-          label: const Text('Enregistrer le travail'),
+          label: Text('Enregistrer le travail'.tr),
         ),
       ]),
     );
@@ -284,12 +285,12 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
         Padding(
           padding: const EdgeInsets.only(right: 8),
           child: SectionTitle(
-            dayOnly(DateTime.now()) == _date ? 'Travail d\'aujourd\'hui' : 'Travail du ${fmtDate(_date)}',
-            subtitle: '${_jour.length} saisie(s) · ${fmtDA(totalJour)}',
+            dayOnly(DateTime.now()) == _date ? 'Travail d\'aujourd\'hui'.tr : 'Travail du {0}'.trf([fmtDate(_date)]),
+            subtitle: '{0} saisie(s) · {1}'.trf([_jour.length, fmtDA(totalJour)]),
           ),
         ),
         if (_jour.isEmpty)
-          const EmptyState('Rien de saisi pour ce jour.', icon: Icons.inventory_2_outlined)
+          EmptyState('Rien de saisi pour ce jour.'.tr, icon: Icons.inventory_2_outlined)
         else
           for (final p in _jour) _LignePiece(p),
       ]),
@@ -331,8 +332,8 @@ class _LignePiece extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w700)),
       subtitle: Text([
         if (avecDate) fmtDate(p.date),
-        '${_q(p.quantite)} pièce(s)',
-        if (p.prixUnitaire > 0) '× ${fmtDA(p.prixUnitaire)}',
+        '{0} pièce(s)'.trf([_q(p.quantite)]),
+        if (p.prixUnitaire > 0) '× {0}'.trf([fmtDA(p.prixUnitaire)]),
         if (p.note?.isNotEmpty ?? false) p.note!,
       ].join(' · ')),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -340,10 +341,10 @@ class _LignePiece extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.w800, color: p.montant > 0 ? AppColors.green : context.pal.muted)),
         PopupMenuButton<String>(
           icon: Icon(Icons.more_vert, color: context.pal.muted),
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'edit', child: Text('Modifier')),
-            PopupMenuItem(value: 'fiche', child: Text('Fiche de l\'ouvrier')),
-            PopupMenuItem(value: 'del', child: Text('Supprimer')),
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'edit', child: Text('Modifier'.tr)),
+            PopupMenuItem(value: 'fiche', child: Text('Fiche de l\'ouvrier'.tr)),
+            PopupMenuItem(value: 'del', child: Text('Supprimer'.tr)),
           ],
           onSelected: (v) async {
             if (v == 'edit' && o != null) {
@@ -351,8 +352,8 @@ class _LignePiece extends StatelessWidget {
             } else if (v == 'fiche') {
               Navigator.of(context).push(MaterialPageRoute(builder: (_) => OuvrierDetailScreen(ouvrierId: p.ouvrierId)));
             } else if (v == 'del') {
-              final ok = await confirmDialog(context, 'Supprimer ce travail ?', '${p.libelle} × ${_q(p.quantite)} du ${fmtDate(p.date)}',
-                  action: 'Supprimer');
+              final ok = await confirmDialog(context, 'Supprimer ce travail ?'.tr, '{0} × {1} du {2}'.trf([p.libelle, _q(p.quantite), fmtDate(p.date)]),
+                  action: 'Supprimer'.tr);
               if (!ok) return;
               try {
                 await data.deletePiece(p.id);
@@ -481,9 +482,9 @@ class _TravauxHistoriqueScreenState extends State<TravauxHistoriqueScreen> {
           DropdownButton<String?>(
             value: _ouvrierId,
             underline: const SizedBox.shrink(),
-            hint: const Text('Tous les ouvriers'),
+            hint: Text('Tous les ouvriers'.tr),
             items: [
-              const DropdownMenuItem(value: null, child: Text('Tous les ouvriers')),
+              DropdownMenuItem(value: null, child: Text('Tous les ouvriers'.tr)),
               for (final o in data.ouvriers.where((o) => !o.brodeur)) DropdownMenuItem(value: o.id, child: Text(o.nom)),
             ],
             onChanged: (v) {
@@ -496,30 +497,30 @@ class _TravauxHistoriqueScreenState extends State<TravauxHistoriqueScreen> {
         if (_loading) const LinearProgressIndicator(minHeight: 2),
         if (_err != null) ErrorBanner(_err!, onRetry: _load),
         AutoGrid(minItemWidth: 180, children: [
-          StatTile(label: 'Pièces réalisées', value: _q(qte), icon: Icons.checkroom_rounded, color: AppColors.violet),
-          StatTile(label: 'À payer (pièces & extra)', value: fmtDA(montant), icon: Icons.payments_rounded, color: AppColors.green),
-          StatTile(label: 'Ouvriers actifs', value: '${parOuvrier.length}', icon: Icons.groups_rounded, color: AppColors.gold),
-          StatTile(label: 'Saisies', value: '${_pieces.length}', icon: Icons.receipt_long_rounded, color: AppColors.sky),
+          StatTile(label: 'Pièces réalisées'.tr, value: _q(qte), icon: Icons.checkroom_rounded, color: AppColors.violet),
+          StatTile(label: 'À payer (pièces & extra)'.tr, value: fmtDA(montant), icon: Icons.payments_rounded, color: AppColors.green),
+          StatTile(label: 'Ouvriers actifs'.tr, value: '${parOuvrier.length}', icon: Icons.groups_rounded, color: AppColors.gold),
+          StatTile(label: 'Saisies'.tr, value: '${_pieces.length}', icon: Icons.receipt_long_rounded, color: AppColors.sky),
         ]),
         const SizedBox(height: 16),
         if (wide)
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: resume('Par ouvrier', ouvTri, data.ouvrierNom)),
+            Expanded(child: resume('Par ouvrier'.tr, ouvTri, data.ouvrierNom)),
             const SizedBox(width: 16),
-            Expanded(child: resume('Par travail', tacheTri, (s) => s)),
+            Expanded(child: resume('Par travail'.tr, tacheTri, (s) => s)),
           ])
         else ...[
-          resume('Par ouvrier', ouvTri, data.ouvrierNom),
+          resume('Par ouvrier'.tr, ouvTri, data.ouvrierNom),
           const SizedBox(height: 14),
-          resume('Par travail', tacheTri, (s) => s),
+          resume('Par travail'.tr, tacheTri, (s) => s),
         ],
         const SizedBox(height: 16),
         AppCard(
           padding: const EdgeInsets.fromLTRB(16, 18, 8, 8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const Padding(padding: EdgeInsets.only(right: 8), child: SectionTitle('Détail des saisies')),
+            Padding(padding: EdgeInsets.only(right: 8), child: SectionTitle('Détail des saisies'.tr)),
             if (_pieces.isEmpty && !_loading)
-              const EmptyState('Aucun travail sur cette période.', icon: Icons.inventory_2_outlined)
+              EmptyState('Aucun travail sur cette période.'.tr, icon: Icons.inventory_2_outlined)
             else
               for (final p in _pieces.take(300)) _LignePiece(p, avecDate: true),
           ]),
@@ -549,7 +550,7 @@ class TachesScreen extends StatelessWidget {
             floatingActionButton: FloatingActionButton.extended(
               onPressed: () => _form(context),
               icon: const Icon(Icons.add_rounded),
-              label: const Text('Nouvelle tâche'),
+              label: Text('Nouvelle tâche'.tr),
             ),
             body: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
@@ -559,16 +560,15 @@ class TachesScreen extends StatelessWidget {
                   child: Row(children: [
                     Icon(Icons.info_outline_rounded, color: context.cs.primary),
                     const SizedBox(width: 12),
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'Chaque tâche a son tarif à la pièce. Il est proposé automatiquement lors de la saisie. '
-                        'Tarif 0 : on utilise le prix à la pièce de l\'ouvrier. Les ouvriers payés au mois ne sont payés que pour le travail « en extra ».',
+                        'Chaque tâche a son tarif à la pièce. Il est proposé automatiquement lors de la saisie. Tarif 0 : on utilise le prix à la pièce de l\'ouvrier. Les ouvriers payés au mois ne sont payés que pour le travail « en extra ».'.tr,
                       ),
                     ),
                   ]),
                 ),
                 const SizedBox(height: 12),
-                if (data.taches.isEmpty) const EmptyState('Aucune tâche. Ajoutez-en une.', icon: Icons.content_cut_rounded),
+                if (data.taches.isEmpty) EmptyState('Aucune tâche. Ajoutez-en une.'.tr, icon: Icons.content_cut_rounded),
                 for (final e in parDep.entries) ...[
                   Padding(
                     padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
@@ -584,7 +584,7 @@ class TachesScreen extends StatelessWidget {
                           leading: Icon(Icons.content_cut_rounded, color: t.actif ? AppColors.gold : context.pal.muted),
                           title: Text(t.nom,
                               style: TextStyle(fontWeight: FontWeight.w700, decoration: t.actif ? null : TextDecoration.lineThrough)),
-                          subtitle: Text(t.prix > 0 ? '${fmtDA(t.prix)} / pièce' : 'Prix de l\'ouvrier'),
+                          subtitle: Text(t.prix > 0 ? '{0} / pièce'.trf([fmtDA(t.prix)]) : 'Prix de l\'ouvrier'.tr),
                           trailing: const Icon(Icons.chevron_right),
                         ),
                     ]),
@@ -632,14 +632,14 @@ class _TacheFormState extends State<_TacheForm> {
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
-        showSnack(context, errorMessage(e).contains('travail_taches') ? 'Mise à jour de la base en attente (v10).' : errorMessage(e), error: true);
+        showSnack(context, errorMessage(e).contains('travail_taches') ? 'Mise à jour de la base en attente (v10).'.tr : errorMessage(e), error: true);
       }
     }
   }
 
   Future<void> _supprimer() async {
     final t = widget.existing!;
-    final ok = await confirmDialog(context, 'Supprimer « ${t.nom} » ?', 'Les travaux déjà saisis sont conservés.', action: 'Supprimer');
+    final ok = await confirmDialog(context, 'Supprimer « {0} » ?'.trf([t.nom]), 'Les travaux déjà saisis sont conservés.'.tr, action: 'Supprimer'.tr);
     if (!ok) return;
     try {
       await data.deleteTache(t.id);
@@ -653,7 +653,7 @@ class _TacheFormState extends State<_TacheForm> {
   Widget build(BuildContext context) {
     final deps = {...data.departements.where((d) => d.toLowerCase() != 'broderie'), _dep}.toList();
     return FormDialog(
-      title: widget.existing == null ? 'Nouvelle tâche' : 'Modifier la tâche',
+      title: widget.existing == null ? 'Nouvelle tâche'.tr : 'Modifier la tâche'.tr,
       formKey: _form,
       busy: _busy,
       onSave: _save,
@@ -661,26 +661,26 @@ class _TacheFormState extends State<_TacheForm> {
         TextFormField(
           controller: _nom,
           autofocus: widget.existing == null,
-          decoration: const InputDecoration(labelText: 'Nom (ex. Robe cousue, Ourlet, Repassage)', prefixIcon: Icon(Icons.content_cut_rounded)),
-          validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+          decoration: InputDecoration(labelText: 'Nom (ex. Robe cousue, Ourlet, Repassage)'.tr, prefixIcon: Icon(Icons.content_cut_rounded)),
+          validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
         ),
         DropdownButtonFormField<String>(
           initialValue: _dep,
-          decoration: const InputDecoration(labelText: 'Département', prefixIcon: Icon(Icons.apartment_rounded)),
-          items: [for (final d in deps) DropdownMenuItem(value: d, child: Text(d))],
+          decoration: InputDecoration(labelText: 'Département'.tr, prefixIcon: Icon(Icons.apartment_rounded)),
+          items: [for (final d in deps) DropdownMenuItem(value: d, child: Text(d.tr))],
           onChanged: (v) => setState(() => _dep = v ?? _dep),
         ),
         TextFormField(
           controller: _prix,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-              labelText: 'Tarif par pièce', suffixText: 'DA', helperText: 'Vide ou 0 : prix à la pièce de l\'ouvrier', prefixIcon: Icon(Icons.sell_outlined)),
+          decoration: InputDecoration(
+              labelText: 'Tarif par pièce'.tr, suffixText: 'DA'.tr, helperText: 'Vide ou 0 : prix à la pièce de l\'ouvrier'.tr, prefixIcon: Icon(Icons.sell_outlined)),
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: _actif,
           onChanged: (v) => setState(() => _actif = v),
-          title: const Text('Active'),
+          title: Text('Active'.tr),
         ),
         if (widget.existing != null)
           Align(
@@ -688,7 +688,7 @@ class _TacheFormState extends State<_TacheForm> {
             child: TextButton.icon(
               onPressed: _supprimer,
               icon: const Icon(Icons.delete_outline_rounded, color: AppColors.rose),
-              label: const Text('Supprimer', style: TextStyle(color: AppColors.rose)),
+              label: Text('Supprimer'.tr, style: TextStyle(color: AppColors.rose)),
             ),
           ),
       ],

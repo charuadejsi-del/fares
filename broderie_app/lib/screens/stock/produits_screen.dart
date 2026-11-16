@@ -11,6 +11,7 @@ import '../../widgets.dart';
 import '../refs_screens.dart' show FormDialog;
 import 'modeles_screen.dart';
 import 'scan_screen.dart';
+import '../../i18n.dart';
 
 Color stockColor(Produit p) => p.rupture ? AppColors.rose : (p.enAlerte ? const Color(0xFFF97316) : AppColors.green);
 
@@ -30,8 +31,8 @@ class _ProduitsScreenState extends State<ProduitsScreen> {
 
   Future<void> _scanStock() => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => ScanScreen(
-          titre: 'Scanner pour le stock',
-          aide: 'Scannez une étiquette pour ajouter ou retirer des pièces',
+          titre: 'Scanner pour le stock'.tr,
+          aide: 'Scannez une étiquette pour ajouter ou retirer des pièces'.tr,
           onCode: (ctx, code) => traiterCodeStock(ctx, code),
         ),
       ));
@@ -63,14 +64,14 @@ class _ProduitsScreenState extends State<ProduitsScreen> {
                 foregroundColor: Colors.black,
                 onPressed: _scanStock,
                 icon: const Icon(Icons.qr_code_scanner_rounded),
-                label: const Text('Scanner'),
+                label: Text('Scanner'.tr),
               ),
               const SizedBox(height: 10),
               FloatingActionButton.extended(
                 heroTag: 'fab-new-prod',
                 onPressed: () => ouvrirModeleForm(context),
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('Nouveau modèle'),
+                label: Text('Nouveau modèle'.tr),
               ),
             ]),
             body: RefreshIndicator(
@@ -79,32 +80,32 @@ class _ProduitsScreenState extends State<ProduitsScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 160),
                 children: [
                   AutoGrid(minItemWidth: 170, children: [
-                    StatTile(label: 'Pièces en stock', value: fmtInt(stock.totalPieces), icon: Icons.inventory_2_rounded, color: AppColors.violet),
-                    StatTile(label: 'Valeur (prix gros)', value: fmtDA(stock.valeurStock), icon: Icons.savings_rounded, color: AppColors.green),
-                    StatTile(label: 'Modèles', value: '${stock.modeles.where((m) => m.actif).length}', icon: Icons.checkroom_rounded, color: AppColors.sky),
-                    StatTile(label: 'En alerte', value: '${stock.nbAlertes}', icon: Icons.warning_amber_rounded, color: AppColors.rose),
+                    StatTile(label: 'Pièces en stock'.tr, value: fmtInt(stock.totalPieces), icon: Icons.inventory_2_rounded, color: AppColors.violet),
+                    StatTile(label: 'Valeur (prix gros)'.tr, value: fmtDA(stock.valeurStock), icon: Icons.savings_rounded, color: AppColors.green),
+                    StatTile(label: 'Modèles'.tr, value: '${stock.modeles.where((m) => m.actif).length}', icon: Icons.checkroom_rounded, color: AppColors.sky),
+                    StatTile(label: 'En alerte'.tr, value: '${stock.nbAlertes}', icon: Icons.warning_amber_rounded, color: AppColors.rose),
                   ]),
                   const SizedBox(height: 14),
                   Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                     SizedBox(
                       width: 300,
                       child: TextField(
-                        decoration: const InputDecoration(hintText: 'Référence, nom, couleur…', prefixIcon: Icon(Icons.search)),
+                        decoration: InputDecoration(hintText: 'Référence, nom, couleur…'.tr, prefixIcon: Icon(Icons.search)),
                         onChanged: (v) => setState(() => _q = v),
                       ),
                     ),
                     FilterChip(
                       avatar: const Icon(Icons.warning_amber_rounded, size: 18),
-                      label: Text('En alerte (${stock.nbAlertes})'),
+                      label: Text('En alerte ({0})'.trf([stock.nbAlertes])),
                       selected: _alertes,
                       onSelected: (v) => setState(() => _alertes = v),
                     ),
                     if (all.any((p) => !p.actif))
-                      FilterChip(label: const Text('Inactifs'), selected: _inactifs, onSelected: (v) => setState(() => _inactifs = v)),
+                      FilterChip(label: Text('Inactifs'.tr), selected: _inactifs, onSelected: (v) => setState(() => _inactifs = v)),
                     OutlinedButton.icon(
                       onPressed: list.isEmpty ? null : () => _etiquettesTous(list),
                       icon: const Icon(Icons.print_rounded),
-                      label: const Text('Étiquettes'),
+                      label: Text('Étiquettes'.tr),
                     ),
                   ]),
                   if (cats.isNotEmpty) ...[
@@ -114,7 +115,7 @@ class _ProduitsScreenState extends State<ProduitsScreen> {
                       child: Row(children: [
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(label: const Text('Toutes'), selected: _cat == null, onSelected: (_) => setState(() => _cat = null)),
+                          child: ChoiceChip(label: Text('Toutes'.tr), selected: _cat == null, onSelected: (_) => setState(() => _cat = null)),
                         ),
                         for (final c in cats)
                           Padding(
@@ -128,7 +129,7 @@ class _ProduitsScreenState extends State<ProduitsScreen> {
                   if (!stock.loaded)
                     const Center(child: Padding(padding: EdgeInsets.all(30), child: CircularProgressIndicator()))
                   else if (modeles.isEmpty)
-                    EmptyState(all.isEmpty ? 'Aucun modèle.\nCréez un modèle, choisissez ses couleurs et tailles : un QR code est créé pour chaque variante.' : 'Aucun résultat.',
+                    EmptyState(all.isEmpty ? 'Aucun modèle.\nCréez un modèle, choisissez ses couleurs et tailles : un QR code est créé pour chaque variante.'.tr : 'Aucun résultat.'.tr,
                         icon: Icons.checkroom_outlined)
                   else
                     AutoGrid(minItemWidth: 340, children: [for (final m in modeles) ModeleCard(m)]),
@@ -148,11 +149,11 @@ Future<void> traiterCodeStock(BuildContext context, String code) async {
     final creer = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Référence inconnue'),
-        content: Text('Aucun produit avec la référence « $code ».\nVoulez-vous le créer ?'),
+        title: Text('Référence inconnue'.tr),
+        content: Text('Aucun produit avec la référence « {0} ».\nVoulez-vous le créer ?'.trf([code])),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Non')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Créer')),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: Text('Non'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: Text('Créer'.tr)),
         ],
       ),
     );
@@ -220,9 +221,9 @@ class _MouvementStockSheetState extends State<MouvementStockSheet> {
       }
       setState(() => _busy = true);
       try {
-        await stock.mouvement(widget.produit.id, TypeStock.ajustement, diff, note: _note.text.isEmpty ? 'Inventaire' : _note.text);
+        await stock.mouvement(widget.produit.id, TypeStock.ajustement, diff, note: _note.text.isEmpty ? 'Inventaire'.tr : _note.text);
         if (mounted) {
-          showSnack(context, 'Stock corrigé : ${fmtInt(_n)} pièces');
+          showSnack(context, 'Stock corrigé : {0} pièces'.trf([fmtInt(_n)]));
           Navigator.pop(context, true);
         }
       } catch (e) {
@@ -239,7 +240,7 @@ class _MouvementStockSheetState extends State<MouvementStockSheet> {
       await stock.mouvement(widget.produit.id, _type, _signe * _n, note: _note.text);
       HapticFeedback.mediumImpact();
       if (mounted) {
-        showSnack(context, '${_signe > 0 ? '+' : '−'}${fmtInt(_n)} · ${widget.produit.reference} → ${fmtInt(widget.produit.stock + _signe * _n)} en stock');
+        showSnack(context, '{0}{1} · {2} → {3} en stock'.trf([_signe > 0 ? '+' : '−', fmtInt(_n), widget.produit.reference, fmtInt(widget.produit.stock + _signe * _n)]));
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -269,18 +270,18 @@ class _MouvementStockSheetState extends State<MouvementStockSheet> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(p.reference, style: TextStyle(fontWeight: FontWeight.w900, color: context.cs.primary)),
                 Text(p.libelle, style: const TextStyle(fontWeight: FontWeight.w700)),
-                Text('En stock : ${fmtInt(p.stock)}', style: TextStyle(color: stockColor(p), fontWeight: FontWeight.w700)),
+                Text('En stock : {0}'.trf([fmtInt(p.stock)]), style: TextStyle(color: stockColor(p), fontWeight: FontWeight.w700)),
               ]),
             ),
           ]),
           const SizedBox(height: 16),
           SegmentedButton<TypeStock>(
             showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: TypeStock.entree, icon: Icon(Icons.add_box_rounded), label: Text('Entrée')),
-              ButtonSegment(value: TypeStock.sortie, icon: Icon(Icons.indeterminate_check_box_rounded), label: Text('Sortie')),
-              ButtonSegment(value: TypeStock.retour, icon: Icon(Icons.undo_rounded), label: Text('Retour')),
-              ButtonSegment(value: TypeStock.ajustement, icon: Icon(Icons.fact_check_rounded), label: Text('Inventaire')),
+            segments: [
+              ButtonSegment(value: TypeStock.entree, icon: Icon(Icons.add_box_rounded), label: Text('Entrée'.tr)),
+              ButtonSegment(value: TypeStock.sortie, icon: Icon(Icons.indeterminate_check_box_rounded), label: Text('Sortie'.tr)),
+              ButtonSegment(value: TypeStock.retour, icon: Icon(Icons.undo_rounded), label: Text('Retour'.tr)),
+              ButtonSegment(value: TypeStock.ajustement, icon: Icon(Icons.fact_check_rounded), label: Text('Inventaire'.tr)),
             ],
             selected: {_type},
             onSelectionChanged: (s) => setState(() {
@@ -289,7 +290,7 @@ class _MouvementStockSheetState extends State<MouvementStockSheet> {
             }),
           ),
           const SizedBox(height: 16),
-          Text(_type == TypeStock.ajustement ? 'Quantité réelle comptée' : 'Quantité', textAlign: TextAlign.center, style: context.tt.titleMedium),
+          Text(_type == TypeStock.ajustement ? 'Quantité réelle comptée'.tr : 'Quantité'.tr, textAlign: TextAlign.center, style: context.tt.titleMedium),
           const SizedBox(height: 8),
           Row(children: [
             IconButton.filledTonal(iconSize: 30, onPressed: () => _add(-1), icon: const Icon(Icons.remove_rounded)),
@@ -310,9 +311,9 @@ class _MouvementStockSheetState extends State<MouvementStockSheet> {
             for (final n in [5, 10, 20, 50, 100]) OutlinedButton(onPressed: () => _add(n), child: Text('+$n')),
           ]),
           const SizedBox(height: 12),
-          TextField(controller: _note, decoration: const InputDecoration(hintText: 'Remarque (facultatif)', prefixIcon: Icon(Icons.notes))),
+          TextField(controller: _note, decoration: InputDecoration(hintText: 'Remarque (facultatif)'.tr, prefixIcon: Icon(Icons.notes))),
           const SizedBox(height: 12),
-          Text('Après : ${fmtInt(apres)} pièces en stock',
+          Text('Après : {0} pièces en stock'.trf([fmtInt(apres)]),
               textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w800, color: apres < 0 ? AppColors.rose : AppColors.green)),
           const SizedBox(height: 14),
           SizedBox(
@@ -322,7 +323,7 @@ class _MouvementStockSheetState extends State<MouvementStockSheet> {
               icon: _busy
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.check_rounded),
-              label: Text(_type == TypeStock.ajustement ? 'Corriger le stock' : '${_type.label} de ${fmtInt(_n)} pièce${_n > 1 ? 's' : ''}'),
+              label: Text(_type == TypeStock.ajustement ? 'Corriger le stock'.tr : '{0} de {1} pièce{2}'.trf([_type.label, fmtInt(_n), _n > 1 ? 's' : ''])),
             ),
           ),
         ]),
@@ -341,7 +342,7 @@ Future<String?> ouvrirProduitForm(BuildContext context, {Produit? produit, Strin
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Imprimer le QR code ?'),
+        title: Text('Imprimer le QR code ?'.tr),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             padding: const EdgeInsets.all(10),
@@ -353,11 +354,11 @@ Future<String?> ouvrirProduitForm(BuildContext context, {Produit? produit, Strin
           Text(p.libelle),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Plus tard')),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: Text('Plus tard'.tr)),
           FilledButton.icon(
             onPressed: () => Navigator.pop(c, true),
             icon: const Icon(Icons.print_rounded),
-            label: const Text('Imprimer en grand (A4)'),
+            label: Text('Imprimer en grand (A4)'.tr),
           ),
         ],
       ),
@@ -389,7 +390,7 @@ class ProduitForm extends StatefulWidget {
 class _ProduitFormState extends State<ProduitForm> {
   final _form = GlobalKey<FormState>();
   late final _ref = TextEditingController(text: widget.produit?.reference ?? widget.reference ?? '');
-  late final _des = TextEditingController(text: widget.produit?.designation ?? 'Robe');
+  late final _des = TextEditingController(text: widget.produit?.designation ?? 'Robe'.tr);
   late final _cat = TextEditingController(text: widget.produit?.categorie ?? '');
   late final _taille = TextEditingController(text: widget.produit?.taille ?? '');
   late final _couleur = TextEditingController(text: widget.produit?.couleur ?? '');
@@ -429,7 +430,7 @@ class _ProduitFormState extends State<ProduitForm> {
     final ref = _ref.text.trim().toUpperCase();
     final doublon = stock.parReference(ref);
     if (doublon != null && doublon.id != widget.produit?.id) {
-      showSnack(context, 'La référence $ref existe déjà', error: true);
+      showSnack(context, 'La référence {0} existe déjà'.trf([ref]), error: true);
       return;
     }
     setState(() => _busy = true);
@@ -451,14 +452,14 @@ class _ProduitFormState extends State<ProduitForm> {
         stockInitial: parseInt(_initial.text) ?? 0,
       );
       if (mounted) {
-        showSnack(context, 'Produit $ref enregistré');
+        showSnack(context, 'Produit {0} enregistré'.trf([ref]));
         Navigator.pop(context, id);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
         final m = errorMessage(e);
-        showSnack(context, m.contains('duplicate') || m.contains('unique') ? 'Cette référence existe déjà' : m, error: true);
+        showSnack(context, m.contains('duplicate') || m.contains('unique') ? 'Cette référence existe déjà'.tr : m, error: true);
       }
     }
   }
@@ -471,7 +472,7 @@ class _ProduitFormState extends State<ProduitForm> {
   Widget build(BuildContext context) {
     final cats = {...stock.produits.map((p) => p.categorie).whereType<String>(), 'Robes', 'Caftans', 'Djellabas', 'Ensembles'}.toList();
     return FormDialog(
-      title: widget.produit == null ? 'Nouveau produit' : 'Modifier ${widget.produit!.reference}',
+      title: widget.produit == null ? 'Nouveau produit'.tr : 'Modifier {0}'.trf([widget.produit!.reference]),
       formKey: _form,
       busy: _busy,
       onSave: _save,
@@ -481,53 +482,53 @@ class _ProduitFormState extends State<ProduitForm> {
             controller: _ref,
             textCapitalization: TextCapitalization.characters,
             decoration: InputDecoration(
-              labelText: 'Référence (= QR code)',
+              labelText: 'Référence (= QR code)'.tr,
               prefixIcon: const Icon(Icons.qr_code_2_rounded),
               suffixIcon: widget.produit == null
-                  ? IconButton(tooltip: 'Générer', icon: const Icon(Icons.autorenew_rounded), onPressed: () {
+                  ? IconButton(tooltip: 'Générer'.tr, icon: const Icon(Icons.autorenew_rounded), onPressed: () {
                       _ref.clear();
                       _genererRef();
                     })
                   : null,
             ),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
           ),
         ]),
         TextFormField(
           controller: _des,
-          decoration: const InputDecoration(labelText: 'Désignation (ex. Robe brodée soirée)', prefixIcon: Icon(Icons.checkroom_rounded)),
-          validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+          decoration: InputDecoration(labelText: 'Désignation (ex. Robe brodée soirée)'.tr, prefixIcon: Icon(Icons.checkroom_rounded)),
+          validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
         ),
-        TextFormField(controller: _cat, decoration: const InputDecoration(labelText: 'Catégorie (facultatif)', prefixIcon: Icon(Icons.category_outlined))),
+        TextFormField(controller: _cat, decoration: InputDecoration(labelText: 'Catégorie (facultatif)'.tr, prefixIcon: Icon(Icons.category_outlined))),
         Wrap(spacing: 6, runSpacing: 6, children: [
           for (final c in cats) ActionChip(label: Text(c), onPressed: () => setState(() => _cat.text = c)),
         ]),
         _row([
-          TextFormField(controller: _taille, decoration: const InputDecoration(labelText: 'Taille')),
-          TextFormField(controller: _couleur, decoration: const InputDecoration(labelText: 'Couleur')),
+          TextFormField(controller: _taille, decoration: InputDecoration(labelText: 'Taille'.tr)),
+          TextFormField(controller: _couleur, decoration: InputDecoration(labelText: 'Couleur'.tr)),
         ]),
         _row([
           TextFormField(
             controller: _gros,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Prix de gros', suffixText: 'DA'),
+            decoration: InputDecoration(labelText: 'Prix de gros'.tr, suffixText: 'DA'.tr),
           ),
           TextFormField(
             controller: _detail,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Prix détail', suffixText: 'DA'),
+            decoration: InputDecoration(labelText: 'Prix détail'.tr, suffixText: 'DA'.tr),
           ),
         ]),
         _row([
           TextFormField(
             controller: _cout,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Coût de revient', suffixText: 'DA'),
+            decoration: InputDecoration(labelText: 'Coût de revient'.tr, suffixText: 'DA'.tr),
           ),
           TextFormField(
             controller: _seuil,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Alerte si stock ≤'),
+            decoration: InputDecoration(labelText: 'Alerte si stock ≤'.tr),
           ),
         ]),
         if (widget.produit == null)
@@ -535,9 +536,9 @@ class _ProduitFormState extends State<ProduitForm> {
             controller: _initial,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(labelText: 'Stock initial (facultatif)', prefixIcon: Icon(Icons.inventory_2_outlined)),
+            decoration: InputDecoration(labelText: 'Stock initial (facultatif)'.tr, prefixIcon: Icon(Icons.inventory_2_outlined)),
           ),
-        SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Actif'), value: _actif, onChanged: (v) => setState(() => _actif = v)),
+        SwitchListTile(contentPadding: EdgeInsets.zero, title: Text('Actif'.tr), value: _actif, onChanged: (v) => setState(() => _actif = v)),
       ],
     );
   }
@@ -578,7 +579,7 @@ class _EtiquettesDialogState extends State<EtiquettesDialog> {
     final total = items.fold<int>(0, (s, e) => s + e.$2);
     if (total == 0) return;
     if (total > 2000) {
-      showSnack(context, 'Maximum 2000 étiquettes à la fois', error: true);
+      showSnack(context, 'Maximum 2000 étiquettes à la fois'.tr, error: true);
       return;
     }
     setState(() => _busy = true);
@@ -599,18 +600,18 @@ class _EtiquettesDialogState extends State<EtiquettesDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Imprimer les étiquettes QR'),
+        title: Text('Imprimer les étiquettes QR'.tr),
         content: SizedBox(
           width: 480,
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             DropdownButtonFormField<FormatEtiquette>(
               value: _format,
               isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Format'),
+              decoration: InputDecoration(labelText: 'Format'.tr),
               items: [for (final f in FormatEtiquette.values) DropdownMenuItem(value: f, child: Text(f.label))],
               onChanged: (v) => setState(() => _format = v ?? _format),
             ),
-            SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Afficher le prix de gros'), value: _prix, onChanged: (v) => setState(() => _prix = v)),
+            SwitchListTile(contentPadding: EdgeInsets.zero, title: Text('Afficher le prix de gros'.tr), value: _prix, onChanged: (v) => setState(() => _prix = v)),
             const Divider(),
             Flexible(
               child: ListView(shrinkWrap: true, children: [
@@ -628,7 +629,7 @@ class _EtiquettesDialogState extends State<EtiquettesDialog> {
                           textAlign: TextAlign.center,
                           keyboardType: TextInputType.number,
                           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                          decoration: const InputDecoration(suffixText: 'ét.'),
+                          decoration: InputDecoration(suffixText: 'ét.'.tr),
                         ),
                       ),
                     ]),
@@ -638,12 +639,12 @@ class _EtiquettesDialogState extends State<EtiquettesDialog> {
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer')),
-          IconButton(tooltip: 'Partager', onPressed: _busy ? null : () => _go(share: true), icon: const Icon(Icons.share_rounded)),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Fermer'.tr)),
+          IconButton(tooltip: 'Partager'.tr, onPressed: _busy ? null : () => _go(share: true), icon: const Icon(Icons.share_rounded)),
           FilledButton.icon(
             onPressed: _busy ? null : _go,
             icon: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.print_rounded),
-            label: const Text('Imprimer'),
+            label: Text('Imprimer'.tr),
           ),
         ],
       );
@@ -700,23 +701,23 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Fabrication · ${p.reference}'),
+        title: Text('Fabrication · {0}'.trf([p.reference])),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text(_nomenclature.isEmpty
-              ? 'Aucune composition définie : seul le stock de robes augmentera.'
-              : 'Le stock de robes augmente et les matières de la composition sont déduites automatiquement.'),
+              ? 'Aucune composition définie : seul le stock de robes augmentera.'.tr
+              : 'Le stock de robes augmente et les matières de la composition sont déduites automatiquement.'.tr),
           const SizedBox(height: 12),
           TextField(
             controller: c,
             autofocus: true,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(labelText: 'Nombre de pièces fabriquées'),
+            decoration: InputDecoration(labelText: 'Nombre de pièces fabriquées'.tr),
           ),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Valider')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Valider'.tr)),
         ],
       ),
     );
@@ -724,20 +725,20 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
     if (ok != true || n <= 0) return;
     try {
       await commerce.fabrication(p.id, n);
-      if (mounted) showSnack(context, '+$n pièces fabriquées${_nomenclature.isEmpty ? '' : ', matières déduites'}');
+      if (mounted) showSnack(context, '+{0} pièces fabriquées{1}'.trf([n, _nomenclature.isEmpty ? '' : ', matières déduites'.tr]));
     } catch (e) {
       if (mounted) showSnack(context, errorMessage(e), error: true);
     }
   }
 
   Future<void> _supprimer(Produit p) async {
-    if (!await confirmDialog(context, 'Supprimer', 'Supprimer définitivement ${p.reference} ?')) return;
+    if (!await confirmDialog(context, 'Supprimer'.tr, 'Supprimer définitivement {0} ?'.trf([p.reference]))) return;
     try {
       await stock.deleteProduit(p.id);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        showSnack(context, 'Impossible : ce produit a déjà des mouvements ou des ventes. Rendez-le inactif.', error: true);
+        showSnack(context, 'Impossible : ce produit a déjà des mouvements ou des ventes. Rendez-le inactif.'.tr, error: true);
       }
     }
   }
@@ -747,13 +748,13 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
         listenable: stock,
         builder: (context, _) {
           final p = stock.produit(widget.produitId);
-          if (p == null) return Scaffold(appBar: AppBar(), body: const EmptyState('Produit introuvable.'));
+          if (p == null) return Scaffold(appBar: AppBar(), body: EmptyState('Produit introuvable.'.tr));
           final c = stockColor(p);
           return Scaffold(
             appBar: AppBar(title: Text(p.reference), actions: [
-              IconButton(tooltip: 'Modifier', icon: const Icon(Icons.edit_outlined), onPressed: () => ouvrirProduitForm(context, produit: p)),
+              IconButton(tooltip: 'Modifier'.tr, icon: const Icon(Icons.edit_outlined), onPressed: () => ouvrirProduitForm(context, produit: p)),
               PopupMenuButton<String>(
-                itemBuilder: (_) => const [PopupMenuItem(value: 'del', child: Text('Supprimer'))],
+                itemBuilder: (_) => [PopupMenuItem(value: 'del', child: Text('Supprimer'.tr))],
                 onSelected: (_) => _supprimer(p),
               ),
             ]),
@@ -773,10 +774,10 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
                       if (p.categorie != null) Text(p.categorie!, style: TextStyle(color: context.pal.muted)),
                       const SizedBox(height: 10),
                       Wrap(spacing: 8, runSpacing: 8, children: [
-                        if (p.prixGros > 0) _chip(context, 'Gros ${fmtDA(p.prixGros)}', AppColors.violet),
-                        if (p.prixDetail > 0) _chip(context, 'Détail ${fmtDA(p.prixDetail)}', AppColors.sky),
-                        if (p.coutRevient > 0) _chip(context, 'Coût ${fmtDA(p.coutRevient)}', context.pal.muted),
-                        _chip(context, 'Alerte ≤ ${p.seuilAlerte}', const Color(0xFFF97316)),
+                        if (p.prixGros > 0) _chip(context, 'Gros {0}'.trf([fmtDA(p.prixGros)]), AppColors.violet),
+                        if (p.prixDetail > 0) _chip(context, 'Détail {0}'.trf([fmtDA(p.prixDetail)]), AppColors.sky),
+                        if (p.coutRevient > 0) _chip(context, 'Coût {0}'.trf([fmtDA(p.coutRevient)]), context.pal.muted),
+                        _chip(context, 'Alerte ≤ {0}'.trf([p.seuilAlerte]), const Color(0xFFF97316)),
                       ]),
                     ]),
                   ),
@@ -784,9 +785,9 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
               ),
               const SizedBox(height: 12),
               AutoGrid(minItemWidth: 160, children: [
-                StatTile(label: 'En stock', value: fmtInt(p.stock), icon: Icons.inventory_2_rounded, color: c),
-                StatTile(label: 'Vendus', value: fmtInt(p.vendus), icon: Icons.shopping_bag_rounded, color: AppColors.gold),
-                StatTile(label: 'Valeur du stock', value: fmtDA(p.valeurStock), icon: Icons.savings_rounded, color: AppColors.green),
+                StatTile(label: 'En stock'.tr, value: fmtInt(p.stock), icon: Icons.inventory_2_rounded, color: c),
+                StatTile(label: 'Vendus'.tr, value: fmtInt(p.vendus), icon: Icons.shopping_bag_rounded, color: AppColors.gold),
+                StatTile(label: 'Valeur du stock'.tr, value: fmtDA(p.valeurStock), icon: Icons.savings_rounded, color: AppColors.green),
               ]),
               const SizedBox(height: 12),
               Wrap(spacing: 10, runSpacing: 10, children: [
@@ -794,28 +795,28 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
                   onPressed: () => showModalBottomSheet<bool>(
                       context: context, isScrollControlled: true, showDragHandle: true, builder: (_) => MouvementStockSheet(produit: p)),
                   icon: const Icon(Icons.add_box_rounded),
-                  label: const Text('Ajouter du stock'),
+                  label: Text('Ajouter du stock'.tr),
                 ),
                 FilledButton.tonalIcon(
                   onPressed: () => _fabriquer(p),
                   icon: const Icon(Icons.precision_manufacturing_rounded),
-                  label: const Text('Fabrication'),
+                  label: Text('Fabrication'.tr),
                 ),
                 OutlinedButton.icon(
                   onPressed: () => showModalBottomSheet<bool>(
                       context: context, isScrollControlled: true, showDragHandle: true, builder: (_) => MouvementStockSheet(produit: p, sortie: true)),
                   icon: const Icon(Icons.indeterminate_check_box_rounded),
-                  label: const Text('Retirer / inventaire'),
+                  label: Text('Retirer / inventaire'.tr),
                 ),
                 FilledButton.tonalIcon(
                   onPressed: () => imprimerQrGrand(context, p),
                   icon: const Icon(Icons.qr_code_2_rounded),
-                  label: const Text('QR en grand (A4)'),
+                  label: Text('QR en grand (A4)'.tr),
                 ),
                 OutlinedButton.icon(
                   onPressed: () => showDialog<void>(context: context, builder: (_) => EtiquettesDialog(produits: [p])),
                   icon: const Icon(Icons.print_rounded),
-                  label: const Text('Petites étiquettes'),
+                  label: Text('Petites étiquettes'.tr),
                 ),
               ]),
               const SizedBox(height: 16),
@@ -823,11 +824,11 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
               const SizedBox(height: 16),
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const SectionTitle('Historique du stock'),
+                  SectionTitle('Historique du stock'.tr),
                   if (_loading)
                     const LinearProgressIndicator()
                   else if (_mvts.isEmpty)
-                    const EmptyState('Aucun mouvement.', icon: Icons.history_rounded)
+                    EmptyState('Aucun mouvement.'.tr, icon: Icons.history_rounded)
                   else
                     for (final m in _mvts)
                       Padding(
@@ -839,8 +840,7 @@ class _ProduitDetailScreenState extends State<ProduitDetailScreen> {
                           Expanded(
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                               Text(m.type.label, style: const TextStyle(fontWeight: FontWeight.w700)),
-                              Text('${fmtDate(m.date)} ${m.date.hour.toString().padLeft(2, '0')}:${m.date.minute.toString().padLeft(2, '0')}'
-                                  '${m.note != null ? ' · ${m.note}' : ''}',
+                              Text('${fmtDate(m.date)} ${m.date.hour.toString().padLeft(2, '0')}:${m.date.minute.toString().padLeft(2, '0')}' '${m.note != null ? ' · ${m.note}' : ''}',
                                   style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
                             ]),
                           ),
@@ -878,12 +878,12 @@ class _CoutCard extends StatelessWidget {
         builder: (ctx, setD) {
           final m = commerce.matiere(matiereId);
           return AlertDialog(
-            title: const Text('Matière par pièce'),
+            title: Text('Matière par pièce'.tr),
             content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               DropdownButtonFormField<String>(
                 value: matiereId,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Matière'),
+                decoration: InputDecoration(labelText: 'Matière'.tr),
                 items: [for (final x in commerce.matieres) DropdownMenuItem(value: x.id, child: Text('${x.nom} (${x.unite})'))],
                 onChanged: ligne != null ? null : (v) => setD(() => matiereId = v),
               ),
@@ -891,15 +891,15 @@ class _CoutCard extends StatelessWidget {
               TextField(
                 controller: q,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(labelText: 'Quantité pour 1 pièce', suffixText: m?.unite ?? ''),
+                decoration: InputDecoration(labelText: 'Quantité pour 1 pièce'.tr, suffixText: m?.unite ?? ''),
               ),
               if (commerce.matieres.isEmpty)
-                const Padding(padding: EdgeInsets.only(top: 8), child: Text('Créez d\'abord vos matières dans Stock → Achats → Matières.')),
+                Padding(padding: EdgeInsets.only(top: 8), child: Text('Créez d\'abord vos matières dans Stock → Achats → Matières.'.tr)),
             ]),
             actions: [
-              if (ligne != null) TextButton(onPressed: () => Navigator.pop(ctx, 'suppr'), child: const Text('Retirer')),
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-              FilledButton(onPressed: matiereId == null ? null : () => Navigator.pop(ctx, 'ok'), child: const Text('Enregistrer')),
+              if (ligne != null) TextButton(onPressed: () => Navigator.pop(ctx, 'suppr'), child: Text('Retirer'.tr)),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler'.tr)),
+              FilledButton(onPressed: matiereId == null ? null : () => Navigator.pop(ctx, 'ok'), child: Text('Enregistrer'.tr)),
             ],
           );
         },
@@ -927,10 +927,10 @@ class _CoutCard extends StatelessWidget {
         );
     return AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SectionTitle('Composition et coût de revient', subtitle: 'Matières utilisées pour 1 pièce',
-            trailing: IconButton.filledTonal(tooltip: 'Ajouter une matière', onPressed: () => _edit(context), icon: const Icon(Icons.add_rounded))),
+        SectionTitle('Composition et coût de revient'.tr, subtitle: 'Matières utilisées pour 1 pièce'.tr,
+            trailing: IconButton.filledTonal(tooltip: 'Ajouter une matière'.tr, onPressed: () => _edit(context), icon: const Icon(Icons.add_rounded))),
         if (lignes.isEmpty)
-          Text('Aucune matière. Ajoutez le tissu, le fil, les perles… pour connaître le coût réel.', style: TextStyle(color: context.pal.muted))
+          Text('Aucune matière. Ajoutez le tissu, le fil, les perles… pour connaître le coût réel.'.tr, style: TextStyle(color: context.pal.muted))
         else
           for (final l in lignes)
             Builder(builder: (context) {
@@ -949,11 +949,11 @@ class _CoutCard extends StatelessWidget {
               );
             }),
         const Divider(height: 22),
-        ligne('Coût des matières', fmtDA(p.coutMatieres)),
-        ligne('+ Main-d\'œuvre / autres (coût de revient saisi)', fmtDA(p.coutRevient)),
-        ligne('= Coût total par pièce', fmtDA(p.coutTotal), b: true),
-        ligne('Prix de gros', fmtDA(p.prixGros)),
-        ligne('Marge par pièce', '${fmtDA(p.marge)}  (${pct.toStringAsFixed(0)} %)', b: true, c: p.marge >= 0 ? AppColors.green : AppColors.rose),
+        ligne('Coût des matières'.tr, fmtDA(p.coutMatieres)),
+        ligne('+ Main-d\'œuvre / autres (coût de revient saisi)'.tr, fmtDA(p.coutRevient)),
+        ligne('= Coût total par pièce'.tr, fmtDA(p.coutTotal), b: true),
+        ligne('Prix de gros'.tr, fmtDA(p.prixGros)),
+        ligne('Marge par pièce'.tr, '${fmtDA(p.marge)}  (${pct.toStringAsFixed(0)} %)', b: true, c: p.marge >= 0 ? AppColors.green : AppColors.rose),
       ]),
     );
   }

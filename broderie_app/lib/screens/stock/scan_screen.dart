@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../theme.dart';
+import '../../i18n.dart';
 
 bool get cameraDisponible =>
     !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
@@ -86,7 +87,7 @@ class _ScanScreenState extends State<ScanScreen> {
                   child: const Icon(Icons.qr_code_scanner_rounded, size: 56, color: Colors.white),
                 ),
                 const SizedBox(height: 18),
-                Text('Scannez avec la douchette USB ou tapez la référence', textAlign: TextAlign.center, style: context.tt.titleMedium),
+                Text('Scannez avec la douchette USB ou tapez la référence'.tr, textAlign: TextAlign.center, style: context.tt.titleMedium),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _saisie,
@@ -95,18 +96,18 @@ class _ScanScreenState extends State<ScanScreen> {
                   textCapitalization: TextCapitalization.characters,
                   style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: 1),
                   textAlign: TextAlign.center,
-                  decoration: const InputDecoration(hintText: 'ex. ROB-0001', prefixIcon: Icon(Icons.qr_code_2_rounded)),
+                  decoration: InputDecoration(hintText: 'ex. ROB-0001'.tr, prefixIcon: Icon(Icons.qr_code_2_rounded)),
                   onSubmitted: _traiter,
                 ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: _occupe ? null : () => _traiter(_saisie.text),
                   icon: const Icon(Icons.search_rounded),
-                  label: const Text('Valider'),
+                  label: Text('Valider'.tr),
                 ),
                 if (_dernier != null) ...[
                   const SizedBox(height: 14),
-                  Text('Dernier code : $_dernier', style: TextStyle(color: context.pal.muted)),
+                  Text('Dernier code : {0}'.trf([_dernier]), style: TextStyle(color: context.pal.muted)),
                 ],
               ]),
             ),
@@ -123,7 +124,7 @@ class _ScanScreenState extends State<ScanScreen> {
         title: Text(widget.titre, style: const TextStyle(color: Colors.white)),
         actions: [
           IconButton(
-            tooltip: 'Lampe',
+            tooltip: 'Lampe'.tr,
             icon: Icon(_torche ? Icons.flash_on_rounded : Icons.flash_off_rounded, color: Colors.white),
             onPressed: () async {
               await _ctrl?.toggleTorch();
@@ -131,14 +132,14 @@ class _ScanScreenState extends State<ScanScreen> {
             },
           ),
           IconButton(
-            tooltip: 'Saisir la référence',
+            tooltip: 'Saisir la référence'.tr,
             icon: const Icon(Icons.keyboard_rounded, color: Colors.white),
             onPressed: () async {
               final c = TextEditingController();
               final v = await showDialog<String>(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  title: const Text('Référence'),
+                  title: Text('Référence'.tr),
                   content: TextField(
                     controller: c,
                     autofocus: true,
@@ -146,8 +147,8 @@ class _ScanScreenState extends State<ScanScreen> {
                     onSubmitted: (s) => Navigator.pop(ctx, s),
                   ),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-                    FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('OK')),
+                    TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler'.tr)),
+                    FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: Text('OK'.tr)),
                   ],
                 ),
               );
@@ -188,7 +189,7 @@ class _ScanScreenState extends State<ScanScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(30)),
-              child: Text(_occupe ? 'Code lu : $_dernier' : widget.aide, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              child: Text(_occupe ? 'Code lu : {0}'.trf([_dernier]) : widget.aide, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
             ),
           ]),
         ),

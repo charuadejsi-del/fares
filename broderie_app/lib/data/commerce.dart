@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../utils.dart';
 import 'stock.dart';
+import '../i18n.dart';
 
 double _d(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
 int _i(dynamic v) => v == null ? 0 : (v is num ? v.toInt() : int.tryParse(v.toString()) ?? 0);
@@ -82,12 +83,12 @@ class Commande {
   String get statutTexte {
     if (venteId != null) return 'Facturé';
     return switch (statut) {
-      StatutDoc.enCours => devis ? 'En attente' : 'En préparation',
-      StatutDoc.prete => 'Prête à livrer',
-      StatutDoc.acceptee => 'Accepté',
-      StatutDoc.refusee => 'Refusé',
-      StatutDoc.livree => 'Livrée',
-      StatutDoc.annulee => 'Annulé',
+      StatutDoc.enCours => devis ? 'En attente'.tr : 'En préparation'.tr,
+      StatutDoc.prete => 'Prête à livrer'.tr,
+      StatutDoc.acceptee => 'Accepté'.tr,
+      StatutDoc.refusee => 'Refusé'.tr,
+      StatutDoc.livree => 'Livrée'.tr,
+      StatutDoc.annulee => 'Annulé'.tr,
     };
   }
 }
@@ -220,10 +221,10 @@ class MatiereMvt {
       );
 
   String get typeTexte => switch (type) {
-        'achat' => 'Achat',
-        'consommation' => 'Consommation',
-        'ajustement' => 'Ajustement (inventaire)',
-        'retour' => 'Retour fournisseur',
+        'achat' => 'Achat'.tr,
+        'consommation' => 'Consommation'.tr,
+        'ajustement' => 'Ajustement (inventaire)'.tr,
+        'retour' => 'Retour fournisseur'.tr,
         _ => type,
       };
 }
@@ -328,7 +329,7 @@ class PaiementFournisseur {
         mode: (m['mode'] ?? 'especes') as String,
         note: _s(m['note']),
       );
-  String get modeTexte => modesPaiement[mode] ?? mode;
+  String get modeTexte => (modesPaiement[mode] ?? mode).tr;
 }
 
 class NomenclatureLigne {

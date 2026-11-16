@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
 import 'refs_screens.dart';
+import '../i18n.dart';
 
 /// Couleur et icône de chaque type de mouvement.
 Color mvtColor(TypeMvt t) => switch (t) {
@@ -25,11 +26,11 @@ IconData mvtIcon(TypeMvt t) => switch (t) {
     };
 
 String mvtHelp(TypeMvt t) => switch (t) {
-      TypeMvt.avance => 'Argent donné à l\'avance : il sera déduit de la paie.',
-      TypeMvt.paiement => 'Argent versé à l\'ouvrier pour régler sa paie.',
-      TypeMvt.salaire => 'Salaire gagné (ex. salaire du mois) : ajouté au montant dû.',
-      TypeMvt.prime => 'Prime ou bonus : ajouté au montant dû.',
-      TypeMvt.retenue => 'Retenue (absence, erreur…) : déduite de la paie.',
+      TypeMvt.avance => 'Argent donné à l\'avance : il sera déduit de la paie.'.tr,
+      TypeMvt.paiement => 'Argent versé à l\'ouvrier pour régler sa paie.'.tr,
+      TypeMvt.salaire => 'Salaire gagné (ex. salaire du mois) : ajouté au montant dû.'.tr,
+      TypeMvt.prime => 'Prime ou bonus : ajouté au montant dû.'.tr,
+      TypeMvt.retenue => 'Retenue (absence, erreur…) : déduite de la paie.'.tr,
     };
 
 /// Ouvre le formulaire d'un mouvement d'argent.
@@ -38,7 +39,7 @@ Future<void> openMouvementForm(BuildContext context, Ouvrier o, TypeMvt type, {M
     context: context,
     builder: (_) => MouvementForm(ouvrier: o, type: type, existing: existing, montantInitial: montant, noteInitiale: note),
   );
-  if (ok == true && context.mounted) showSnack(context, '${type.label} enregistré${type == TypeMvt.avance || type == TypeMvt.paiement || type == TypeMvt.salaire ? '' : 'e'}');
+  if (ok == true && context.mounted) showSnack(context, '{0} enregistré{1}'.trf([type.label, type == TypeMvt.avance || type == TypeMvt.paiement || type == TypeMvt.salaire ? '' : 'e']));
 }
 
 class MouvementForm extends StatefulWidget {
@@ -132,10 +133,10 @@ class _MouvementFormState extends State<MouvementForm> {
           autofocus: true,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: c),
-          decoration: InputDecoration(labelText: 'Montant', suffixText: 'DA', prefixIcon: Icon(mvtIcon(_type), color: c)),
+          decoration: InputDecoration(labelText: 'Montant'.tr, suffixText: 'DA'.tr, prefixIcon: Icon(mvtIcon(_type), color: c)),
           validator: (v) {
             final n = parseNum(v ?? '');
-            return (n == null || n <= 0) ? 'Montant supérieur à 0' : null;
+            return (n == null || n <= 0) ? 'Montant supérieur à 0'.tr : null;
           },
         ),
         InkWell(
@@ -144,19 +145,19 @@ class _MouvementFormState extends State<MouvementForm> {
             if (d != null) setState(() => _date = d);
           },
           child: InputDecorator(
-            decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.event)),
+            decoration: InputDecoration(labelText: 'Date'.tr, prefixIcon: Icon(Icons.event)),
             child: Text(fmtDate(_date)),
           ),
         ),
-        TextFormField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque (facultatif)', prefixIcon: Icon(Icons.notes))),
+        TextFormField(controller: _note, decoration: InputDecoration(labelText: 'Remarque (facultatif)'.tr, prefixIcon: Icon(Icons.notes))),
         if (widget.existing == null)
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: context.pal.surface2, borderRadius: BorderRadius.circular(14)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              _line(context, 'Solde actuel', solde),
+              _line(context, 'Solde actuel'.tr, solde),
               const SizedBox(height: 4),
-              _line(context, 'Après ce mouvement', apres, bold: true),
+              _line(context, 'Après ce mouvement'.tr, apres, bold: true),
             ]),
           ),
       ],
@@ -170,8 +171,8 @@ class _MouvementFormState extends State<MouvementForm> {
 }
 
 String soldeLabel(double v) {
-  if (v.abs() < 0.005) return 'À jour (0 DA)';
-  return v > 0 ? 'À payer ${fmtDA(v)}' : 'Avance ${fmtDA(-v)}';
+  if (v.abs() < 0.005) return 'À jour (0 DA)'.tr;
+  return v > 0 ? 'À payer {0}'.trf([fmtDA(v)]) : 'Avance {0}'.trf([fmtDA(-v)]);
 }
 
 Color soldeColor(double v) => v.abs() < 0.005 ? const Color(0xFF9AA0B4) : (v > 0 ? AppColors.green : AppColors.rose);
@@ -179,7 +180,7 @@ Color soldeColor(double v) => v.abs() < 0.005 ? const Color(0xFF9AA0B4) : (v > 0
 /// Formulaire d'un travail payé à la pièce.
 Future<void> openPieceForm(BuildContext context, Ouvrier o, {Piece? existing}) async {
   final ok = await showDialog<bool>(context: context, builder: (_) => PieceForm(ouvrier: o, existing: existing));
-  if (ok == true && context.mounted) showSnack(context, 'Travail enregistré');
+  if (ok == true && context.mounted) showSnack(context, 'Travail enregistré'.tr);
 }
 
 class PieceForm extends StatefulWidget {
@@ -199,7 +200,7 @@ class _PieceFormState extends State<PieceForm> {
       : (data.tachesPour(widget.ouvrier.departement).isEmpty ? null : data.tachesPour(widget.ouvrier.departement).first);
   late bool _extra = widget.existing != null && widget.existing!.prixUnitaire > 0;
   bool get _auMois => widget.ouvrier.modePaie == ModePaie.mois;
-  late final _libelle = TextEditingController(text: widget.existing?.libelle ?? _tache?.nom ?? 'Robe');
+  late final _libelle = TextEditingController(text: widget.existing?.libelle ?? _tache?.nom ?? 'Robe'.tr);
   late final _qte = TextEditingController(text: widget.existing == null ? '' : _fmt(widget.existing!.quantite));
   late final _prix = TextEditingController(
     text: _fmt(widget.existing?.prixUnitaire ?? data.prixTravail(widget.ouvrier, _tache)),
@@ -262,19 +263,19 @@ class _PieceFormState extends State<PieceForm> {
     final total = (parseNum(_qte.text) ?? 0) * prix;
     final taches = data.tachesPour(widget.ouvrier.departement);
     return FormDialog(
-      title: 'Travail · ${widget.ouvrier.nom}',
+      title: 'Travail · {0}'.trf([widget.ouvrier.nom]),
       formKey: _form,
       busy: _busy,
       onSave: _save,
       children: [
         TextFormField(
           controller: _libelle,
-          decoration: const InputDecoration(labelText: 'Travail (ex. Robe cousue, Repassage)', prefixIcon: Icon(Icons.checkroom_rounded)),
-          validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+          decoration: InputDecoration(labelText: 'Travail (ex. Robe cousue, Repassage)'.tr, prefixIcon: Icon(Icons.checkroom_rounded)),
+          validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
         ),
         Wrap(spacing: 6, runSpacing: 6, children: [
           if (taches.isEmpty)
-            for (final s in const ['Robe', 'Robe cousue', 'Repassage', 'Finition', 'Coupe'])
+            for (final s in ['Robe'.tr, 'Robe cousue'.tr, 'Repassage'.tr, 'Finition'.tr, 'Coupe'])
               ActionChip(
                 label: Text(s),
                 onPressed: () {
@@ -298,10 +299,10 @@ class _PieceFormState extends State<PieceForm> {
               setState(() => _extra = v);
               _prix.text = _fmt(data.prixTravail(widget.ouvrier, _tache, extra: v));
             },
-            title: const Text('Payé en extra', style: TextStyle(fontWeight: FontWeight.w700)),
+            title: Text('Payé en extra'.tr, style: TextStyle(fontWeight: FontWeight.w700)),
             subtitle: Text(_extra
-                ? 'Montant ajouté en plus de son salaire mensuel'
-                : 'Travail compté (suivi), sans montant : il est payé au mois'),
+                ? 'Montant ajouté en plus de son salaire mensuel'.tr
+                : 'Travail compté (suivi), sans montant : il est payé au mois'.tr),
           ),
         Row(children: [
           Expanded(
@@ -309,10 +310,10 @@ class _PieceFormState extends State<PieceForm> {
               controller: _qte,
               autofocus: widget.existing == null,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Quantité', prefixIcon: Icon(Icons.numbers)),
+              decoration: InputDecoration(labelText: 'Quantité'.tr, prefixIcon: Icon(Icons.numbers)),
               validator: (v) {
                 final n = parseNum(v ?? '');
-                return (n == null || n <= 0) ? 'Supérieur à 0' : null;
+                return (n == null || n <= 0) ? 'Supérieur à 0'.tr : null;
               },
             ),
           ),
@@ -321,10 +322,10 @@ class _PieceFormState extends State<PieceForm> {
             child: TextFormField(
               controller: _prix,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Prix / pièce', suffixText: 'DA'),
+              decoration: InputDecoration(labelText: 'Prix / pièce'.tr, suffixText: 'DA'.tr),
               validator: (v) {
                 final n = parseNum(v ?? '');
-                return (n == null || n < 0) ? 'Invalide' : null;
+                return (n == null || n < 0) ? 'Invalide'.tr : null;
               },
             ),
           ),
@@ -335,17 +336,17 @@ class _PieceFormState extends State<PieceForm> {
             if (d != null) setState(() => _date = d);
           },
           child: InputDecorator(
-            decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.event)),
+            decoration: InputDecoration(labelText: 'Date'.tr, prefixIcon: Icon(Icons.event)),
             child: Text(fmtDate(_date)),
           ),
         ),
-        TextFormField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque (facultatif)', prefixIcon: Icon(Icons.notes))),
+        TextFormField(controller: _note, decoration: InputDecoration(labelText: 'Remarque (facultatif)'.tr, prefixIcon: Icon(Icons.notes))),
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(gradient: AppColors.heroGradient, borderRadius: BorderRadius.circular(14)),
           child: Column(children: [
-            Text('${_qte.text.isEmpty ? '0' : _qte.text} × ${fmtDA(prix)}', style: const TextStyle(color: Colors.white70)),
-            Text(prix == 0 ? '${_qte.text.isEmpty ? '0' : _qte.text} pièce(s) · sans montant' : fmtDA(total),
+            Text('{0} × {1}'.trf([_qte.text.isEmpty ? '0' : _qte.text, fmtDA(prix)]), style: const TextStyle(color: Colors.white70)),
+            Text(prix == 0 ? '{0} pièce(s) · sans montant'.trf([_qte.text.isEmpty ? '0' : _qte.text]) : fmtDA(total),
                 style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
           ]),
         ),
@@ -366,7 +367,7 @@ class JournalItem {
   final VoidCallback? onEdit;
   final Future<void> Function() onDelete;
 
-  const JournalItem({
+  JournalItem({
     required this.date,
     required this.tri,
     required this.titre,
@@ -411,16 +412,16 @@ class JournalTile extends StatelessWidget {
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert, color: context.pal.muted, size: 20),
             itemBuilder: (_) => [
-              if (item.onEdit != null) const PopupMenuItem(value: 'edit', child: Text('Modifier')),
-              const PopupMenuItem(value: 'del', child: Text('Supprimer')),
+              if (item.onEdit != null) PopupMenuItem(value: 'edit', child: Text('Modifier'.tr)),
+              PopupMenuItem(value: 'del', child: Text('Supprimer'.tr)),
             ],
             onSelected: (v) async {
               if (v == 'edit') {
                 item.onEdit?.call();
-              } else if (await confirmDialog(context, 'Supprimer', 'Supprimer « ${item.titre} » du ${fmtDate(item.date)} ?')) {
+              } else if (await confirmDialog(context, 'Supprimer'.tr, 'Supprimer « {0} » du {1} ?'.trf([item.titre, fmtDate(item.date)]))) {
                 try {
                   await item.onDelete();
-                  if (context.mounted) showSnack(context, 'Supprimé');
+                  if (context.mounted) showSnack(context, 'Supprimé'.tr);
                 } catch (e) {
                   if (context.mounted) showSnack(context, errorMessage(e), error: true);
                 }
@@ -451,25 +452,25 @@ class SoldeCard extends StatelessWidget {
           return AppCard(
             gradient: grad,
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text(v < -0.005 ? 'Avance non couverte' : 'Reste à payer', style: const TextStyle(color: Colors.white70)),
+              Text(v < -0.005 ? 'Avance non couverte'.tr : 'Reste à payer'.tr, style: const TextStyle(color: Colors.white70)),
               FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 child: Text(fmtDA(v.abs()), style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w900)),
               ),
-              Text('Gagné ${fmtDA(s.gains)} · Avances ${fmtDA(s.avances)} · Payé ${fmtDA(s.paiements)}',
+              Text('Gagné {0} · Avances {1} · Payé {2}'.trf([fmtDA(s.gains), fmtDA(s.avances), fmtDA(s.paiements)]),
                   style: const TextStyle(color: Colors.white70, fontSize: 12)),
               const SizedBox(height: 14),
               Wrap(spacing: 8, runSpacing: 8, children: [
-                _btn(context, Icons.north_east_rounded, 'Avance', () => openMouvementForm(context, ouvrier, TypeMvt.avance)),
-                _btn(context, Icons.payments_rounded, 'Payer', () => openMouvementForm(context, ouvrier, TypeMvt.paiement, montant: v > 0 ? v : null)),
+                _btn(context, Icons.north_east_rounded, 'Avance'.tr, () => openMouvementForm(context, ouvrier, TypeMvt.avance)),
+                _btn(context, Icons.payments_rounded, 'Payer'.tr, () => openMouvementForm(context, ouvrier, TypeMvt.paiement, montant: v > 0 ? v : null)),
                 if (ouvrier.modePaie == ModePaie.mois)
-                  _btn(context, Icons.account_balance_wallet_rounded, 'Salaire du mois',
-                      () => openMouvementForm(context, ouvrier, TypeMvt.salaire, montant: ouvrier.salaireMensuel, note: 'Salaire $mois')),
+                  _btn(context, Icons.account_balance_wallet_rounded, 'Salaire du mois'.tr,
+                      () => openMouvementForm(context, ouvrier, TypeMvt.salaire, montant: ouvrier.salaireMensuel, note: 'Salaire {0}'.trf([mois]))),
                 if (!ouvrier.brodeur)
-                  _btn(context, Icons.add_box_rounded, 'Travail', () => openPieceForm(context, ouvrier)),
-                _btn(context, Icons.star_rounded, 'Prime', () => openMouvementForm(context, ouvrier, TypeMvt.prime)),
-                _btn(context, Icons.remove_circle_outline_rounded, 'Retenue', () => openMouvementForm(context, ouvrier, TypeMvt.retenue)),
+                  _btn(context, Icons.add_box_rounded, 'Travail'.tr, () => openPieceForm(context, ouvrier)),
+                _btn(context, Icons.star_rounded, 'Prime'.tr, () => openMouvementForm(context, ouvrier, TypeMvt.prime)),
+                _btn(context, Icons.remove_circle_outline_rounded, 'Retenue'.tr, () => openMouvementForm(context, ouvrier, TypeMvt.retenue)),
               ]),
             ]),
           );

@@ -13,6 +13,7 @@ import 'clients_screen.dart';
 import 'produits_screen.dart' show stockColor;
 import 'modeles_screen.dart' show choisirArticles;
 import 'scan_screen.dart';
+import '../../i18n.dart';
 
 Color venteColor(Vente v) {
   if (v.annulee) return const Color(0xFF9AA0B4);
@@ -101,7 +102,7 @@ class _VentesScreenState extends State<VentesScreen> {
         heroTag: 'fab-vente',
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NouvelleVenteScreen())),
         icon: const Icon(Icons.add_shopping_cart_rounded),
-        label: const Text('Nouvelle vente'),
+        label: Text('Nouvelle vente'.tr),
       ),
       body: RefreshIndicator(
         onRefresh: _load,
@@ -121,26 +122,26 @@ class _VentesScreenState extends State<VentesScreen> {
             ),
             const SizedBox(height: 12),
             AutoGrid(minItemWidth: 165, children: [
-              StatTile(label: 'Chiffre d\'affaires', value: fmtDA(ca), icon: Icons.trending_up_rounded, color: AppColors.violet, sub: '${valides.length} ventes'),
-              StatTile(label: 'Encaissé', value: fmtDA(encaisse), icon: Icons.payments_rounded, color: AppColors.green),
-              StatTile(label: 'Reste à encaisser', value: fmtDA(reste), icon: Icons.hourglass_bottom_rounded, color: AppColors.rose),
-              StatTile(label: 'Pièces vendues', value: fmtInt(pieces), icon: Icons.checkroom_rounded, color: AppColors.gold),
+              StatTile(label: 'Chiffre d\'affaires'.tr, value: fmtDA(ca), icon: Icons.trending_up_rounded, color: AppColors.violet, sub: '${valides.length} ventes'),
+              StatTile(label: 'Encaissé'.tr, value: fmtDA(encaisse), icon: Icons.payments_rounded, color: AppColors.green),
+              StatTile(label: 'Reste à encaisser'.tr, value: fmtDA(reste), icon: Icons.hourglass_bottom_rounded, color: AppColors.rose),
+              StatTile(label: 'Pièces vendues'.tr, value: fmtInt(pieces), icon: Icons.checkroom_rounded, color: AppColors.gold),
             ]),
             const SizedBox(height: 14),
             Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
               SizedBox(
                 width: 300,
                 child: TextField(
-                  decoration: const InputDecoration(hintText: 'N° facture, BL, client…', prefixIcon: Icon(Icons.search)),
+                  decoration: InputDecoration(hintText: 'N° facture, BL, client…'.tr, prefixIcon: Icon(Icons.search)),
                   onChanged: (v) => setState(() => _q = v),
                 ),
               ),
-              FilterChip(label: const Text('Non payées'), selected: _impayees, onSelected: (v) => setState(() => _impayees = v)),
+              FilterChip(label: Text('Non payées'.tr), selected: _impayees, onSelected: (v) => setState(() => _impayees = v)),
             ]),
             const SizedBox(height: 10),
             if (_loading) const LinearProgressIndicator(minHeight: 2),
             if (_error != null) ErrorBanner(_error!, onRetry: _load),
-            if (!_loading && list.isEmpty) const EmptyState('Aucune vente sur cette période.', icon: Icons.receipt_long_outlined),
+            if (!_loading && list.isEmpty) EmptyState('Aucune vente sur cette période.'.tr, icon: Icons.receipt_long_outlined),
             if (list.isNotEmpty)
               AppCard(
                 padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
@@ -181,10 +182,10 @@ class VenteTile extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(showClient ? '${v.numero} · ${v.clientNom ?? 'Client de passage'}' : v.numero,
+              Text(showClient ? '${v.numero} · ${v.clientNom ?? 'Client de passage'.tr}' : v.numero,
                   style: TextStyle(fontWeight: FontWeight.w800, decoration: v.annulee ? TextDecoration.lineThrough : null),
                   overflow: TextOverflow.ellipsis),
-              Text('${fmtDate(v.date)} · ${fmtInt(v.nbArticles)} pièces · ${v.statutTexte}',
+              Text('{0} · {1} pièces · {2}'.trf([fmtDate(v.date), fmtInt(v.nbArticles), v.statutTexte]),
                   style: context.tt.bodySmall?.copyWith(color: context.pal.muted), overflow: TextOverflow.ellipsis),
             ]),
           ),
@@ -257,17 +258,17 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
 
   Future<void> _scanner() => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => ScanScreen(
-          titre: 'Scanner les articles',
-          aide: 'Chaque scan ajoute 1 pièce au panier',
+          titre: 'Scanner les articles'.tr,
+          aide: 'Chaque scan ajoute 1 pièce au panier'.tr,
           onCode: (ctx, code) async {
             final p = stock.parReference(code);
             if (p == null) {
-              showSnack(ctx, 'Référence inconnue : $code', error: true);
+              showSnack(ctx, 'Référence inconnue : {0}'.trf([code]), error: true);
               return;
             }
             _ajouter(p);
             final q = _panier.firstWhere((l) => l.produit.id == p.id).quantite;
-            showSnack(ctx, '+1 ${p.reference} · ${p.designation} (×$q)');
+            showSnack(ctx, '+1 {0} · {1} (×{2})'.trf([p.reference, p.designation, q]));
             await Future.delayed(const Duration(milliseconds: 700));
           },
         ),
@@ -283,7 +284,7 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
 
   Future<void> _valider() async {
     if (_panier.isEmpty) {
-      showSnack(context, 'Ajoutez au moins un article', error: true);
+      showSnack(context, 'Ajoutez au moins un article'.tr, error: true);
       return;
     }
     final manque = _panier.where((l) => l.quantite > l.produit.stock).toList();
@@ -291,16 +292,16 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
     if (manque.isNotEmpty) {
       negatif = await confirmDialog(
         context,
-        'Stock insuffisant',
-        manque.map((l) => '${l.produit.reference} : demandé ${l.quantite}, disponible ${l.produit.stock}').join('\n') +
-            '\n\nVendre quand même ? (le stock deviendra négatif)',
-        action: 'Vendre quand même',
+        'Stock insuffisant'.tr,
+        manque.map((l) => '{0} : demandé {1}, disponible {2}'.trf([l.produit.reference, l.quantite, l.produit.stock])).join('\n') +
+            '\n\nVendre quand même ? (le stock deviendra négatif)'.tr,
+        action: 'Vendre quand même'.tr,
       );
       if (!negatif) return;
     }
     final verse = parseNum(_versement.text) ?? 0;
     if (verse > 0 && _clientId == null) {
-      showSnack(context, 'Choisissez le client pour enregistrer un versement', error: true);
+      showSnack(context, 'Choisissez le client pour enregistrer un versement'.tr, error: true);
       return;
     }
     setState(() => _busy = true);
@@ -336,12 +337,12 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
     final panier = AppCard(
       padding: const EdgeInsets.fromLTRB(16, 16, 10, 10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SectionTitle('Articles', subtitle: '${fmtInt(_qte)} pièce${_qte > 1 ? 's' : ''}', trailing: Wrap(spacing: 6, children: [
-          FilledButton.tonalIcon(onPressed: _scanner, icon: const Icon(Icons.qr_code_scanner_rounded), label: const Text('Scanner')),
-          OutlinedButton.icon(onPressed: _chercher, icon: const Icon(Icons.search_rounded), label: const Text('Chercher')),
+        SectionTitle('Articles'.tr, subtitle: '{0} pièce{1}'.trf([fmtInt(_qte), _qte > 1 ? 's' : '']), trailing: Wrap(spacing: 6, children: [
+          FilledButton.tonalIcon(onPressed: _scanner, icon: const Icon(Icons.qr_code_scanner_rounded), label: Text('Scanner'.tr)),
+          OutlinedButton.icon(onPressed: _chercher, icon: const Icon(Icons.search_rounded), label: Text('Chercher'.tr)),
         ])),
         if (_panier.isEmpty)
-          const EmptyState('Scannez les étiquettes QR ou cherchez les produits.', icon: Icons.shopping_cart_outlined)
+          EmptyState('Scannez les étiquettes QR ou cherchez les produits.'.tr, icon: Icons.shopping_cart_outlined)
         else
           for (final l in _panier) LigneEditor(
             ligne: l,
@@ -353,13 +354,13 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
 
     final resume = AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const SectionTitle('Client'),
+        SectionTitle('Client'.tr),
         DropdownButtonFormField<String?>(
           value: _clientId,
           isExpanded: true,
           decoration: const InputDecoration(prefixIcon: Icon(Icons.storefront_outlined)),
           items: [
-            const DropdownMenuItem<String?>(value: null, child: Text('Client de passage')),
+            DropdownMenuItem<String?>(value: null, child: Text('Client de passage'.tr)),
             for (final c in clients) DropdownMenuItem<String?>(value: c.id, child: Text(c.nom, overflow: TextOverflow.ellipsis)),
           ],
           onChanged: (v) => setState(() {
@@ -376,11 +377,11 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
               if (id != null) setState(() => _clientId = id);
             },
             icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-            label: const Text('Nouveau client'),
+            label: Text('Nouveau client'.tr),
           ),
           const Spacer(),
           if (client != null && client.solde.abs() > 0.005)
-            Text('Ancien solde : ${soldeClientTexte(client.solde)}', style: TextStyle(color: soldeClientColor(client.solde), fontWeight: FontWeight.w700, fontSize: 12.5)),
+            Text('Ancien solde : {0}'.trf([soldeClientTexte(client.solde)]), style: TextStyle(color: soldeClientColor(client.solde), fontWeight: FontWeight.w700, fontSize: 12.5)),
         ]),
         const SizedBox(height: 8),
         InkWell(
@@ -388,24 +389,24 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
             final d = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime(2100));
             if (d != null) setState(() => _date = d);
           },
-          child: InputDecorator(decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.event)), child: Text(fmtDate(_date))),
+          child: InputDecorator(decoration: InputDecoration(labelText: 'Date'.tr, prefixIcon: Icon(Icons.event)), child: Text(fmtDate(_date))),
         ),
         const SizedBox(height: 16),
-        _tot('Total articles', _brut),
+        _tot('Total articles'.tr, _brut),
         const SizedBox(height: 6),
         TextField(
           controller: _remise,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Remise', suffixText: 'DA', prefixIcon: Icon(Icons.discount_outlined)),
+          decoration: InputDecoration(labelText: 'Remise'.tr, suffixText: 'DA'.tr, prefixIcon: Icon(Icons.discount_outlined)),
         ),
         const SizedBox(height: 8),
         if (_tvaTaux > 0) ...[
-          _tot('Total HT', _ht),
-          _tot('TVA ${fmtNum(_tvaTaux)} %', _tva),
+          _tot('Total HT'.tr, _ht),
+          _tot('TVA {0} %'.trf([fmtNum(_tvaTaux)]), _tva),
         ],
         const Divider(height: 20),
         Row(children: [
-          Expanded(child: Text(_tvaTaux > 0 ? 'TOTAL TTC' : 'TOTAL', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16))),
+          Expanded(child: Text(_tvaTaux > 0 ? 'TOTAL TTC'.tr : 'TOTAL'.tr, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16))),
           Text(fmtDA(_ttc), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: context.cs.primary)),
         ]),
         const SizedBox(height: 14),
@@ -413,20 +414,20 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
           controller: _versement,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(
-            labelText: 'Versement maintenant',
-            suffixText: 'DA',
+            labelText: 'Versement maintenant'.tr,
+            suffixText: 'DA'.tr,
             prefixIcon: const Icon(Icons.payments_rounded),
-            suffixIcon: TextButton(onPressed: () => _versement.text = _ttc.toStringAsFixed(_ttc == _ttc.roundToDouble() ? 0 : 2), child: const Text('Tout')),
+            suffixIcon: TextButton(onPressed: () => _versement.text = _ttc.toStringAsFixed(_ttc == _ttc.roundToDouble() ? 0 : 2), child: Text('Tout'.tr)),
           ),
         ),
         const SizedBox(height: 8),
         Wrap(spacing: 6, runSpacing: 6, children: [
           for (final m in modesPaiement.entries)
-            ChoiceChip(label: Text(m.value), selected: _mode == m.key, onSelected: (_) => setState(() => _mode = m.key)),
+            ChoiceChip(label: Text(m.value.tr), selected: _mode == m.key, onSelected: (_) => setState(() => _mode = m.key)),
         ]),
         const SizedBox(height: 8),
         Row(children: [
-          const Expanded(child: Text('Reste à payer sur cette vente')),
+          Expanded(child: Text('Reste à payer sur cette vente'.tr)),
           Text(fmtDA((_ttc - (parseNum(_versement.text) ?? 0)).clamp(0, double.infinity)),
               style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.rose)),
         ]),
@@ -434,12 +435,12 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            title: const Text('Livraison et remarque'),
-            subtitle: Text('Adresse de livraison, remarque', style: TextStyle(color: context.pal.muted, fontSize: 12)),
+            title: Text('Livraison et remarque'.tr),
+            subtitle: Text('Adresse de livraison, remarque'.tr, style: TextStyle(color: context.pal.muted, fontSize: 12)),
             children: [
-              TextField(controller: _adresse, decoration: const InputDecoration(labelText: 'Adresse de livraison', prefixIcon: Icon(Icons.place_outlined))),
+              TextField(controller: _adresse, decoration: InputDecoration(labelText: 'Adresse de livraison'.tr, prefixIcon: Icon(Icons.place_outlined))),
               const SizedBox(height: 8),
-              TextField(controller: _note, decoration: const InputDecoration(labelText: 'Remarque', prefixIcon: Icon(Icons.notes))),
+              TextField(controller: _note, decoration: InputDecoration(labelText: 'Remarque'.tr, prefixIcon: Icon(Icons.notes))),
               const SizedBox(height: 8),
             ],
           ),
@@ -452,14 +453,14 @@ class _NouvelleVenteScreenState extends State<NouvelleVenteScreen> {
             icon: _busy
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.check_circle_rounded),
-            label: Text(_panier.isEmpty ? 'Ajoutez des articles' : 'Valider la vente · ${fmtDA(_ttc)}'),
+            label: Text(_panier.isEmpty ? 'Ajoutez des articles'.tr : 'Valider la vente · {0}'.trf([fmtDA(_ttc)])),
           ),
         ),
       ]),
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Nouvelle vente en gros')),
+      appBar: AppBar(title: Text('Nouvelle vente en gros'.tr)),
       body: wide
           ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(flex: 3, child: ListView(padding: const EdgeInsets.all(16), children: [panier])),
@@ -522,11 +523,11 @@ class LigneEditorState extends State<LigneEditor> {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('${l.produit.reference} · ${l.produit.libelle}', style: const TextStyle(fontWeight: FontWeight.w800), overflow: TextOverflow.ellipsis),
-              Text('Disponible : ${fmtInt(l.produit.disponible)}${l.produit.reserve > 0 ? ' (${fmtInt(l.produit.reserve)} réservées)' : ''}${manque ? '  ⚠ insuffisant' : ''}',
+              Text('Disponible : {0}{1}{2}'.trf([fmtInt(l.produit.disponible), l.produit.reserve > 0 ? ' ({0} réservées)'.trf([fmtInt(l.produit.reserve)]) : '', manque ? '  ⚠ insuffisant'.tr : '']),
                   style: TextStyle(fontSize: 12, color: manque ? AppColors.rose : stockColor(l.produit), fontWeight: FontWeight.w600)),
             ]),
           ),
-          IconButton(tooltip: 'Retirer', onPressed: widget.onRemove, icon: Icon(Icons.delete_outline, color: context.pal.muted)),
+          IconButton(tooltip: 'Retirer'.tr, onPressed: widget.onRemove, icon: Icon(Icons.delete_outline, color: context.pal.muted)),
         ]),
         const SizedBox(height: 6),
         Row(children: [
@@ -554,7 +555,7 @@ class LigneEditorState extends State<LigneEditor> {
             child: TextField(
               controller: _p,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Prix unitaire', suffixText: 'DA'),
+              decoration: InputDecoration(labelText: 'Prix unitaire'.tr, suffixText: 'DA'.tr),
               onChanged: (v) {
                 l.prix = parseNum(v) ?? 0;
                 widget.onChanged();
@@ -592,20 +593,20 @@ class ChoixProduitDialogState extends State<ChoixProduitDialog> {
         .take(100)
         .toList();
     return AlertDialog(
-      title: const Text('Choisir un produit'),
+      title: Text('Choisir un produit'.tr),
       content: SizedBox(
         width: 480,
         height: 460,
         child: Column(children: [
           TextField(
             autofocus: true,
-            decoration: const InputDecoration(hintText: 'Référence ou nom', prefixIcon: Icon(Icons.search)),
+            decoration: InputDecoration(hintText: 'Référence ou nom'.tr, prefixIcon: Icon(Icons.search)),
             onChanged: (v) => setState(() => _q = v),
           ),
           const SizedBox(height: 8),
           Expanded(
             child: list.isEmpty
-                ? const EmptyState('Aucun produit.')
+                ? EmptyState('Aucun produit.'.tr)
                 : ListView.builder(
                     itemCount: list.length,
                     itemBuilder: (_, i) {
@@ -621,7 +622,7 @@ class ChoixProduitDialogState extends State<ChoixProduitDialog> {
           ),
         ]),
       ),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fermer'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text('Fermer'.tr))],
     );
   }
 }
@@ -711,18 +712,18 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Annuler la vente'),
+        title: Text('Annuler la vente'.tr),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Les articles reviennent dans le stock. Les versements déjà reçus restent au crédit du client.'),
+          Text('Les articles reviennent dans le stock. Les versements déjà reçus restent au crédit du client.'.tr),
           const SizedBox(height: 12),
-          TextField(controller: motif, decoration: const InputDecoration(labelText: 'Motif (facultatif)')),
+          TextField(controller: motif, decoration: InputDecoration(labelText: 'Motif (facultatif)'.tr)),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Retour')),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: Text('Retour'.tr)),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Theme.of(c).colorScheme.error),
             onPressed: () => Navigator.pop(c, true),
-            child: const Text('Annuler la vente'),
+            child: Text('Annuler la vente'.tr),
           ),
         ],
       ),
@@ -730,7 +731,7 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
     if (ok != true) return;
     try {
       await stock.annulerVente(widget.venteId, motif.text);
-      if (mounted) showSnack(context, 'Vente annulée, stock remis à jour');
+      if (mounted) showSnack(context, 'Vente annulée, stock remis à jour'.tr);
     } catch (e) {
       if (mounted) showSnack(context, errorMessage(e), error: true);
     }
@@ -742,7 +743,7 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
     if (v == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: _loading ? const Center(child: CircularProgressIndicator()) : EmptyState(_error ?? 'Vente introuvable.'),
+        body: _loading ? const Center(child: CircularProgressIndicator()) : EmptyState(_error ?? 'Vente introuvable.'.tr),
       );
     }
     final c = stock.client(v.clientId);
@@ -751,7 +752,7 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
       appBar: AppBar(title: Text(v.numero), actions: [
         if (!v.annulee)
           PopupMenuButton<String>(
-            itemBuilder: (_) => const [PopupMenuItem(value: 'annuler', child: Text('Annuler la vente'))],
+            itemBuilder: (_) => [PopupMenuItem(value: 'annuler', child: Text('Annuler la vente'.tr))],
             onSelected: (_) => _annuler(),
           ),
       ]),
@@ -763,10 +764,10 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: AppColors.green.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(14)),
-              child: const Row(children: [
+              child: Row(children: [
                 Icon(Icons.check_circle_rounded, color: AppColors.green),
                 SizedBox(width: 10),
-                Expanded(child: Text('Vente enregistrée. Le stock a été mis à jour automatiquement.', style: TextStyle(fontWeight: FontWeight.w700))),
+                Expanded(child: Text('Vente enregistrée. Le stock a été mis à jour automatiquement.'.tr, style: TextStyle(fontWeight: FontWeight.w700))),
               ]),
             ),
           AppCard(
@@ -775,8 +776,8 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
               Row(children: [
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Facture ${v.numero} · BL ${v.numeroBl}', style: TextStyle(color: v.annulee ? null : Colors.white70)),
-                    Text(v.clientNom ?? 'Client de passage',
+                    Text('Facture {0} · BL {1}'.trf([v.numero, v.numeroBl]), style: TextStyle(color: v.annulee ? null : Colors.white70)),
+                    Text(v.clientNom ?? 'Client de passage'.tr,
                         style: TextStyle(color: v.annulee ? null : Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
                     Text(fmtDateLong(v.date), style: TextStyle(color: v.annulee ? null : Colors.white70)),
                   ]),
@@ -793,28 +794,28 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
                   style: v.annulee ? null : FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.violetDeep),
                   onPressed: _pdf ? null : () => _doc(facture: true),
                   icon: const Icon(Icons.receipt_long_rounded),
-                  label: const Text('Facture'),
+                  label: Text('Facture'.tr),
                 ),
                 FilledButton.icon(
                   style: v.annulee ? null : FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.violetDeep),
                   onPressed: _pdf ? null : () => _doc(facture: false),
                   icon: const Icon(Icons.local_shipping_rounded),
-                  label: const Text('Bon de livraison'),
+                  label: Text('Bon de livraison'.tr),
                 ),
-                IconButton.filledTonal(tooltip: 'Partager la facture', onPressed: _pdf ? null : () => _doc(facture: true, share: true), icon: const Icon(Icons.share_rounded)),
+                IconButton.filledTonal(tooltip: 'Partager la facture'.tr, onPressed: _pdf ? null : () => _doc(facture: true, share: true), icon: const Icon(Icons.share_rounded)),
                 if (!v.annulee && c != null && v.reste > 0.005)
                   FilledButton.icon(
                     style: FilledButton.styleFrom(backgroundColor: AppColors.green),
                     onPressed: () => ouvrirVersementForm(context, c, vente: v),
                     icon: const Icon(Icons.payments_rounded),
-                    label: const Text('Encaisser'),
+                    label: Text('Encaisser'.tr),
                   ),
                 if (!v.annulee && c != null)
                   FilledButton.tonalIcon(
                     onPressed: () => Navigator.of(context).push(MaterialPageRoute(
                         builder: (_) => AvoirEditorScreen(client: c, vente: v, lignesVente: _lignes))),
                     icon: const Icon(Icons.undo_rounded),
-                    label: const Text('Retour / avoir'),
+                    label: Text('Retour / avoir'.tr),
                   ),
               ]),
             ]),
@@ -822,7 +823,7 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
           const SizedBox(height: 12),
           AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SectionTitle('Articles', subtitle: '${fmtInt(v.nbArticles)} pièces'),
+              SectionTitle('Articles'.tr, subtitle: '{0} pièces'.trf([fmtInt(v.nbArticles)])),
               for (final l in _lignes)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
@@ -833,19 +834,19 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
                         Text(l.designation, overflow: TextOverflow.ellipsis),
                       ]),
                     ),
-                    Text('${fmtInt(l.quantite)} × ${fmtDA(l.prixUnitaire)}', style: TextStyle(color: context.pal.muted)),
+                    Text('{0} × {1}'.trf([fmtInt(l.quantite), fmtDA(l.prixUnitaire)]), style: TextStyle(color: context.pal.muted)),
                     const SizedBox(width: 12),
                     SizedBox(width: 110, child: Text(fmtDA(l.montant), textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w800))),
                   ]),
                 ),
               const Divider(height: 22),
-              if (v.remise > 0) ...[_l('Total articles', v.totalBrut), _l('Remise', -v.remise)],
-              if (v.tvaTaux > 0) ...[_l('Total HT', v.totalHt), _l('TVA ${fmtNum(v.tvaTaux)} %', v.totalTva)],
-              _l(v.tvaTaux > 0 ? 'Total TTC' : 'Total', v.totalTtc, bold: true),
+              if (v.remise > 0) ...[_l('Total articles'.tr, v.totalBrut), _l('Remise'.tr, -v.remise)],
+              if (v.tvaTaux > 0) ...[_l('Total HT'.tr, v.totalHt), _l('TVA {0} %'.trf([fmtNum(v.tvaTaux)]), v.totalTva)],
+              _l(v.tvaTaux > 0 ? 'Total TTC'.tr : 'Total'.tr, v.totalTtc, bold: true),
               if (!v.annulee) ...[
-                if (v.avoirs > 0) _l('Avoirs (retours)', -v.avoirs, color: AppColors.teal),
-                _l('Versé', v.verse, color: AppColors.green),
-                _l('Reste à payer', v.reste, bold: true, color: v.reste > 0.005 ? AppColors.rose : AppColors.green),
+                if (v.avoirs > 0) _l('Avoirs (retours)'.tr, -v.avoirs, color: AppColors.teal),
+                _l('Versé'.tr, v.verse, color: AppColors.green),
+                _l('Reste à payer'.tr, v.reste, bold: true, color: v.reste > 0.005 ? AppColors.rose : AppColors.green),
               ],
             ]),
           ),
@@ -853,11 +854,11 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
             const SizedBox(height: 12),
             AppCard(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const SectionTitle('Livraison et remarques'),
-                if (v.chauffeur != null) Text('Chauffeur : ${v.chauffeur}'),
-                if (v.vehicule != null) Text('Véhicule : ${v.vehicule}'),
-                if (v.adresseLivraison != null) Text('Adresse : ${v.adresseLivraison}'),
-                if (v.note != null) Text('Remarque : ${v.note}'),
+                SectionTitle('Livraison et remarques'.tr),
+                if (v.chauffeur != null) Text('Chauffeur : {0}'.trf([v.chauffeur])),
+                if (v.vehicule != null) Text('Véhicule : {0}'.trf([v.vehicule])),
+                if (v.adresseLivraison != null) Text('Adresse : {0}'.trf([v.adresseLivraison])),
+                if (v.note != null) Text('Remarque : {0}'.trf([v.note])),
               ]),
             ),
           ],
@@ -866,7 +867,7 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
             AppCard(
               padding: const EdgeInsets.fromLTRB(16, 18, 8, 8),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                const SectionTitle('Retours (avoirs)'),
+                SectionTitle('Retours (avoirs)'.tr),
                 for (final a in _avoirs) AvoirTile(a),
               ]),
             ),
@@ -876,9 +877,9 @@ class _VenteDetailScreenState extends State<VenteDetailScreen> {
             AppCard(
               padding: const EdgeInsets.fromLTRB(16, 18, 8, 8),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                const SectionTitle('Versements sur cette facture'),
+                SectionTitle('Versements sur cette facture'.tr),
                 if (_versements.isEmpty)
-                  const EmptyState('Aucun versement.', icon: Icons.payments_outlined)
+                  EmptyState('Aucun versement.'.tr, icon: Icons.payments_outlined)
                 else
                   for (final x in _versements) VersementTile(x, client: c, ventes: [v]),
               ]),

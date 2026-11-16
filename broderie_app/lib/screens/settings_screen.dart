@@ -13,6 +13,8 @@ import '../widgets.dart';
 import 'admin_screens.dart';
 import 'gestion_screens.dart';
 import 'refs_screens.dart';
+import '../i18n.dart';
+import '../pin.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -21,26 +23,55 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final email = Supabase.instance.client.auth.currentUser?.email ?? '';
     return Scaffold(
-      appBar: AppBar(title: const Text('Réglages')),
+      appBar: AppBar(title: Text('Réglages'.tr)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           AppCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const SectionTitle('Apparence', subtitle: 'Thème de l\'application'),
+              SectionTitle('Apparence'.tr, subtitle: 'Thème de l\'application'.tr),
               ValueListenableBuilder<ThemeMode>(
                 valueListenable: ThemeController.instance,
                 builder: (context, mode, _) => SegmentedButton<ThemeMode>(
-                  segments: const [
-                    ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_rounded), label: Text('Clair')),
-                    ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_rounded), label: Text('Sombre')),
-                    ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.brightness_auto_rounded), label: Text('Auto')),
+                  segments: [
+                    ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_rounded), label: Text('Clair'.tr)),
+                    ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_rounded), label: Text('Sombre'.tr)),
+                    ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.brightness_auto_rounded), label: Text('Auto'.tr)),
                   ],
                   selected: {mode},
                   onSelectionChanged: (s) => ThemeController.instance.set(s.first),
                 ),
               ),
+              const SizedBox(height: 18),
+              SectionTitle('Langue'.tr, subtitle: 'Tout le logiciel et les documents PDF'.tr),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'fr', label: Text('Français')),
+                  ButtonSegment(value: 'ar', label: Text('العربية')),
+                ],
+                selected: {langue.value},
+                onSelectionChanged: (s) => langue.set(s.first),
+              ),
             ]),
+          ),
+          const SizedBox(height: 14),
+          AppCard(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            child: ListTile(
+              leading: const Icon(Icons.pin_rounded, color: AppColors.gold),
+              title: Text('Changer mon code PIN'.tr, style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: Text('Demandé à chaque ouverture et après 10 min d\'inactivité'.tr),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (ctx) => EcranPin(
+                  mode: ModePin.changer,
+                  onTermine: () {
+                    Navigator.of(ctx).pop();
+                    showSnack(context, 'Code PIN modifié'.tr);
+                  },
+                ),
+              )),
+            ),
           ),
           if (session.admin) ...[
             const SizedBox(height: 14),
@@ -49,15 +80,15 @@ class SettingsScreen extends StatelessWidget {
               child: Column(children: [
                 ListTile(
                   leading: const Icon(Icons.manage_accounts_rounded, color: AppColors.gold),
-                  title: const Text('Comptes et accès au logiciel', style: TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: const Text('Pour ceux qui utilisent l\'application (pas les ouvriers)'),
+                  title: Text('Comptes et accès au logiciel'.tr, style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text('Pour ceux qui utilisent l\'application (pas les ouvriers)'.tr),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EmployesScreen())),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.business_rounded),
-                  title: const Text('Entreprise (en-tête des factures)', style: TextStyle(fontWeight: FontWeight.w700)),
+                  title: Text('Entreprise (en-tête des factures)'.tr, style: TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: Text(session.atelier?.nom ?? ''),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SocieteScreen())),
@@ -65,8 +96,8 @@ class SettingsScreen extends StatelessWidget {
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.history_rounded, color: AppColors.gold),
-                  title: const Text('Journal des actions', style: TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: const Text('Qui a ajouté, modifié ou supprimé quoi, et quand'),
+                  title: Text('Journal des actions'.tr, style: TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text('Qui a ajouté, modifié ou supprimé quoi, et quand'.tr),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const JournalScreen())),
                 ),
@@ -82,8 +113,8 @@ class SettingsScreen extends StatelessWidget {
               child: Column(children: [
                 ListTile(
                   leading: const Icon(Icons.precision_manufacturing_outlined),
-                  title: const Text('Machines'),
-                  subtitle: Text('${data.machines.length} machine(s)'),
+                  title: Text('Machines'.tr),
+                  subtitle: Text('{0} machine(s)'.trf([data.machines.length])),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MachinesScreen())),
                 ),
@@ -96,20 +127,21 @@ class SettingsScreen extends StatelessWidget {
             child: Column(children: [
               ListTile(
                 leading: const Icon(Icons.account_circle_outlined),
-                title: Text(session.membre?.nom.isNotEmpty == true ? session.membre!.nom : 'Compte'),
+                title: Text(session.membre?.nom.isNotEmpty == true ? session.membre!.nom : 'Compte'.tr),
                 subtitle: Text('${session.membre?.identifiantCourt ?? email}\n${session.membre?.droitsTexte ?? ''}'),
                 isThreeLine: true,
               ),
               const Divider(height: 1),
               ListTile(
                 leading: Icon(Icons.logout_rounded, color: context.cs.error),
-                title: Text('Se déconnecter', style: TextStyle(color: context.cs.error)),
+                title: Text('Se déconnecter'.tr, style: TextStyle(color: context.cs.error)),
                 onTap: () async {
                   data.clear();
                   stock.clear();
                   commerce.clear();
                   oublierLogo();
                   session.clear();
+                  verrou.arreter();
                   Navigator.of(context).popUntil((r) => r.isFirst);
                   await Supabase.instance.client.auth.signOut();
                 },
@@ -117,7 +149,7 @@ class SettingsScreen extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 24),
-          Center(child: Text('Atelier Broderie · v5.0', style: TextStyle(color: context.pal.muted, fontSize: 12))),
+          Center(child: Text('Atelier · v10.0'.tr, style: TextStyle(color: context.pal.muted, fontSize: 12))),
         ],
       ),
     );
@@ -134,10 +166,10 @@ class _TypesCard extends StatelessWidget {
         builder: (context, _) => AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             SectionTitle(
-              'Types de broderie et tarifs',
-              subtitle: 'Prix pour 1000 points du compteur',
+              'Types de broderie et tarifs'.tr,
+              subtitle: 'Prix pour 1000 points du compteur'.tr,
               trailing: IconButton.filledTonal(
-                tooltip: 'Ajouter un type',
+                tooltip: 'Ajouter un type'.tr,
                 onPressed: () => showDialog<bool>(context: context, builder: (_) => const _TypeForm(null)),
                 icon: const Icon(Icons.add),
               ),
@@ -157,9 +189,9 @@ class _TypesCard extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(data.types[i].nom + (data.types[i].actif ? '' : ' (inactif)'),
+                        Text(data.types[i].nom + (data.types[i].actif ? '' : ' (inactif)'.tr),
                             style: const TextStyle(fontWeight: FontWeight.w700)),
-                        Text('300 000 pts = ${fmtDA(300 * data.types[i].tarif1000)}',
+                        Text('300 000 pts = {0}'.trf([fmtDA(300 * data.types[i].tarif1000)]),
                             style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
                       ]),
                     ),
@@ -170,7 +202,7 @@ class _TypesCard extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 6),
-            Text('Changer un tarif ne modifie pas les relevés déjà enregistrés.',
+            Text('Changer un tarif ne modifie pas les relevés déjà enregistrés.'.tr,
                 style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
           ]),
         ),
@@ -226,32 +258,32 @@ class _TypeFormState extends State<_TypeForm> {
 
   @override
   Widget build(BuildContext context) => FormDialog(
-        title: widget.t == null ? 'Nouveau type de broderie' : 'Modifier le type',
+        title: widget.t == null ? 'Nouveau type de broderie'.tr : 'Modifier le type'.tr,
         formKey: _form,
         busy: _busy,
         onSave: _save,
         children: [
           TextFormField(
             controller: _nom,
-            decoration: const InputDecoration(labelText: 'Nom (ex. Passé plat, Cordon)', prefixIcon: Icon(Icons.gesture_rounded)),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
+            decoration: InputDecoration(labelText: 'Nom (ex. Passé plat, Cordon)'.tr, prefixIcon: Icon(Icons.gesture_rounded)),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire'.tr : null,
           ),
           TextFormField(
             controller: _tarif,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Prix pour 1000 points (DA)',
+            decoration: InputDecoration(
+              labelText: 'Prix pour 1000 points (DA)'.tr,
               prefixIcon: Icon(Icons.payments_outlined),
-              helperText: 'Ex. 10 → 300 000 points = 3 000 DA',
+              helperText: 'Ex. 10 → 300 000 points = 3 000 DA'.tr,
             ),
             validator: (v) {
               final n = parseNum(v ?? '');
-              return (n == null || n < 0) ? 'Nombre invalide' : null;
+              return (n == null || n < 0) ? 'Nombre invalide'.tr : null;
             },
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Actif'),
+            title: Text('Actif'.tr),
             value: _actif,
             onChanged: (v) => setState(() => _actif = v),
           ),

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../utils.dart';
 import 'session.dart';
+import '../i18n.dart';
 
 double _d(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
 int _i(dynamic v) => v == null ? 0 : (v is num ? v.toInt() : int.tryParse(v.toString()) ?? 0);
@@ -185,12 +186,12 @@ enum TypeStock { entree, sortie, vente, retour, ajustement, annulation }
 
 extension TypeStockX on TypeStock {
   String get label => switch (this) {
-        TypeStock.entree => 'Entrée',
-        TypeStock.sortie => 'Sortie',
-        TypeStock.vente => 'Vente',
-        TypeStock.retour => 'Retour client',
-        TypeStock.ajustement => 'Ajustement (inventaire)',
-        TypeStock.annulation => 'Annulation de vente',
+        TypeStock.entree => 'Entrée'.tr,
+        TypeStock.sortie => 'Sortie'.tr,
+        TypeStock.vente => 'Vente'.tr,
+        TypeStock.retour => 'Retour client'.tr,
+        TypeStock.ajustement => 'Ajustement (inventaire)'.tr,
+        TypeStock.annulation => 'Annulation de vente'.tr,
       };
   static TypeStock parse(String? s) => TypeStock.values.firstWhere((t) => t.name == s, orElse: () => TypeStock.entree);
 }
@@ -424,7 +425,7 @@ class Versement {
         note: _s(m['note']),
       );
 
-  String get modeTexte => modesPaiement[mode] ?? mode;
+  String get modeTexte => (modesPaiement[mode] ?? mode).tr;
 }
 
 /// Ligne du panier pendant une vente.

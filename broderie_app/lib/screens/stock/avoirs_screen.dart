@@ -9,6 +9,7 @@ import '../../theme.dart';
 import '../../utils.dart';
 import '../../widgets.dart';
 import 'ventes_screen.dart' show ChoixProduitDialog;
+import '../../i18n.dart';
 
 /// Création d'un avoir (retour client). Depuis une vente : les articles de la facture sont proposés.
 class AvoirEditorScreen extends StatefulWidget {
@@ -70,7 +71,7 @@ class _AvoirEditorScreenState extends State<AvoirEditorScreen> {
   Future<void> _save() async {
     final l = _lignes.where((x) => x.quantite > 0).toList();
     if (l.isEmpty) {
-      showSnack(context, 'Indiquez au moins une pièce retournée', error: true);
+      showSnack(context, 'Indiquez au moins une pièce retournée'.tr, error: true);
       return;
     }
     setState(() => _busy = true);
@@ -97,16 +98,16 @@ class _AvoirEditorScreenState extends State<AvoirEditorScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(widget.vente != null ? 'Retour sur ${widget.vente!.numero}' : 'Retour · ${widget.client.nom}')),
+        appBar: AppBar(title: Text(widget.vente != null ? 'Retour sur {0}'.trf([widget.vente!.numero]) : 'Retour · {0}'.trf([widget.client.nom]))),
         body: ListView(padding: const EdgeInsets.all(16), children: [
           AppCard(
             padding: const EdgeInsets.fromLTRB(16, 16, 10, 10),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              SectionTitle('Pièces retournées', subtitle: '${fmtInt(_qte)} pièce(s)', trailing: widget.vente == null
-                  ? OutlinedButton.icon(onPressed: _ajouterProduit, icon: const Icon(Icons.add_rounded), label: const Text('Ajouter'))
+              SectionTitle('Pièces retournées'.tr, subtitle: '{0} pièce(s)'.trf([fmtInt(_qte)]), trailing: widget.vente == null
+                  ? OutlinedButton.icon(onPressed: _ajouterProduit, icon: const Icon(Icons.add_rounded), label: Text('Ajouter'.tr))
                   : null),
               if (_lignes.isEmpty)
-                const EmptyState('Ajoutez les articles retournés.', icon: Icons.undo_rounded)
+                EmptyState('Ajoutez les articles retournés.'.tr, icon: Icons.undo_rounded)
               else
                 for (final l in _lignes)
                   Padding(
@@ -116,7 +117,7 @@ class _AvoirEditorScreenState extends State<AvoirEditorScreen> {
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text(l.reference, style: TextStyle(fontWeight: FontWeight.w900, color: context.cs.primary)),
                           Text(l.designation, overflow: TextOverflow.ellipsis),
-                          Text('${fmtDA(l.prix)} / pièce${l.max < 999999 ? ' · vendu : ${l.max}' : ''}',
+                          Text('{0} / pièce{1}'.trf([fmtDA(l.prix), l.max < 999999 ? ' · vendu : {0}'.trf([l.max]) : '']),
                               style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
                         ]),
                       ),
@@ -141,18 +142,18 @@ class _AvoirEditorScreenState extends State<AvoirEditorScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Remettre les pièces dans le stock'),
-                subtitle: const Text('Désactivez si les pièces sont abîmées et ne peuvent pas être revendues'),
+                title: Text('Remettre les pièces dans le stock'.tr),
+                subtitle: Text('Désactivez si les pièces sont abîmées et ne peuvent pas être revendues'.tr),
                 value: _remettre,
                 onChanged: (v) => setState(() => _remettre = v),
               ),
-              TextField(controller: _motif, decoration: const InputDecoration(labelText: 'Motif du retour', prefixIcon: Icon(Icons.notes))),
+              TextField(controller: _motif, decoration: InputDecoration(labelText: 'Motif du retour'.tr, prefixIcon: Icon(Icons.notes))),
               const Divider(height: 24),
               Row(children: [
-                const Expanded(child: Text('Montant de l\'avoir', style: TextStyle(fontWeight: FontWeight.w900))),
+                Expanded(child: Text('Montant de l\'avoir'.tr, style: TextStyle(fontWeight: FontWeight.w900))),
                 Text(fmtDA(_total), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: AppColors.green)),
               ]),
-              Text('Ce montant est déduit de ce que doit le client.', style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
+              Text('Ce montant est déduit de ce que doit le client.'.tr, style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
               const SizedBox(height: 14),
               SizedBox(
                 height: 54,
@@ -161,7 +162,7 @@ class _AvoirEditorScreenState extends State<AvoirEditorScreen> {
                   icon: _busy
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Icon(Icons.check_rounded),
-                  label: Text(_qte == 0 ? 'Choisissez les pièces' : 'Créer l\'avoir · ${fmtDA(_total)}'),
+                  label: Text(_qte == 0 ? 'Choisissez les pièces'.tr : 'Créer l\'avoir · {0}'.trf([fmtDA(_total)])),
                 ),
               ),
             ]),
@@ -196,13 +197,13 @@ class _AvoirDetailScreenState extends State<AvoirDetailScreen> {
     try {
       final bytes = await buildDocumentCommercial(
         atelier: session.atelier!,
-        titre: 'AVOIR',
+        titre: 'AVOIR'.tr,
         infos: [
-          ['N°', a.numero],
-          ['Date', fmtDate(a.date)],
-          if (a.venteNumero != null) ['Facture', a.venteNumero!],
+          ['N°'.tr, a.numero],
+          ['Date'.tr, fmtDate(a.date)],
+          if (a.venteNumero != null) ['Facture'.tr, a.venteNumero!],
         ],
-        titreClient: 'Client',
+        titreClient: 'Client'.tr,
         client: stock.client(a.clientId),
         lignes: [
           for (final l in _lignes)
@@ -214,10 +215,10 @@ class _AvoirDetailScreenState extends State<AvoirDetailScreen> {
               montant: l.montant,
             ),
         ],
-        totaux: [('MONTANT DE L\'AVOIR', a.total, true)],
+        totaux: [('MONTANT DE L\'AVOIR'.tr, a.total, true)],
         montantLettres: a.total,
-        phraseLettres: 'Arrêté le présent avoir à la somme de :',
-        note: [if (a.motif != null) 'Motif : ${a.motif}', a.remisEnStock ? 'Marchandise reprise en stock.' : 'Marchandise non remise en stock.'].join('\n'),
+        phraseLettres: 'Arrêté le présent avoir à la somme de :'.tr,
+        note: [if (a.motif != null) 'Motif : {0}'.trf([a.motif]), a.remisEnStock ? 'Marchandise reprise en stock.'.tr : 'Marchandise non remise en stock.'].join('\n'),
       );
       final nom = '${a.numero}.pdf';
       share ? await partager(bytes, nom) : await imprimer(bytes, nom);
@@ -237,10 +238,10 @@ class _AvoirDetailScreenState extends State<AvoirDetailScreen> {
         AppCard(
           gradient: const LinearGradient(colors: [Color(0xFF047857), Color(0xFF10B981)]),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('Avoir ${a.numero}${a.venteNumero != null ? ' · facture ${a.venteNumero}' : ''}', style: const TextStyle(color: Colors.white70)),
+            Text('Avoir {0}{1}'.trf([a.numero, a.venteNumero != null ? ' · facture {0}'.trf([a.venteNumero]) : '']), style: const TextStyle(color: Colors.white70)),
             Text(a.clientNom ?? '', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
             Text(fmtDA(a.total), style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900)),
-            Text('${fmtDate(a.date)} · ${fmtInt(a.nbArticles)} pièce(s) · ${a.remisEnStock ? 'remis en stock' : 'non remis en stock'}',
+            Text('{0} · {1} pièce(s) · {2}'.trf([fmtDate(a.date), fmtInt(a.nbArticles), a.remisEnStock ? 'remis en stock'.tr : 'non remis en stock'.tr]),
                 style: const TextStyle(color: Colors.white70)),
             const SizedBox(height: 12),
             Wrap(spacing: 8, children: [
@@ -248,7 +249,7 @@ class _AvoirDetailScreenState extends State<AvoirDetailScreen> {
                 style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF047857)),
                 onPressed: _busy ? null : () => _pdf(),
                 icon: const Icon(Icons.picture_as_pdf_rounded),
-                label: const Text('Avoir PDF'),
+                label: Text('Avoir PDF'.tr),
               ),
               IconButton.filledTonal(onPressed: _busy ? null : () => _pdf(share: true), icon: const Icon(Icons.share_rounded)),
             ]),
@@ -257,16 +258,16 @@ class _AvoirDetailScreenState extends State<AvoirDetailScreen> {
         const SizedBox(height: 12),
         AppCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const SectionTitle('Articles'),
+            SectionTitle('Articles'.tr),
             for (final l in _lignes)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 5),
                 child: Row(children: [
                   Expanded(child: Text('${stock.produit(l.produitId)?.reference ?? ''} · ${stock.produit(l.produitId)?.libelle ?? ''}')),
-                  Text('${fmtInt(l.quantite)} × ${fmtDA(l.prixUnitaire)} = ${fmtDA(l.montant)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  Text('{0} × {1} = {2}'.trf([fmtInt(l.quantite), fmtDA(l.prixUnitaire), fmtDA(l.montant)]), style: const TextStyle(fontWeight: FontWeight.w700)),
                 ]),
               ),
-            if (a.motif != null) ...[const SizedBox(height: 8), Text('Motif : ${a.motif}')],
+            if (a.motif != null) ...[const SizedBox(height: 8), Text('Motif : {0}'.trf([a.motif]))],
           ]),
         ),
       ]),
@@ -294,8 +295,8 @@ class AvoirTile extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Avoir ${a.numero}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                Text('${fmtDate(a.date)} · ${fmtInt(a.nbArticles)} pièce(s)${a.motif != null ? ' · ${a.motif}' : ''}',
+                Text('Avoir {0}'.trf([a.numero]), style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text('{0} · {1} pièce(s){2}'.trf([fmtDate(a.date), fmtInt(a.nbArticles), a.motif != null ? ' · ${a.motif}' : '']),
                     style: context.tt.bodySmall?.copyWith(color: context.pal.muted), overflow: TextOverflow.ellipsis),
               ]),
             ),

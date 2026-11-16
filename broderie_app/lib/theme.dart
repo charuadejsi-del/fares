@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'i18n.dart';
 
 /// Palette « Maison de couture » : noir profond, or et pierres précieuses.
 class AppColors {
@@ -263,7 +264,7 @@ ThemeData buildTheme(Brightness b) {
     menuTheme: MenuThemeData(
       style: MenuStyle(
         backgroundColor: WidgetStatePropertyAll(surface),
-        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
         shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: line))),
       ),
     ),
@@ -311,7 +312,7 @@ ThemeData buildTheme(Brightness b) {
       ),
     ),
     badgeTheme: const BadgeThemeData(backgroundColor: AppColors.rose, textColor: Colors.white),
-    drawerTheme: const DrawerThemeData(backgroundColor: AppColors.sidebar, surfaceTintColor: Colors.transparent),
+    drawerTheme: DrawerThemeData(backgroundColor: AppColors.sidebar, surfaceTintColor: Colors.transparent),
   );
 }
 

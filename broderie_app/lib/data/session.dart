@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../i18n.dart';
 
 double _d(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
 String? _s(dynamic v) => (v == null || v.toString().trim().isEmpty) ? null : v.toString().trim();
@@ -9,9 +10,9 @@ enum Espace { broderie, paie, stock }
 
 extension EspaceX on Espace {
   String get label => switch (this) {
-        Espace.broderie => 'Broderie',
-        Espace.paie => 'Paie & avances',
-        Espace.stock => 'Stock & ventes',
+        Espace.broderie => 'Broderie'.tr,
+        Espace.paie => 'Paie & avances'.tr,
+        Espace.stock => 'Stock & ventes'.tr,
       };
 }
 
