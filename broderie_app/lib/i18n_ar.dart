@@ -1182,4 +1182,13 @@ const arabe = <String, String>{
   'Pièces de chaque couleur et taille dans une série': 'قطع كل لون ومقاس في السلسلة الواحدة',
   '{0} pièces par série': '{0} قطعة في السلسلة',
   '{0} la série au prix de gros': '{0} للسلسلة بسعر الجملة',
+  'Automatique selon le stock': 'تلقائية حسب المخزون',
+  'Stock insuffisant : seulement {0} pièces disponibles pour cette série.': 'مخزون غير كافٍ: {0} قطعة فقط متوفرة لهذه السلسلة.',
+  'Programme automatique': 'البرمجة التلقائية',
+  'Répartit les pièces à parts égales entre les couleurs et tailles en stock.': 'يوزّع القطع بالتساوي على الألوان والمقاسات المتوفرة في المخزون.',
+  'pcs': 'قطعة',
+  'Programmer automatiquement': 'برمجة تلقائية',
+  'Recalculer à chaque vente selon le stock': 'إعادة الحساب عند كل بيع حسب المخزون',
+  'Si une couleur ou une taille est épuisée, la série se répartit sur celles qui restent.': 'إذا نفد لون أو مقاس، تتوزع السلسلة على المتبقية.',
+  'La série garde exactement la composition de la grille ci-dessous.': 'تحافظ السلسلة تماماً على تركيبة الجدول أدناه.',
 };

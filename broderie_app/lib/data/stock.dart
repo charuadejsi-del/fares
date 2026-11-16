@@ -442,9 +442,15 @@ class LignePanier {
 class SerieVente {
   final String nom;
   final Map<String, int> composition;
-  const SerieVente({required this.nom, required this.composition});
 
-  int get total => composition.values.fold(0, (s, v) => s + v);
+  /// Série automatique : recalculée selon les couleurs et tailles en stock à chaque vente.
+  final bool auto;
+
+  /// Nombre de pièces visé (séries automatiques).
+  final int cible;
+  const SerieVente({required this.nom, required this.composition, this.auto = false, this.cible = 0});
+
+  int get total => auto && cible > 0 ? cible : composition.values.fold(0, (s, v) => s + v);
 
   factory SerieVente.fromJson(Map<String, dynamic> m) => SerieVente(
         nom: '${m['nom'] ?? ''}',
@@ -452,9 +458,67 @@ class SerieVente {
           for (final e in ((m['composition'] as Map?) ?? const {}).entries)
             if ((e.value as num) > 0) e.key.toString(): (e.value as num).toInt(),
         },
+        auto: m['auto'] == true,
+        cible: (m['cible'] as num?)?.toInt() ?? 0,
       );
 
-  Map<String, dynamic> toJson() => {'nom': nom, 'composition': composition};
+  Map<String, dynamic> toJson() => {'nom': nom, 'composition': composition, if (auto) 'auto': true, if (auto) 'cible': cible};
+
+  /// Composition à utiliser pour [n] séries : recalculée sur le stock si la série est automatique.
+  Map<String, int> pour(Modele m, int n) => auto
+      ? repartirSerie(m, total * n)
+      : {for (final e in composition.entries) e.key: e.value * n};
+}
+
+/// Programme automatique : répartit [total] pièces entre les couleurs et tailles en stock,
+/// le plus équitablement possible (même nombre par couleur, puis par taille), sans dépasser le stock.
+Map<String, int> repartirSerie(Modele m, int total, {bool selonStock = true}) {
+  var cases = [for (final v in m.variantes) if (!selonStock || v.disponible > 0) v];
+  if (cases.isEmpty) cases = [...m.variantes];
+  final res = <String, int>{};
+  if (total <= 0 || cases.isEmpty) return res;
+  int reste(Produit v) => selonStock ? v.disponible - (res[cleGrille(v.couleur, v.taille)] ?? 0) : 1 << 30;
+  final couleurs = <String?>[];
+  for (final v in cases) {
+    if (!couleurs.contains(v.couleur)) couleurs.add(v.couleur);
+  }
+  final parTaille = <String?, int>{};
+  // Quota par couleur : total réparti à parts égales (le surplus aux premières couleurs)
+  final quota = {for (var i = 0; i < couleurs.length; i++) couleurs[i]: total ~/ couleurs.length + (i < total % couleurs.length ? 1 : 0)};
+  var place = 0;
+  // Tour par tour : chaque couleur reçoit une pièce dans la taille la moins servie
+  for (var tour = 0; place < total && tour < total; tour++) {
+    var progres = false;
+    for (final c in couleurs) {
+      if (place >= total) break;
+      final donne = cases.where((v) => v.couleur == c).fold<int>(0, (s, v) => s + (res[cleGrille(v.couleur, v.taille)] ?? 0));
+      if (donne >= quota[c]!) continue;
+      final dispo = cases.where((v) => v.couleur == c && reste(v) > 0).toList()
+        ..sort((a, b) {
+          final d = (parTaille[a.taille] ?? 0).compareTo(parTaille[b.taille] ?? 0);
+          return d != 0 ? d : (res[cleGrille(a.couleur, a.taille)] ?? 0).compareTo(res[cleGrille(b.couleur, b.taille)] ?? 0);
+        });
+      if (dispo.isEmpty) continue;
+      final v = dispo.first;
+      final k = cleGrille(v.couleur, v.taille);
+      res[k] = (res[k] ?? 0) + 1;
+      parTaille[v.taille] = (parTaille[v.taille] ?? 0) + 1;
+      place++;
+      progres = true;
+    }
+    if (!progres) break;
+  }
+  // Stock insuffisant sur certaines couleurs : compléter avec ce qui reste
+  while (place < total) {
+    final dispo = cases.where((v) => reste(v) > 0).toList()
+      ..sort((a, b) => (res[cleGrille(a.couleur, a.taille)] ?? 0).compareTo(res[cleGrille(b.couleur, b.taille)] ?? 0));
+    if (dispo.isEmpty) break;
+    final k = cleGrille(dispo.first.couleur, dispo.first.taille);
+    res[k] = (res[k] ?? 0) + 1;
+    parTaille[dispo.first.taille] = (parTaille[dispo.first.taille] ?? 0) + 1;
+    place++;
+  }
+  return res;
 }
 
 class InfoModele {

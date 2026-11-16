@@ -794,9 +794,9 @@ Future<List<(Produit, int)>?> choisirArticles(BuildContext context, {bool verifi
         final total = lireGrille(ctrls).values.fold(0, (s, v) => s + v);
         void ajouterSerie(int i) {
           final n = nbSeries[i] ?? 1;
-          for (final e in series[i].composition.entries) {
+          for (final e in series[i].pour(m, n).entries) {
             final c = ctrls.putIfAbsent(e.key, () => TextEditingController());
-            c.text = '${(int.tryParse(c.text) ?? 0) + e.value * n}';
+            c.text = '${(int.tryParse(c.text) ?? 0) + e.value}';
           }
           setD(() {});
         }
@@ -1021,7 +1021,7 @@ class SeriesModeleCard extends StatelessWidget {
                   subtitle: Text([
                     '{0} pièces'.trf([series[i].total]),
                     if (m.prixGros > 0) '{0} la série'.trf([fmtDA(series[i].total * m.prixGros)]),
-                    _resume(series[i]),
+                    series[i].auto ? 'Automatique selon le stock'.tr : _resume(series[i]),
                   ].join(' · ')),
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                     IconButton(tooltip: 'Modifier'.tr, onPressed: () => _editer(context, index: i), icon: const Icon(Icons.edit_rounded)),
@@ -1066,6 +1066,23 @@ class _SerieDialogState extends State<_SerieDialog> {
   late final _nom = TextEditingController(text: widget.existante?.nom ?? '');
   final _ctrls = <String, TextEditingController>{};
   final _parCase = TextEditingController(text: '1');
+  late final _cible = TextEditingController(text: '${widget.existante?.cible ?? 12}');
+  late bool _auto = widget.existante?.auto ?? false;
+
+  void _generer() {
+    final n = int.tryParse(_cible.text) ?? 0;
+    if (n <= 0) return;
+    final r = repartirSerie(widget.m, n);
+    for (final c in _ctrls.values) {
+      c.clear();
+    }
+    for (final e in r.entries) {
+      _ctrls.putIfAbsent(e.key, () => TextEditingController()).text = '${e.value}';
+    }
+    final place = r.values.fold(0, (s, v) => s + v);
+    setState(() => _auto = true);
+    if (place < n) showSnack(context, 'Stock insuffisant : seulement {0} pièces disponibles pour cette série.'.trf([place]), error: true);
+  }
 
   Set<String> get _cases => {for (final v in widget.m.variantes) cleGrille(v.couleur, v.taille)};
 
@@ -1081,6 +1098,7 @@ class _SerieDialogState extends State<_SerieDialog> {
   void dispose() {
     _nom.dispose();
     _parCase.dispose();
+    _cible.dispose();
     for (final c in _ctrls.values) {
       c.dispose();
     }
@@ -1114,6 +1132,55 @@ class _SerieDialogState extends State<_SerieDialog> {
                 hintText: 'Série {0}'.trf([total]),
                 prefixIcon: const Icon(Icons.inventory_2_rounded),
               ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.gold.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.gold.withValues(alpha: 0.45)),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Row(children: [
+                  const Icon(Icons.auto_awesome_rounded, color: AppColors.gold),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Programme automatique'.tr, style: const TextStyle(fontWeight: FontWeight.w800))),
+                ]),
+                const SizedBox(height: 4),
+                Text('Répartit les pièces à parts égales entre les couleurs et tailles en stock.'.tr,
+                    style: TextStyle(fontSize: 12.5, color: context.pal.muted)),
+                const SizedBox(height: 10),
+                Row(children: [
+                  SizedBox(
+                    width: 90,
+                    child: TextField(
+                      controller: _cible,
+                      textAlign: TextAlign.center,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: InputDecoration(isDense: true, suffixText: 'pcs'.tr),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _generer,
+                      icon: const Icon(Icons.auto_fix_high_rounded),
+                      label: Text('Programmer automatiquement'.tr),
+                    ),
+                  ),
+                ]),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _auto,
+                  onChanged: (v) => setState(() => _auto = v),
+                  title: Text('Recalculer à chaque vente selon le stock'.tr, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text(_auto
+                      ? 'Si une couleur ou une taille est épuisée, la série se répartit sur celles qui restent.'.tr
+                      : 'La série garde exactement la composition de la grille ci-dessous.'.tr),
+                ),
+              ]),
             ),
             const SizedBox(height: 12),
             Row(children: [
@@ -1162,7 +1229,12 @@ class _SerieDialogState extends State<_SerieDialog> {
               ? null
               : () => Navigator.pop(
                     context,
-                    SerieVente(nom: _nom.text.trim().isEmpty ? 'Série {0}'.trf([total]) : _nom.text.trim(), composition: compo),
+                    SerieVente(
+                      nom: _nom.text.trim().isEmpty ? 'Série {0}'.trf([_auto ? (int.tryParse(_cible.text) ?? total) : total]) : _nom.text.trim(),
+                      composition: compo,
+                      auto: _auto,
+                      cible: _auto ? (int.tryParse(_cible.text) ?? total) : 0,
+                    ),
                   ),
           child: Text('Enregistrer'.tr),
         ),
