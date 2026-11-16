@@ -17,6 +17,7 @@ import 'refs_screens.dart';
 import 'settings_screen.dart';
 import 'stock/achats_screen.dart' show AchatsModule;
 import 'stock/produits_screen.dart' show ProduitsScreen;
+import 'travaux_screens.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -126,6 +127,9 @@ class _HomeShellState extends State<HomeShell> {
           _Cible(Icons.bolt_rounded, 'Saisie rapide des points', 'Relevé du compteur de la machine', 'Actions',
               () => _pousser(Scaffold(appBar: AppBar(title: const Text('Saisie rapide')), body: const QuickEntryScreen()))),
         if (session.peut(Espace.paie))
+          _Cible(Icons.add_task_rounded, 'Saisie du travail', 'Pièces, travail au mois et extra', 'Actions',
+              () => _pousser(Scaffold(appBar: AppBar(title: const Text('Saisie du travail')), body: const TravauxSaisieScreen()))),
+        if (session.peut(Espace.paie))
           _Cible(Icons.person_add_alt_1_rounded, 'Ajouter un ouvrier', 'Nouvelle fiche ouvrier', 'Actions',
               () => showDialog<bool>(context: context, builder: (_) => const OuvrierForm(null))),
         if (session.peut(Espace.paie))
@@ -168,7 +172,7 @@ class _HomeShellState extends State<HomeShell> {
           }),
         ),
       _Cle.broderie => BroderieModule(onGoToOuvriers: session.peut(Espace.paie) ? () => _aller(_Cle.paie) : null),
-      _Cle.paie => const OuvriersScreen(),
+      _Cle.paie => const OuvriersModule(),
       _Cle.stock => const ProduitsScreen(),
       _Cle.ventes => const VentesModule(),
       _Cle.achats => const AchatsModule(),

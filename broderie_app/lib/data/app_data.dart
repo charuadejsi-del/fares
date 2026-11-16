@@ -17,6 +17,7 @@ class AppData extends ChangeNotifier {
   List<Dessin> dessins = [];
   List<Machine> machines = [];
   List<TypeTravail> types = [];
+  List<Tache> taches = [];
   Map<String, Solde> soldes = {};
   bool refsLoaded = false;
 
@@ -39,6 +40,22 @@ class AppData extends ChangeNotifier {
   Dessin? dessin(String? id) => _find(dessins, id, (d) => d.id);
   Machine? machine(String? id) => _find(machines, id, (m) => m.id);
   TypeTravail? type(String? id) => _find(types, id, (t) => t.id);
+  Tache? tache(String? id) => _find(taches, id, (t) => t.id);
+
+  /// Tâches actives d'un département (toutes si aucune ne correspond).
+  List<Tache> tachesPour(String departement) {
+    final actives = taches.where((t) => t.actif).toList();
+    final dep = actives.where((t) => t.departement.toLowerCase() == departement.toLowerCase()).toList();
+    return dep.isNotEmpty ? dep : actives;
+  }
+
+  /// Prix proposé pour un travail : tarif de la tâche, sinon prix à la pièce de l'ouvrier.
+  /// Un ouvrier payé au mois n'est payé que si le travail est « en extra ».
+  double prixTravail(Ouvrier o, Tache? t, {bool extra = false}) {
+    if (o.modePaie == ModePaie.mois && !extra) return 0;
+    if (t != null && t.prix > 0) return t.prix;
+    return o.prixPiece;
+  }
   String typeNom(String? id) => id == null ? '—' : (type(id)?.nom ?? '(supprimé)');
 
   String ouvrierNom(String id) => ouvrier(id)?.nom ?? '(supprimé)';
@@ -72,9 +89,49 @@ class AppData extends ChangeNotifier {
       ]).select();
       types = rows.map(TypeTravail.fromMap).toList()..sort((a, b) => a.ordre.compareTo(b.ordre));
     }
-    await _loadSoldes();
+    await Future.wait([_loadSoldes(), loadTaches(notify: false)]);
     refsLoaded = true;
     notifyListeners();
+  }
+
+  /// Tâches & tarifs (tolérant : liste vide si la table n'existe pas encore).
+  Future<void> loadTaches({bool notify = true}) async {
+    try {
+      final rows = await _db.from('travail_taches').select().order('departement').order('ordre').order('nom');
+      taches = rows.map(Tache.fromMap).toList();
+      if (taches.isEmpty && session.admin) {
+        final defaut = [
+          ('Robe cousue', 'Couture'),
+          ('Montage', 'Couture'),
+          ('Coupe', 'Coupe'),
+          ('Repassage', 'Repassage'),
+          ('Finition', 'Finition'),
+          ('Emballage', 'Emballage'),
+        ];
+        final ins = await _db
+            .from('travail_taches')
+            .insert([for (var i = 0; i < defaut.length; i++) Tache.toRow(nom: defaut[i].$1, departement: defaut[i].$2, prix: 0, ordre: i)])
+            .select();
+        taches = ins.map(Tache.fromMap).toList();
+      }
+    } catch (_) {
+      taches = [];
+    }
+    if (notify) notifyListeners();
+  }
+
+  Future<void> saveTache(Map<String, dynamic> row, {String? id}) async {
+    if (id == null) {
+      await _db.from('travail_taches').insert(row);
+    } else {
+      await _db.from('travail_taches').update(row).eq('id', id);
+    }
+    await loadTaches();
+  }
+
+  Future<void> deleteTache(String id) async {
+    await _db.from('travail_taches').delete().eq('id', id);
+    await loadTaches();
   }
 
   Future<void> _loadSoldes() async {
@@ -94,6 +151,7 @@ class AppData extends ChangeNotifier {
     dessins = [];
     machines = [];
     types = [];
+    taches = [];
     soldes = {};
     refsLoaded = false;
     productionVersion = 0;

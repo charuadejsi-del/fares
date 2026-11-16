@@ -100,6 +100,7 @@ class Piece {
   final double prixUnitaire;
   final double montant;
   final String? note;
+  final String? tacheId;
 
   const Piece({
     required this.id,
@@ -110,6 +111,7 @@ class Piece {
     required this.prixUnitaire,
     required this.montant,
     this.note,
+    this.tacheId,
   });
 
   factory Piece.fromMap(Map<String, dynamic> m) => Piece(
@@ -121,6 +123,7 @@ class Piece {
         prixUnitaire: _toD(m['prix_unitaire']),
         montant: _toD(m['montant']),
         note: m['note'] as String?,
+        tacheId: m['tache_id'] as String?,
       );
 
   static Map<String, dynamic> toRow({
@@ -130,6 +133,7 @@ class Piece {
     required double quantite,
     required double prixUnitaire,
     String? note,
+    String? tacheId,
   }) =>
       {
         'ouvrier_id': ouvrierId,
@@ -138,6 +142,36 @@ class Piece {
         'quantite': quantite,
         'prix_unitaire': prixUnitaire,
         'note': _nullIfEmpty(note),
+        if (tacheId != null) 'tache_id': tacheId,
+      };
+}
+
+/// Tâche d'atelier hors broderie (couture, coupe, repassage…) avec son tarif à la pièce.
+class Tache {
+  final String id;
+  final String nom;
+  final String departement;
+  final double prix;
+  final int ordre;
+  final bool actif;
+
+  const Tache({required this.id, required this.nom, required this.departement, this.prix = 0, this.ordre = 0, this.actif = true});
+
+  factory Tache.fromMap(Map<String, dynamic> m) => Tache(
+        id: m['id'] as String,
+        nom: (m['nom'] ?? '') as String,
+        departement: (m['departement'] ?? '') as String,
+        prix: _toD(m['prix']),
+        ordre: _toI(m['ordre']),
+        actif: (m['actif'] ?? true) as bool,
+      );
+
+  static Map<String, dynamic> toRow({required String nom, required String departement, required double prix, int ordre = 0, bool actif = true}) => {
+        'nom': nom.trim(),
+        'departement': departement.trim(),
+        'prix': prix,
+        'ordre': ordre,
+        'actif': actif,
       };
 }
 

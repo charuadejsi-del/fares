@@ -1,7 +1,7 @@
 name: atelier_broderie
 description: "Atelier Broderie — suivi de la production des machines à broder (points, robes, ouvriers, paie)."
 publish_to: 'none'
-version: 9.0.0+14
+version: 9.1.0+15
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

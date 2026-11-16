@@ -175,8 +175,24 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
     final nbNuit = _prod.length - nbJour;
     final journal = _journal(o);
     final showBroderie = o.enBroderie || _prod.isNotEmpty;
+    final showTravail = !o.brodeur || _pieces.isNotEmpty;
+    final qtePieces = _pieces.fold<double>(0, (s, p) => s + p.quantite);
+    final montantPieces = _pieces.fold<double>(0, (s, p) => s + p.montant);
+    final joursTravail = {for (final p in _pieces) dateKey(p.date)}.length;
+    final parTache = <String, double>{};
+    for (final p in _pieces) {
+      parTache[p.libelle.trim()] = (parTache[p.libelle.trim()] ?? 0) + p.quantite;
+    }
+    final tachesTri = parTache.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
 
     return Scaffold(
+      floatingActionButton: o.brodeur
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => openPieceForm(context, o),
+              icon: const Icon(Icons.add_task_rounded),
+              label: const Text('Ajouter du travail'),
+            ),
       appBar: AppBar(
         title: Text(o.nom),
         actions: [
@@ -223,7 +239,8 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
                   subtitle: _periode == Periode.tout ? 'Depuis le début' : 'Du ${fmtDate(r.start)} au ${fmtDate(r.end)}'),
               _bl(context, 'Solde reporté (avant la période)', _bilan.anterieur, muted: true),
               if (_bilan.broderie != 0 || o.brodeur) _bl(context, '+ Broderie (points)', _bilan.broderie),
-              if (_bilan.pieces != 0 || o.modePaie == ModePaie.piece) _bl(context, '+ Travaux à la pièce', _bilan.pieces),
+              if (_bilan.pieces != 0 || o.modePaie == ModePaie.piece)
+                _bl(context, o.modePaie == ModePaie.mois ? '+ Travail en extra' : '+ Travaux à la pièce', _bilan.pieces),
               if (_bilan.salaires != 0 || o.modePaie == ModePaie.mois) _bl(context, '+ Salaires', _bilan.salaires),
               if (_bilan.primes != 0) _bl(context, '+ Primes', _bilan.primes),
               _bl(context, '− Avances', -_bilan.avances),
@@ -276,6 +293,48 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
                   ),
                 ]);
 
+          final Widget travail = !showTravail
+              ? const SizedBox.shrink()
+              : Column(children: [
+                  AutoGrid(minItemWidth: 160, children: [
+                    StatTile(
+                        label: 'Pièces réalisées',
+                        value: qtePieces == qtePieces.roundToDouble() ? qtePieces.toStringAsFixed(0) : qtePieces.toStringAsFixed(1),
+                        icon: Icons.checkroom_rounded,
+                        color: AppColors.violet),
+                    StatTile(
+                        label: o.modePaie == ModePaie.mois ? 'Payé en extra' : 'Gagné aux pièces',
+                        value: fmtDA(montantPieces),
+                        icon: Icons.payments_rounded,
+                        color: AppColors.green),
+                    StatTile(label: 'Jours travaillés', value: '$joursTravail', icon: Icons.event_available_rounded, color: AppColors.gold),
+                  ]),
+                  if (tachesTri.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    AppCard(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        const SectionTitle('Travail par tâche'),
+                        for (final e in tachesTri)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 5),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                              Row(children: [
+                                Expanded(child: Text(e.key, style: const TextStyle(fontWeight: FontWeight.w700))),
+                                Text('${e.value == e.value.roundToDouble() ? e.value.toStringAsFixed(0) : e.value.toStringAsFixed(1)} pcs',
+                                    style: const TextStyle(fontWeight: FontWeight.w800)),
+                              ]),
+                              const SizedBox(height: 4),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(minHeight: 5, value: e.value / tachesTri.first.value),
+                              ),
+                            ]),
+                          ),
+                      ]),
+                    ),
+                  ],
+                ]);
+
           final journalCard = AppCard(
             padding: const EdgeInsets.fromLTRB(16, 18, 6, 8),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -304,7 +363,7 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
           );
 
           return ListView(
-            padding: EdgeInsets.fromLTRB(wide ? 28 : 16, 4, wide ? 28 : 16, 32),
+            padding: EdgeInsets.fromLTRB(wide ? 28 : 16, 4, wide ? 28 : 16, 96),
             children: [
               if (wide)
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -325,13 +384,23 @@ class _OuvrierDetailScreenState extends State<OuvrierDetailScreen> {
               const SizedBox(height: 8),
               if (wide)
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(child: Column(children: [bilanCard, const SizedBox(height: 16), broderie])),
+                  Expanded(
+                    child: Column(children: [
+                      bilanCard,
+                      const SizedBox(height: 16),
+                      travail,
+                      if (showTravail && showBroderie) const SizedBox(height: 16),
+                      broderie,
+                    ]),
+                  ),
                   const SizedBox(width: 16),
                   Expanded(child: journalCard),
                 ])
               else ...[
                 bilanCard,
                 const SizedBox(height: 16),
+                travail,
+                if (showTravail) const SizedBox(height: 16),
                 broderie,
                 if (showBroderie) const SizedBox(height: 16),
                 journalCard,

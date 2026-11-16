@@ -196,14 +196,17 @@ class _OuvrierCard extends StatelessWidget {
           ),
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert, color: context.pal.muted),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'avance', child: Text('Donner une avance')),
-              PopupMenuItem(value: 'payer', child: Text('Payer')),
-              PopupMenuItem(value: 'edit', child: Text('Modifier')),
-              PopupMenuItem(value: 'del', child: Text('Supprimer')),
+            itemBuilder: (_) => [
+              if (!o.brodeur) const PopupMenuItem(value: 'travail', child: Text('Ajouter du travail')),
+              const PopupMenuItem(value: 'avance', child: Text('Donner une avance')),
+              const PopupMenuItem(value: 'payer', child: Text('Payer')),
+              const PopupMenuItem(value: 'edit', child: Text('Modifier')),
+              const PopupMenuItem(value: 'del', child: Text('Supprimer')),
             ],
             onSelected: (v) {
               switch (v) {
+                case 'travail':
+                  openPieceForm(context, o);
                 case 'avance':
                   openMouvementForm(context, o, TypeMvt.avance);
                 case 'payer':

@@ -8,6 +8,7 @@ import 'refs_screens.dart';
 import 'stock/clients_screen.dart';
 import 'stock/commandes_screen.dart';
 import 'stock/ventes_screen.dart';
+import 'travaux_screens.dart';
 
 /// Espace avec onglets en haut.
 class _Onglets extends StatelessWidget {
@@ -44,6 +45,19 @@ class BroderieModule extends StatelessWidget {
         ('Historique', Icons.history_rounded, const ProductionScreen()),
         ('Statistiques', Icons.insights_rounded, const DashboardScreen()),
         ('Dessins', Icons.local_florist_outlined, const DessinsScreen()),
+      ]);
+}
+
+/// Espace Ouvriers : équipe, saisie du travail (pièce / mois / extra), historique, tâches & tarifs.
+class OuvriersModule extends StatelessWidget {
+  const OuvriersModule({super.key});
+
+  @override
+  Widget build(BuildContext context) => _Onglets([
+        ('Équipe', Icons.groups_rounded, const OuvriersScreen()),
+        ('Saisie du travail', Icons.add_task_rounded, const TravauxSaisieScreen()),
+        ('Historique', Icons.history_rounded, const TravauxHistoriqueScreen()),
+        ('Tâches & tarifs', Icons.content_cut_rounded, const TachesScreen()),
       ]);
 }
 

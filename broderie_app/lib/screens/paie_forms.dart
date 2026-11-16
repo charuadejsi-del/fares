@@ -179,7 +179,7 @@ Color soldeColor(double v) => v.abs() < 0.005 ? const Color(0xFF9AA0B4) : (v > 0
 /// Formulaire d'un travail payé à la pièce.
 Future<void> openPieceForm(BuildContext context, Ouvrier o, {Piece? existing}) async {
   final ok = await showDialog<bool>(context: context, builder: (_) => PieceForm(ouvrier: o, existing: existing));
-  if (ok == true && context.mounted) showSnack(context, 'Pièces enregistrées');
+  if (ok == true && context.mounted) showSnack(context, 'Travail enregistré');
 }
 
 class PieceForm extends StatefulWidget {
@@ -194,11 +194,22 @@ class PieceForm extends StatefulWidget {
 class _PieceFormState extends State<PieceForm> {
   final _form = GlobalKey<FormState>();
   late DateTime _date = widget.existing?.date ?? dayOnly(DateTime.now());
-  late final _libelle = TextEditingController(text: widget.existing?.libelle ?? 'Robe');
+  late Tache? _tache = widget.existing != null
+      ? data.tache(widget.existing!.tacheId)
+      : (data.tachesPour(widget.ouvrier.departement).isEmpty ? null : data.tachesPour(widget.ouvrier.departement).first);
+  late bool _extra = widget.existing != null && widget.existing!.prixUnitaire > 0;
+  bool get _auMois => widget.ouvrier.modePaie == ModePaie.mois;
+  late final _libelle = TextEditingController(text: widget.existing?.libelle ?? _tache?.nom ?? 'Robe');
   late final _qte = TextEditingController(text: widget.existing == null ? '' : _fmt(widget.existing!.quantite));
   late final _prix = TextEditingController(
-    text: _fmt(widget.existing?.prixUnitaire ?? widget.ouvrier.prixPiece),
+    text: _fmt(widget.existing?.prixUnitaire ?? data.prixTravail(widget.ouvrier, _tache)),
   );
+
+  void _choisir(Tache? t) {
+    setState(() => _tache = t);
+    if (t != null) _libelle.text = t.nom;
+    _prix.text = _fmt(data.prixTravail(widget.ouvrier, t, extra: _extra));
+  }
   late final _note = TextEditingController(text: widget.existing?.note ?? '');
   bool _busy = false;
 
@@ -230,8 +241,9 @@ class _PieceFormState extends State<PieceForm> {
           dateKey: dateKey(_date),
           libelle: _libelle.text,
           quantite: parseNum(_qte.text)!,
-          prixUnitaire: parseNum(_prix.text) ?? 0,
+          prixUnitaire: _auMois && !_extra ? 0 : (parseNum(_prix.text) ?? 0),
           note: _note.text,
+          tacheId: _tache != null && _tache!.nom.trim() == _libelle.text.trim() ? _tache!.id : null,
         ),
         id: widget.existing?.id,
       );
@@ -246,9 +258,11 @@ class _PieceFormState extends State<PieceForm> {
 
   @override
   Widget build(BuildContext context) {
-    final total = (parseNum(_qte.text) ?? 0) * (parseNum(_prix.text) ?? 0);
+    final prix = _auMois && !_extra ? 0.0 : (parseNum(_prix.text) ?? 0);
+    final total = (parseNum(_qte.text) ?? 0) * prix;
+    final taches = data.tachesPour(widget.ouvrier.departement);
     return FormDialog(
-      title: 'Pièces · ${widget.ouvrier.nom}',
+      title: 'Travail · ${widget.ouvrier.nom}',
       formKey: _form,
       busy: _busy,
       onSave: _save,
@@ -259,9 +273,36 @@ class _PieceFormState extends State<PieceForm> {
           validator: (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
         ),
         Wrap(spacing: 6, runSpacing: 6, children: [
-          for (final s in const ['Robe', 'Robe cousue', 'Repassage', 'Finition', 'Coupe'])
-            ActionChip(label: Text(s), onPressed: () => _libelle.text = s),
+          if (taches.isEmpty)
+            for (final s in const ['Robe', 'Robe cousue', 'Repassage', 'Finition', 'Coupe'])
+              ActionChip(
+                label: Text(s),
+                onPressed: () {
+                  _choisir(null);
+                  _libelle.text = s;
+                },
+              )
+          else
+            for (final t in taches)
+              ChoiceChip(
+                label: Text(t.prix > 0 ? '${t.nom} · ${fmtDA(t.prix)}' : t.nom),
+                selected: _tache?.id == t.id && _libelle.text.trim() == t.nom,
+                onSelected: (_) => _choisir(t),
+              ),
         ]),
+        if (_auMois)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _extra,
+            onChanged: (v) {
+              setState(() => _extra = v);
+              _prix.text = _fmt(data.prixTravail(widget.ouvrier, _tache, extra: v));
+            },
+            title: const Text('Payé en extra', style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text(_extra
+                ? 'Montant ajouté en plus de son salaire mensuel'
+                : 'Travail compté (suivi), sans montant : il est payé au mois'),
+          ),
         Row(children: [
           Expanded(
             child: TextFormField(
@@ -276,7 +317,7 @@ class _PieceFormState extends State<PieceForm> {
             ),
           ),
           const SizedBox(width: 10),
-          Expanded(
+          if (!_auMois || _extra) Expanded(
             child: TextFormField(
               controller: _prix,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -303,8 +344,9 @@ class _PieceFormState extends State<PieceForm> {
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(gradient: AppColors.heroGradient, borderRadius: BorderRadius.circular(14)),
           child: Column(children: [
-            Text('${_qte.text.isEmpty ? '0' : _qte.text} × ${fmtDA(parseNum(_prix.text) ?? 0)}', style: const TextStyle(color: Colors.white70)),
-            Text(fmtDA(total), style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
+            Text('${_qte.text.isEmpty ? '0' : _qte.text} × ${fmtDA(prix)}', style: const TextStyle(color: Colors.white70)),
+            Text(prix == 0 ? '${_qte.text.isEmpty ? '0' : _qte.text} pièce(s) · sans montant' : fmtDA(total),
+                style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
           ]),
         ),
       ],
@@ -424,8 +466,8 @@ class SoldeCard extends StatelessWidget {
                 if (ouvrier.modePaie == ModePaie.mois)
                   _btn(context, Icons.account_balance_wallet_rounded, 'Salaire du mois',
                       () => openMouvementForm(context, ouvrier, TypeMvt.salaire, montant: ouvrier.salaireMensuel, note: 'Salaire $mois')),
-                if (ouvrier.modePaie == ModePaie.piece)
-                  _btn(context, Icons.add_box_rounded, 'Pièces', () => openPieceForm(context, ouvrier)),
+                if (!ouvrier.brodeur)
+                  _btn(context, Icons.add_box_rounded, 'Travail', () => openPieceForm(context, ouvrier)),
                 _btn(context, Icons.star_rounded, 'Prime', () => openMouvementForm(context, ouvrier, TypeMvt.prime)),
                 _btn(context, Icons.remove_circle_outline_rounded, 'Retenue', () => openMouvementForm(context, ouvrier, TypeMvt.retenue)),
               ]),
