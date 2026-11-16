@@ -1159,4 +1159,5 @@ const arabe = <String, String>{
   'Couture': 'خياطة',
   'Coupe': 'قص',
   'Emballage': 'تغليف',
+  'Cachet et signature': 'الختم والإمضاء',
 };

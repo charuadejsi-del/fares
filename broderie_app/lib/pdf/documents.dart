@@ -68,8 +68,6 @@ Future<pw.ThemeData> _pdfTheme() async {
   _themeLangue = langue.value;
   return _theme!;
 }
-  return _theme!;
-}
 
 // ============================================================== montant en lettres
 
@@ -472,7 +470,7 @@ pw.Widget _signatures(List<String> labels) => pw.Row(children: [
             height: 78,
             padding: const pw.EdgeInsets.all(8),
             decoration: pw.BoxDecoration(border: pw.Border.all(color: _line), borderRadius: pw.BorderRadius.circular(4)),
-            child: pw.Text(labels[i].toUpperCase(), style: _label(_grey)),
+            child: pw.Text(labels[i].tr.toUpperCase(), style: _label(_grey)),
           ),
         ),
       ],
@@ -695,7 +693,7 @@ Future<Uint8List> buildDocumentCommercial({
   double? montantLettres,
   String? phraseLettres,
   String? note,
-  List<String> signatures = ['Le client'.tr, 'Cachet et signature'],
+  List<String> signatures = const ['Le client', 'Cachet et signature'],
   bool annule = false,
 }) async {
   final doc = await _nouveau(atelier, titre);
