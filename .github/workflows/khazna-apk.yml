@@ -155,6 +155,11 @@ jobs:
               urllib.request.urlretrieve(url, dest)
           PY
 
+      - name: نسخة Windows بلا صوت (Agora لا تُبنى على Windows هنا)
+        run: |
+          cp lib/core/voice_stub.dart lib/core/voice.dart
+          sed -i '/agora_rtc_engine:/d; /permission_handler:/d' pubspec.yaml
+
       - name: توليد ملفات Windows
         run: |
           flutter create --platforms=windows --org com.khazna --project-name khazna .
