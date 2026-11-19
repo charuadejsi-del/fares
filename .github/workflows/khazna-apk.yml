@@ -68,11 +68,14 @@ jobs:
       - name: الاختبارات
         run: flutter test
 
+      - name: اختبار الاتصال أونلاين (Supabase Realtime بين عميلين)
+        working-directory: jeu-khazna
+        run: |
+          mkdir -p /tmp/rt && cd /tmp/rt && npm init -y >/dev/null && npm i @supabase/supabase-js@2 >/dev/null
+          cp "$GITHUB_WORKSPACE/jeu-khazna/tools/realtime-check.mjs" . && node realtime-check.mjs
+
       - name: بناء APK
-        run: >
-          flutter build apk --release
-          --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-          --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+        run: flutter build apk --release
 
       - uses: actions/upload-artifact@v4
         with:

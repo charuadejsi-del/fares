@@ -4,9 +4,13 @@ import 'dart:async';
 
 import 'package:supabase/supabase.dart';
 
-/// تُمرَّر عند البناء: flutter build apk --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
-const String kSupabaseUrl = String.fromEnvironment('SUPABASE_URL');
-const String kSupabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+/// مشروع Supabase (apk-logiciel): يُستعمل لقنوات Realtime فقط، بلا جداول.
+/// المفتاح العام (anon) مصمَّم ليوضع داخل التطبيقات. يمكن تغييرهما عند البناء بـ --dart-define.
+const String kSupabaseUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: 'https://ubdamgzqqwgcxjvvegwk.supabase.co');
+const String kSupabaseAnonKey = String.fromEnvironment(
+  'SUPABASE_ANON_KEY',
+  defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViZGFtZ3pxcXdnY3hqdnZlZ3drIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ4ODAzNzksImV4cCI6MjExMDQ1NjM3OX0.eAQ0bOVJ139YKR3VUOa3mQNV5BOeALEYV4zyobD48RI',
+);
 bool get onlineAvailable => kSupabaseUrl.isNotEmpty && kSupabaseAnonKey.isNotEmpty;
 
 abstract class Transport {
