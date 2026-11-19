@@ -208,7 +208,9 @@ jobs:
             cp -r "$SRC" "$LINK"
             cmake -S windows -B build/windows/x64
             cmake --build build/windows/x64 --config Release
-            cmake --install build/windows/x64 --config Release --prefix "$(pwd)/build/windows/x64/runner/Release"
+            cmake --install build/windows/x64 --config Release
+            # التثبيت يذهب إلى Program Files (المسار المحفوظ في ذاكرة CMake): ننسخه إلى مجلّد النسخة
+            cp -r "/c/Program Files/khazna/." build/windows/x64/runner/Release/
           fi
           test -f build/windows/x64/runner/Release/khazna.exe
           test -d build/windows/x64/runner/Release/data/flutter_assets
