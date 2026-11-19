@@ -45,7 +45,6 @@ jobs:
               urllib.request.urlretrieve(url, dest)
               print('حُمّل:', rel, os.path.getsize(dest))
           PY
-          convert assets/images/icon.jpg -resize 1024x1024 assets/images/icon.png
 
       - name: توليد ملفات أندرويد
         run: |
