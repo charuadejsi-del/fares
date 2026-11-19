@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/controller.dart';
 import '../features/briefing/briefing_screen.dart';
+import '../features/campaign/campaign_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/intro/intro_screen.dart';
 import '../features/play/play_screen.dart';
@@ -32,6 +33,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/home', pageBuilder: (c, s) => _fade(s, const HomeScreen())),
     GoRoute(path: '/tutorial', pageBuilder: (c, s) => _fade(s, const TutorialScreen())),
     GoRoute(path: '/briefing', pageBuilder: (c, s) => _fade(s, const BriefingScreen())),
+    GoRoute(path: '/campaign', pageBuilder: (c, s) => _fade(s, const CampaignScreen())),
     GoRoute(path: '/settings', pageBuilder: (c, s) => _fade(s, const SettingsScreen())),
     GoRoute(path: '/profile', pageBuilder: (c, s) => _fade(s, const ProfileScreen())),
     GoRoute(

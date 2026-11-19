@@ -31,6 +31,10 @@ class LockView extends StatelessWidget {
         return op ? CipherOp(p: puzzles, dispatch: dispatch) : CipherEx(p: puzzles);
       case 'maze':
         return op ? MazeOp(dispatch: dispatch) : MazeEx(p: puzzles, state: state);
+      case 'dial':
+        return op ? DialOp(p: puzzles, state: state, dispatch: dispatch) : DialEx(p: puzzles);
+      case 'radio':
+        return op ? RadioOp(p: puzzles, dispatch: dispatch) : RadioEx(p: puzzles);
       default:
         return op ? LightsOp(p: puzzles, state: state, dispatch: dispatch) : LightsEx(p: puzzles, state: state);
     }
@@ -213,8 +217,8 @@ class _KeypadOpState extends State<KeypadOp> {
                 border: K.neonDim,
                 shadow: K.glow(K.neon, 10, 50),
                 child: SizedBox(
-                    width: 62,
-                    height: 62,
+                    width: 70,
+                    height: 70,
                     child: Center(
                         child: Text(kSymbols[i].s,
                             style: TextStyle(
@@ -257,8 +261,8 @@ class _KeypadOpState extends State<KeypadOp> {
         textDirection: TextDirection.ltr,
         child: FixedGrid(
           columns: 3,
-          spacing: 9,
-          aspect: 1.75,
+          spacing: 10,
+          aspect: 1.4,
           children: [
             for (final k in keys)
               DeviceKey(
@@ -374,12 +378,12 @@ class _WireRowState extends ConsumerState<_WireRow> with SingleTickerProviderSta
     return InkWell(
       onTap: widget.cut ? null : _tap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         child: Row(children: [
           SizedBox(width: 22, child: MonoLabel('${widget.index + 1}', color: K.muted, size: 15)),
           Expanded(
             child: SizedBox(
-              height: 34,
+              height: 40,
               child: AnimatedBuilder(
                 animation: _a,
                 builder: (context, _) => CustomPaint(painter: _WirePainter(widget.color, widget.cut ? _a.value : 0, _seed)),
@@ -626,8 +630,8 @@ class MazeOp extends StatelessWidget {
   const MazeOp({super.key, required this.dispatch});
 
   Widget _arrow(IconData icon, String label, String dir) => SizedBox(
-        width: 92,
-        height: 80,
+        width: 100,
+        height: 88,
         child: DeviceKey(
           sfx: Sfx.click,
           onTap: () => dispatch({'type': 'move', 'dir': dir}),
@@ -917,8 +921,8 @@ class _Bulb extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnimatedContainer(
         duration: const Duration(milliseconds: 140),
-        width: 62,
-        height: 62,
+        width: 72,
+        height: 72,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(
@@ -979,4 +983,454 @@ class LightsEx extends StatelessWidget {
             ),
           ),
       ]);
+}
+
+
+// ───── 6. قرص الخزنة ─────
+class DialOp extends ConsumerStatefulWidget {
+  final Puzzles p;
+  final GameState state;
+  final Dispatch dispatch;
+  const DialOp({super.key, required this.p, required this.state, required this.dispatch});
+
+  @override
+  ConsumerState<DialOp> createState() => _DialOpState();
+}
+
+class _DialOpState extends ConsumerState<DialOp> {
+  double _angle = 0; // راديان، تراكمي
+  double? _lastTouch;
+
+  int get value {
+    final steps = (_angle / (2 * pi) * 40).round();
+    return ((steps % 40) + 40) % 40;
+  }
+
+  void _pan(Offset local, Size size, {bool start = false}) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final a = atan2(local.dy - c.dy, local.dx - c.dx);
+    if (start || _lastTouch == null) {
+      _lastTouch = a;
+      return;
+    }
+    var d = a - _lastTouch!;
+    if (d > pi) d -= 2 * pi;
+    if (d < -pi) d += 2 * pi;
+    _lastTouch = a;
+    final before = value;
+    setState(() => _angle += d);
+    if (value != before) ref.read(audioProvider).fx(Sfx.type, HapticKind.tap, volume: 0.6);
+  }
+
+  void _nudge(int dir) {
+    setState(() => _angle += dir * 2 * pi / 40);
+    ref.read(audioProvider).fx(Sfx.type, HapticKind.tap, volume: 0.6);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final step = widget.state.dialStep;
+    final shown = widget.p.dial.shown;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Brief('صِف الرموز الثلاثة للمحلّل. أدِر القرص بإصبعك إلى الرقم الذي يمليه عليك لكل رمز، ثم اضغط «تثبيت». خطأ واحد يعيدك إلى البداية.',
+          icon: Icons.record_voice_over_outlined),
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          for (int i = 0; i < shown.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 66,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: i < step ? K.neon.withAlpha(35) : K.cell,
+                  border: Border.all(color: i == step ? K.amber : (i < step ? K.neon : K.line), width: i == step ? 2 : 1),
+                  boxShadow: i == step ? K.glow(K.amber, 12, 100) : null,
+                ),
+                child: Column(children: [
+                  MonoLabel('${i + 1}', color: K.muted, size: 11),
+                  Text(kSymbols[shown[i]].s, style: TextStyle(fontSize: 30, color: i < step ? K.neon : K.text)),
+                  Icon(i < step ? Icons.check : Icons.more_horiz, size: 14, color: i < step ? K.neon : K.muted),
+                ]),
+              ),
+            ),
+        ]),
+      ),
+      const SizedBox(height: 14),
+      Center(
+        child: LayoutBuilder(builder: (context, box) {
+          final size = min(box.maxWidth, 290.0);
+          return SizedBox(
+            width: size,
+            height: size,
+            child: GestureDetector(
+              onPanStart: (d) => _pan(d.localPosition, Size(size, size), start: true),
+              onPanUpdate: (d) => _pan(d.localPosition, Size(size, size)),
+              onPanEnd: (_) => _lastTouch = null,
+              child: CustomPaint(painter: _DialPainter(_angle, value)),
+            ),
+          );
+        }),
+      ),
+      const SizedBox(height: 10),
+      Row(children: [
+        SizedBox(
+            width: 64,
+            height: 54,
+            child: DeviceKey(sfx: Sfx.type, onTap: () => _nudge(-1), child: const Icon(Icons.rotate_left, color: K.text))),
+        const SizedBox(width: 10),
+        Expanded(
+          child: NeonButton(
+            label: 'تثبيت $value',
+            icon: Icons.lock_outline,
+            height: 54,
+            onTap: () => widget.dispatch({'type': 'dial', 'value': value}),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+            width: 64,
+            height: 54,
+            child: DeviceKey(sfx: Sfx.type, onTap: () => _nudge(1), child: const Icon(Icons.rotate_right, color: K.text))),
+      ]),
+    ]);
+  }
+}
+
+class _DialPainter extends CustomPainter {
+  final double angle;
+  final int value;
+  _DialPainter(this.angle, this.value);
+
+  @override
+  void paint(Canvas canvas, Size s) {
+    final c = Offset(s.width / 2, s.height / 2);
+    final r = s.width / 2;
+    // الحلقة الخارجية الثابتة
+    canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..shader = const RadialGradient(colors: [Color(0xFF26302C), Color(0xFF0B0F0E)]).createShader(Rect.fromCircle(center: c, radius: r)));
+    canvas.drawCircle(c, r - 2, Paint()
+      ..color = const Color(0xFF3A4842)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3);
+    // المؤشّر الثابت في الأعلى
+    final tri = Path()
+      ..moveTo(c.dx - 9, 2)
+      ..lineTo(c.dx + 9, 2)
+      ..lineTo(c.dx, 18)
+      ..close();
+    canvas.drawPath(tri, Paint()..color = K.danger);
+    // القرص الدوّار
+    canvas.save();
+    canvas.translate(c.dx, c.dy);
+    canvas.rotate(-angle);
+    final inner = r * 0.86;
+    canvas.drawCircle(
+        Offset.zero,
+        inner,
+        Paint()
+          ..shader = const SweepGradient(colors: [Color(0xFF4A5A54), Color(0xFF1C2421), Color(0xFF4A5A54), Color(0xFF1C2421), Color(0xFF4A5A54)])
+              .createShader(Rect.fromCircle(center: Offset.zero, radius: inner)));
+    final tick = Paint()..color = K.text;
+    for (int i = 0; i < 40; i++) {
+      final a = i / 40 * 2 * pi - pi / 2;
+      final major = i % 5 == 0;
+      final p1 = Offset(cos(a), sin(a)) * (inner - (major ? 18 : 10));
+      final p2 = Offset(cos(a), sin(a)) * (inner - 3);
+      canvas.drawLine(p1, p2, tick..strokeWidth = major ? 3.0 : 1.5);
+      if (major) {
+        final tp = TextPainter(
+          text: TextSpan(text: '$i', style: const TextStyle(fontFamily: K.mono, color: K.text, fontSize: 14)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        final pos = Offset(cos(a), sin(a)) * (inner - 34);
+        canvas.save();
+        canvas.translate(pos.dx, pos.dy);
+        canvas.rotate(a + pi / 2);
+        tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+        canvas.restore();
+      }
+    }
+    // المقبض في الوسط
+    canvas.drawCircle(Offset.zero, inner * 0.38, Paint()..color = const Color(0xFF0E1412));
+    canvas.drawCircle(Offset.zero, inner * 0.38, Paint()
+      ..color = K.neonDim
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2);
+    canvas.restore();
+    // الرقم الحالي
+    final tp = TextPainter(
+      text: TextSpan(
+          text: value.toString().padLeft(2, '0'),
+          style: TextStyle(
+              fontFamily: K.mono, color: K.neon, fontSize: 40, shadows: [Shadow(color: K.neon.withAlpha(200), blurRadius: 14)])),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
+  }
+
+  @override
+  bool shouldRepaint(covariant _DialPainter old) => old.angle != angle;
+}
+
+class DialEx extends StatelessWidget {
+  final Puzzles p;
+  const DialEx({super.key, required this.p});
+
+  @override
+  Widget build(BuildContext context) {
+    final m = p.dial.manual;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Brief('ملف القرص: العميل يصف 3 رموز بالترتيب. للرمز الأول خذ الرقم من العمود 1، وللثاني من العمود 2، وللثالث من العمود 3.',
+          icon: Icons.folder_open),
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Table(
+          border: TableBorder.all(color: K.line),
+          columnWidths: const {0: FlexColumnWidth(1.4)},
+          children: [
+            const TableRow(decoration: BoxDecoration(color: K.cell), children: [
+              Padding(padding: EdgeInsets.all(6), child: Center(child: MonoLabel('SYM', color: K.muted))),
+              Padding(padding: EdgeInsets.all(6), child: Center(child: MonoLabel('1', color: K.amber, size: 14))),
+              Padding(padding: EdgeInsets.all(6), child: Center(child: MonoLabel('2', color: K.amber, size: 14))),
+              Padding(padding: EdgeInsets.all(6), child: Center(child: MonoLabel('3', color: K.amber, size: 14))),
+            ]),
+            for (int i = 0; i < kSymbols.length; i++)
+              TableRow(children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Center(child: Text('${kSymbols[i].s} ${kSymbols[i].n}', style: const TextStyle(fontSize: 14))),
+                ),
+                for (int j = 0; j < 3; j++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Center(
+                        child: Text(m[i][j].toString().padLeft(2, '0'),
+                            style: const TextStyle(fontFamily: K.mono, fontSize: 17, color: K.text))),
+                  ),
+              ]),
+          ],
+        ),
+      ),
+    ]);
+  }
+}
+
+// ───── 7. تردّد الراديو ─────
+class RadioOp extends ConsumerStatefulWidget {
+  final Puzzles p;
+  final Dispatch dispatch;
+  const RadioOp({super.key, required this.p, required this.dispatch});
+
+  @override
+  ConsumerState<RadioOp> createState() => _RadioOpState();
+}
+
+class _RadioOpState extends ConsumerState<RadioOp> with SingleTickerProviderStateMixin {
+  late final AnimationController _a = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
+  int freq = 100;
+
+  @override
+  void dispose() {
+    _a.dispose();
+    super.dispose();
+  }
+
+  void _set(int f) {
+    final v = f.clamp(kFreqMin, kFreqMax).toInt();
+    if (v == freq) return;
+    setState(() => freq = v);
+    ref.read(audioProvider).fx(Sfx.type, HapticKind.tap, volume: 0.5);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.p.radio;
+    final led = Color(kLights[r.color].argb);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Brief('صِف للمحلّل شكل الموجة على الشاشة ولون المؤشّر. اضبط التردّد الذي يعطيك إياه ثم أرسل.',
+          icon: Icons.record_voice_over_outlined),
+      Container(
+        height: 150,
+        decoration: BoxDecoration(color: const Color(0xFF020805), border: Border.all(color: K.neonDim)),
+        child: Stack(children: [
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _a,
+              builder: (context, _) => CustomPaint(painter: WavePainter(r.wave, _a.value, K.neon, grid: true)),
+            ),
+          ),
+          Positioned(
+            top: 10,
+            right: 10,
+            child: Row(children: [
+              const MonoLabel('SIGNAL', color: K.muted, size: 10),
+              const SizedBox(width: 6),
+              Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: led, boxShadow: K.glow(led, 12, 220)),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 14),
+      Center(
+        child: Text('$freq MHz',
+            textDirection: TextDirection.ltr,
+            style: TextStyle(
+                fontFamily: K.mono, fontSize: 44, color: K.neon, shadows: [Shadow(color: K.neon.withAlpha(180), blurRadius: 16)])),
+      ),
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Row(children: [
+          SizedBox(
+              width: 56,
+              height: 50,
+              child: DeviceKey(sfx: Sfx.type, onTap: () => _set(freq - 1), child: const Icon(Icons.remove, color: K.text))),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: K.neon,
+                inactiveTrackColor: K.line,
+                thumbColor: K.neon,
+                overlayColor: K.neon.withAlpha(40),
+              ),
+              child: Slider(
+                min: kFreqMin.toDouble(),
+                max: kFreqMax.toDouble(),
+                divisions: kFreqMax - kFreqMin,
+                value: freq.toDouble(),
+                onChanged: (v) => _set(v.round()),
+              ),
+            ),
+          ),
+          SizedBox(
+              width: 56,
+              height: 50,
+              child: DeviceKey(sfx: Sfx.type, onTap: () => _set(freq + 1), child: const Icon(Icons.add, color: K.text))),
+        ]),
+      ),
+      const SizedBox(height: 12),
+      NeonButton(label: 'إرسال على $freq', icon: Icons.cell_tower, onTap: () => widget.dispatch({'type': 'tune', 'value': freq})),
+    ]);
+  }
+}
+
+/// يرسم أحد أشكال الموجات الأربعة.
+class WavePainter extends CustomPainter {
+  final int wave;
+  final double phase;
+  final Color color;
+  final bool grid;
+  WavePainter(this.wave, this.phase, this.color, {this.grid = false});
+
+  double _y(double x) {
+    final t = (x + phase) % 1.0;
+    switch (wave) {
+      case 0:
+        return sin(t * 2 * pi);
+      case 1:
+        return t < 0.5 ? 0.8 : -0.8;
+      case 2:
+        return 1.6 * t - 0.8;
+      default:
+        return (t > 0.45 && t < 0.55) ? 0.9 : -0.4;
+    }
+  }
+
+  @override
+  void paint(Canvas canvas, Size s) {
+    if (grid) {
+      final g = Paint()
+        ..color = color.withAlpha(25)
+        ..strokeWidth = 1;
+      for (double x = 0; x < s.width; x += 20) {
+        canvas.drawLine(Offset(x, 0), Offset(x, s.height), g);
+      }
+      for (double y = 0; y < s.height; y += 20) {
+        canvas.drawLine(Offset(0, y), Offset(s.width, y), g);
+      }
+    }
+    const cycles = 3.0;
+    final path = Path();
+    for (int i = 0; i <= 240; i++) {
+      final fx = i / 240;
+      final y = s.height / 2 - _y(fx * cycles) * s.height * 0.35;
+      final x = fx * s.width;
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(path, Paint()
+      ..color = color.withAlpha(70)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6);
+    canvas.drawPath(path, Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2);
+  }
+
+  @override
+  bool shouldRepaint(covariant WavePainter old) => old.phase != phase || old.wave != wave;
+}
+
+class RadioEx extends StatelessWidget {
+  final Puzzles p;
+  const RadioEx({super.key, required this.p});
+
+  @override
+  Widget build(BuildContext context) {
+    final m = p.radio.manual;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Brief('سجلّ التردّدات: اسأل العميل عن شكل الموجة ولون المؤشّر، وأعطه التردّد من الجدول.', icon: Icons.folder_open),
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Table(
+          border: TableBorder.all(color: K.line),
+          columnWidths: const {0: FlexColumnWidth(1.6)},
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          children: [
+            TableRow(decoration: const BoxDecoration(color: K.cell), children: [
+              const Padding(padding: EdgeInsets.all(6), child: Center(child: MonoLabel('WAVE', color: K.muted))),
+              for (final l in kLights)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Center(
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(shape: BoxShape.circle, color: Color(l.argb)),
+                    ),
+                  ),
+                ),
+            ]),
+            for (int w = 0; w < kWaveNames.length; w++)
+              TableRow(children: [
+                Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Column(children: [
+                    SizedBox(height: 30, child: CustomPaint(size: const Size(90, 30), painter: WavePainter(w, 0, K.amber))),
+                    Text(kWaveNames[w], style: const TextStyle(fontSize: 11, color: K.muted)),
+                  ]),
+                ),
+                for (int c = 0; c < kLights.length; c++)
+                  Center(child: Text('${m[w][c]}', style: const TextStyle(fontFamily: K.mono, fontSize: 17, color: K.text))),
+              ]),
+          ],
+        ),
+      ),
+      const SizedBox(height: 8),
+      const Text('التردّد بالميغاهرتز (MHz).', style: TextStyle(color: K.muted, fontSize: 12)),
+    ]);
+  }
 }

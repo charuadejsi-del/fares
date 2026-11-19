@@ -5,13 +5,43 @@ const int kDuration = 600; // ثانية
 const int kPenalty = 30;
 const int kBump = 10;
 
+/// الأقفال الخمسة الأساسية (المتوافقة مع نسخة الويب).
 const List<String> kRooms = ['keypad', 'wires', 'cipher', 'maze', 'lights'];
+
+/// كل الأقفال المتاحة، منها قفلان خاصّان بالتطبيق.
+const List<String> kAllRooms = ['keypad', 'wires', 'cipher', 'maze', 'lights', 'dial', 'radio'];
+
+class Difficulty {
+  final String id;
+  final String name;
+  final int duration;
+  final int penalty;
+  final int mazeN;
+  final int lightStages;
+  final int wireMin;
+  final int wireMax;
+  const Difficulty(this.id, this.name, this.duration, this.penalty, this.mazeN, this.lightStages, this.wireMin, this.wireMax);
+}
+
+const Map<String, Difficulty> kDifficulties = {
+  'recruit': Difficulty('recruit', 'مجنّد', 720, 20, 5, 2, 3, 4),
+  'agent': Difficulty('agent', 'عميل', 600, 30, 5, 3, 3, 6),
+  'elite': Difficulty('elite', 'نخبة', 540, 45, 6, 4, 4, 6),
+  'master': Difficulty('master', 'أسطورة', 480, 45, 7, 4, 4, 6),
+};
+Difficulty diffOf(String id) => kDifficulties[id] ?? kDifficulties['agent']!;
+
+const List<String> kWaveNames = ['موجة ناعمة', 'موجة مربّعة', 'موجة منشارية', 'نبضات متقطّعة'];
+const int kFreqMin = 80;
+const int kFreqMax = 119;
 const Map<String, String> kRoomNames = {
   'keypad': 'باب الرموز',
   'wires': 'صندوق الأسلاك',
   'cipher': 'المخطوط المشفّر',
   'maze': 'السرداب المظلم',
   'lights': 'قفل الأضواء',
+  'dial': 'قرص الخزنة',
+  'radio': 'تردّد الراديو',
 };
 
 class Sym {
@@ -193,13 +223,32 @@ class Lights {
   List<int> expected(int stage) => [for (final c in seq.sublist(0, stage + 1)) maps[stage][c]];
 }
 
+/// قرص الخزنة: 3 رموز، ولكل رمز رقم مختلف حسب موضعه (الأول/الثاني/الثالث).
+class DialLock {
+  final List<List<int>> manual; // [رمز][موضع] = 0..39
+  final List<int> shown;
+  DialLock(this.manual, this.shown);
+  List<int> get answer => [for (int i = 0; i < shown.length; i++) manual[shown[i]][i]];
+}
+
+/// تردّد الراديو: شكل الموجة × لون المؤشّر ← التردّد.
+class RadioLock {
+  final List<List<int>> manual; // [موجة][لون] = kFreqMin..kFreqMax
+  final int wave;
+  final int color;
+  RadioLock(this.manual, this.wave, this.color);
+  int get answer => manual[wave][color];
+}
+
 class Puzzles {
   final Keypad keypad;
   final Wires wires;
   final Cipher cipher;
   final Maze maze;
   final Lights lights;
-  Puzzles(this.keypad, this.wires, this.cipher, this.maze, this.lights);
+  final DialLock dial;
+  final RadioLock radio;
+  Puzzles(this.keypad, this.wires, this.cipher, this.maze, this.lights, this.dial, this.radio);
 }
 
 Keypad _genKeypad(Rng r) {
@@ -208,7 +257,7 @@ Keypad _genKeypad(Rng r) {
   return Keypad(digits, shown, shown.map((i) => digits[i]).join());
 }
 
-Wires _genWires(Rng r) {
+Wires _genWires(Rng r, Difficulty d) {
   const types = ['none', 'lastIs', 'many', 'one'];
   final rules = <int, List<WireRule>>{};
   for (int n = 3; n <= 6; n++) {
@@ -222,7 +271,7 @@ Wires _genWires(Rng r) {
     list.add(WireRule('default', null, 1 + r.nextInt(n)));
     rules[n] = list;
   }
-  final n = 3 + r.nextInt(4);
+  final n = d.wireMin + r.nextInt(d.wireMax - d.wireMin + 1);
   final wires = [for (int i = 0; i < n; i++) r.nextInt(kColors.length)];
   int answer = -1;
   for (final rule in rules[n]!) {
@@ -293,15 +342,38 @@ Maze _genMaze(Rng r, [int n = 5]) {
   return Maze(n, open, start, exit, dist[exit]);
 }
 
-Lights _genLights(Rng r) {
-  final seq = [for (int i = 0; i < 3; i++) r.nextInt(kLights.length)];
-  final maps = [for (int i = 0; i < 3; i++) r.shuffle([0, 1, 2, 3])];
+Lights _genLights(Rng r, int stages) {
+  final seq = [for (int i = 0; i < stages; i++) r.nextInt(kLights.length)];
+  final maps = [for (int i = 0; i < stages; i++) r.shuffle([0, 1, 2, 3])];
   return Lights(seq, maps);
 }
 
-Puzzles generatePuzzles(int seed) {
+DialLock _genDial(Rng r) {
+  final manual = [
+    for (int i = 0; i < kSymbols.length; i++) [for (int j = 0; j < 3; j++) r.nextInt(40)]
+  ];
+  final shown = r.shuffle([for (int i = 0; i < kSymbols.length; i++) i]).sublist(0, 3);
+  return DialLock(manual, shown);
+}
+
+RadioLock _genRadio(Rng r) {
+  final manual = [
+    for (int w = 0; w < kWaveNames.length; w++)
+      [for (int c = 0; c < kLights.length; c++) kFreqMin + r.nextInt(kFreqMax - kFreqMin + 1)]
+  ];
+  return RadioLock(manual, r.nextInt(kWaveNames.length), r.nextInt(kLights.length));
+}
+
+/// ترتيب استدعاءات المولّد ثابت: الأقفال الجديدة بعد القديمة، فتبقى الألغاز الافتراضية مطابقة لنسخة الويب.
+Puzzles generatePuzzles(int seed, [String diff = 'agent']) {
+  final d = diffOf(diff);
   final r = Rng(seed);
-  return Puzzles(_genKeypad(r), _genWires(r), _genCipher(r), _genMaze(r), _genLights(r));
+  final keypad = _genKeypad(r);
+  final wires = _genWires(r, d);
+  final cipher = _genCipher(r);
+  final maze = _genMaze(r, d.mazeN);
+  final lights = _genLights(r, d.lightStages);
+  return Puzzles(keypad, wires, cipher, maze, lights, _genDial(r), _genRadio(r));
 }
 
 // ───── الحالة ─────
@@ -320,6 +392,9 @@ class GameEvent {
 
 class GameState {
   final int seed;
+  final List<String> rooms;
+  final String diff;
+  final int dialStep;
   final String phase; // lobby | playing | won | lost
   final int room;
   final int startedAt; // ms
@@ -334,6 +409,9 @@ class GameState {
 
   const GameState({
     required this.seed,
+    this.rooms = kRooms,
+    this.diff = 'agent',
+    this.dialStep = 0,
     this.phase = 'lobby',
     this.room = 0,
     this.startedAt = 0,
@@ -347,7 +425,8 @@ class GameState {
     this.finishedIn = 0,
   });
 
-  String get roomId => kRooms[room.clamp(0, kRooms.length - 1)];
+  String get roomId => rooms[room.clamp(0, rooms.length - 1)];
+  Difficulty get difficulty => diffOf(diff);
 
   GameState copyWith({
     String? phase,
@@ -361,9 +440,13 @@ class GameState {
     GameEvent? lastEvent,
     int? eventId,
     int? finishedIn,
+    int? dialStep,
   }) =>
       GameState(
         seed: seed,
+        rooms: rooms,
+        diff: diff,
+        dialStep: dialStep ?? this.dialStep,
         phase: phase ?? this.phase,
         room: room ?? this.room,
         startedAt: startedAt ?? this.startedAt,
@@ -379,6 +462,9 @@ class GameState {
 
   Map<String, dynamic> toJson() => {
         'seed': seed,
+        'rooms': rooms,
+        'diff': diff,
+        'dialStep': dialStep,
         'phase': phase,
         'room': room,
         'startedAt': startedAt,
@@ -397,6 +483,11 @@ class GameState {
 
   static GameState fromJson(Map j) => GameState(
         seed: _i(j['seed']),
+        rooms: j['rooms'] is List && (j['rooms'] as List).isNotEmpty
+            ? [for (final r in j['rooms'] as List) '$r']
+            : kRooms,
+        diff: '${j['diff'] ?? 'agent'}',
+        dialStep: _i(j['dialStep']),
         phase: '${j['phase'] ?? 'lobby'}',
         room: _i(j['room']),
         startedAt: _i(j['startedAt']),
@@ -411,20 +502,24 @@ class GameState {
       );
 }
 
-GameState newState(int seed) => GameState(seed: seed);
+GameState newState(int seed, {List<String> rooms = kRooms, String diff = 'agent'}) =>
+    GameState(seed: seed, rooms: rooms, diff: diff);
 
 GameState startGame(GameState s, Puzzles p, int now) => GameState(
       seed: s.seed,
+      rooms: s.rooms,
+      diff: s.diff,
       phase: 'playing',
       startedAt: now,
       mazePos: p.maze.start,
       eventId: s.eventId + 1,
-      lastEvent: const GameEvent('start', 'keypad'),
+      lastEvent: GameEvent('start', s.rooms.first),
     );
 
 double remainingSeconds(GameState s, int now) {
-  if (s.startedAt == 0) return kDuration.toDouble();
-  final r = kDuration - (now - s.startedAt) / 1000 - s.penalty;
+  final duration = s.difficulty.duration;
+  if (s.startedAt == 0) return duration.toDouble();
+  final r = duration - (now - s.startedAt) / 1000 - s.penalty;
   return r < 0 ? 0 : r;
 }
 
@@ -443,15 +538,17 @@ GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
       x.copyWith(eventId: s.eventId + 1, lastEvent: GameEvent(t, room, pen));
   GameState advance(GameState x) {
     final next = s.room + 1;
-    if (next >= kRooms.length) {
+    if (next >= s.rooms.length) {
       final y = x.copyWith(room: next, phase: 'won');
-      return ev(y.copyWith(finishedIn: (kDuration - remainingSeconds(y, now)).round()), 'solved');
+      return ev(y.copyWith(finishedIn: (s.difficulty.duration - remainingSeconds(y, now)).round()), 'solved');
     }
     return ev(x.copyWith(room: next), 'solved');
   }
 
-  GameState wrong(GameState x, [int pen = kPenalty, String t = 'wrong']) =>
-      ev(x.copyWith(penalty: s.penalty + pen), t, pen);
+  GameState wrong(GameState x, [int? pen, String t = 'wrong']) {
+    final p0 = pen ?? s.difficulty.penalty;
+    return ev(x.copyWith(penalty: s.penalty + p0), t, p0);
+  }
 
   GameState out = s;
   switch (room) {
@@ -495,11 +592,31 @@ GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
         out = wrong(s.copyWith(lightInput: const []));
       } else if (input.length < expected.length) {
         out = ev(s.copyWith(lightInput: input), 'press');
-      } else if (st == 2) {
+      } else if (st == p.lights.seq.length - 1) {
         out = advance(s.copyWith(lightInput: const []));
       } else {
         out = ev(s.copyWith(lightInput: const [], lightStage: st + 1), 'stage');
       }
+      break;
+    }
+    case 'dial': {
+      final v = a['value'];
+      if (type != 'dial' || v is! int) return s;
+      final step = s.dialStep;
+      final ans = p.dial.answer;
+      if (v != ans[step]) {
+        out = wrong(s.copyWith(dialStep: 0));
+      } else if (step == ans.length - 1) {
+        out = advance(s.copyWith(dialStep: 0));
+      } else {
+        out = ev(s.copyWith(dialStep: step + 1), 'press');
+      }
+      break;
+    }
+    case 'radio': {
+      final v = a['value'];
+      if (type != 'tune' || v is! int) return s;
+      out = v == p.radio.answer ? advance(s) : wrong(s);
       break;
     }
   }

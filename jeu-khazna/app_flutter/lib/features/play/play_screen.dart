@@ -33,6 +33,8 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
   StreamSubscription<GameEvent>? _sub;
   bool _recorded = false;
   String? _flash; // رسالة قصيرة فوق الشاشة
+  String? _transition; // اسم القفل التالي أثناء مشهد «تمّ الاختراق»
+  Timer? _transitionTimer;
   Color _flashColor = K.neon;
   Timer? _flashTimer;
 
@@ -49,6 +51,7 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
   void dispose() {
     _sub?.cancel();
     _flashTimer?.cancel();
+    _transitionTimer?.cancel();
     c.removeListener(_onChange);
     _shake.dispose();
     c.dispose();
@@ -76,6 +79,7 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
             won: won,
             finishedIn: s.finishedIn,
             stars: starsFor(won: won, finishedIn: s.finishedIn, penalty: s.penalty),
+            mission: c.missionId,
           );
       final audio = ref.read(audioProvider);
       if (won) {
@@ -102,9 +106,14 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
         _showFlash('جدار! −${e.pen} ثوانٍ', K.danger);
         break;
       case 'solved':
-        if (c.state?.phase == 'playing') {
+        final st = c.state;
+        if (st != null && st.phase == 'playing') {
           audio.fx(Sfx.success, HapticKind.medium);
-          _showFlash('تمّ اختراق القفل', K.neon);
+          _transitionTimer?.cancel();
+          setState(() => _transition = K.roomNames[st.roomId] ?? '');
+          _transitionTimer = Timer(const Duration(milliseconds: 1250), () {
+            if (mounted) setState(() => _transition = null);
+          });
         }
         break;
       case 'stage':
@@ -158,7 +167,9 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
                   } else if (s.phase == 'lobby') {
                     body = _Lobby(c: c);
                   } else if (s.phase == 'playing') {
-                    body = _Game(c: c, shake: _shake, onExit: _leave);
+                    body = c.table
+                        ? _TableGame(c: c, shake: _shake, onExit: _leave)
+                        : _Game(c: c, shake: _shake, onExit: _leave);
                   } else {
                     body = _End(c: c);
                   }
@@ -194,9 +205,65 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
                     ),
                   ),
                 ),
+              if (_transition != null) Positioned.fill(child: _AccessGranted(next: _transition!)),
             ]),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// مشهد قصير بين قفلين: «تمّ الاختراق» ثم اسم القفل التالي.
+class _AccessGranted extends StatelessWidget {
+  final String next;
+  const _AccessGranted({required this.next});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 1250),
+        builder: (context, t, _) {
+          final fadeIn = (t / 0.15).clamp(0.0, 1.0).toDouble();
+          final fadeOut = ((1 - t) / 0.2).clamp(0.0, 1.0).toDouble();
+          final o = min(fadeIn, fadeOut);
+          return Opacity(
+            opacity: o,
+            child: Container(
+              color: K.bg.withAlpha(225),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Transform.rotate(
+                  angle: Curves.easeOutCubic.transform(min(1.0, t / 0.6)) * pi,
+                  child: Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: K.glow(K.neon, 40, 160)),
+                    child: ClipOval(
+                      child: Image.asset('assets/images/vault.jpg',
+                          fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.lock_open, size: 70, color: K.neon)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                const MonoLabel('ACCESS GRANTED', color: K.neon, size: 16),
+                const SizedBox(height: 6),
+                const Text('تمّ اختراق القفل',
+                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: K.neon)),
+                const SizedBox(height: 16),
+                Opacity(
+                  opacity: (t - 0.35).clamp(0.0, 1.0).toDouble() > 0 ? 1 : 0,
+                  child: Column(children: [
+                    const MonoLabel('NEXT TARGET', color: K.muted),
+                    const SizedBox(height: 4),
+                    Text(next, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: K.amber)),
+                  ]),
+                ),
+              ]),
+            ),
+          );
+        },
       ),
     );
   }
@@ -325,16 +392,19 @@ class _Game extends StatelessWidget {
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-        child: _Progress(room: s.room, codename: codenameFor(s.seed)),
+        child: _Progress(room: s.room, total: s.rooms.length, codename: codenameFor(s.seed)),
       ),
       Expanded(
         child: AnimatedBuilder(
           animation: shake,
           builder: (context, child) => Transform.translate(
               offset: Offset(sin(shake.value * pi * 7) * 12 * (1 - shake.value), 0), child: child),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 28),
-            child: AnimatedSwitcher(
+          child: LayoutBuilder(
+            builder: (context, box) => SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 20),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: max(0.0, box.maxHeight - 20)),
+              child: Center(child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 380),
               transitionBuilder: (child, anim) => FadeTransition(
                 opacity: anim,
@@ -348,11 +418,66 @@ class _Game extends StatelessWidget {
                   child: LockView(state: s, puzzles: p, role: role, dispatch: c.dispatch),
                 ),
               ),
+            )),
             ),
+          ),
           ),
         ),
       ),
     ]);
+  }
+}
+
+/// وضع الطاولة: النصف العلوي للمحلّل (مقلوب باتجاهه)، والسفلي للعميل.
+class _TableGame extends StatelessWidget {
+  final GameController c;
+  final AnimationController shake;
+  final VoidCallback onExit;
+  const _TableGame({required this.c, required this.shake, required this.onExit});
+
+  Widget _half(GameState s, Puzzles p, String role) => SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          child: KeyedSubtree(
+            key: ValueKey('${s.seed}-${s.room}-$role'),
+            child: HudPanel(
+              color: K.role(role),
+              padding: const EdgeInsets.all(12),
+              label: '${K.roleName(role)} // ${K.roomNames[s.roomId]}',
+              child: LockView(state: s, puzzles: p, role: role, dispatch: c.dispatch),
+            ),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final s = c.state!;
+    final p = c.puzzles!;
+    return AnimatedBuilder(
+      animation: shake,
+      builder: (context, child) =>
+          Transform.translate(offset: Offset(sin(shake.value * pi * 7) * 10 * (1 - shake.value), 0), child: child),
+      child: Column(children: [
+        Expanded(child: RotatedBox(quarterTurns: 2, child: _half(s, p, 'ex'))),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: const BoxDecoration(
+            color: K.panelSolid,
+            border: Border.symmetric(horizontal: BorderSide(color: K.line)),
+          ),
+          child: Row(children: [
+            InkWell(onTap: onExit, child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.close, color: K.muted))),
+            const SizedBox(width: 8),
+            Expanded(child: _Progress(room: s.room, total: s.rooms.length, codename: codenameFor(s.seed))),
+            const SizedBox(width: 10),
+            _RadarTimer(c: c),
+          ]),
+        ),
+        Expanded(child: _half(s, p, 'op')),
+      ]),
+    );
   }
 }
 
@@ -379,8 +504,9 @@ class _RoleSwitch extends ConsumerWidget {
 
 class _Progress extends StatelessWidget {
   final int room;
+  final int total;
   final String codename;
-  const _Progress({required this.room, required this.codename});
+  const _Progress({required this.room, required this.total, required this.codename});
 
   @override
   Widget build(BuildContext context) {
@@ -388,11 +514,11 @@ class _Progress extends StatelessWidget {
       Row(children: [
         MonoLabel(codename, color: K.muted, size: 11),
         const Spacer(),
-        MonoLabel('${room.clamp(0, kRooms.length)}/${kRooms.length}', color: K.neon, size: 12),
+        MonoLabel('${room.clamp(0, total)}/$total', color: K.neon, size: 12),
       ]),
       const SizedBox(height: 6),
       Row(children: [
-        for (int i = 0; i < kRooms.length; i++)
+        for (int i = 0; i < total; i++)
           Expanded(
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 400),
@@ -449,7 +575,7 @@ class _RadarTimerState extends ConsumerState<_RadarTimer> {
   @override
   Widget build(BuildContext context) {
     final r = widget.c.remaining;
-    final frac = (r / kDuration).clamp(0.0, 1.0).toDouble();
+    final frac = (r / (widget.c.state?.difficulty.duration ?? kDuration)).clamp(0.0, 1.0).toDouble();
     final warn = r < 60;
     final color = warn ? K.danger : (r < 180 ? K.amber : K.neon);
     return Row(mainAxisSize: MainAxisSize.min, children: [
@@ -570,7 +696,8 @@ class _End extends ConsumerWidget {
             child: Column(children: [
               _Row('الوقت', won ? fmtTime(s.finishedIn.toDouble()) : '—'),
               _Row('العقوبات', '${s.penalty} ث'),
-              _Row('الأقفال', '${s.room.clamp(0, kRooms.length)}/${kRooms.length}'),
+              _Row('الأقفال', '${s.room.clamp(0, s.rooms.length)}/${s.rooms.length}'),
+              _Row('الصعوبة', s.difficulty.name),
               _Row('العملية', codenameFor(s.seed)),
             ]),
           ),

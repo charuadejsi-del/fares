@@ -21,6 +21,16 @@ class GameController extends ChangeNotifier {
   final String meId;
   final String meName;
 
+  /// وضع الطاولة: الهاتف بين اللاعبَين، والشاشة مقسومة نصفين.
+  final bool table;
+
+  /// أقفال المهمّة ومستوى الصعوبة (وضع الهاتف الواحد).
+  final List<String> rooms;
+  final String diff;
+
+  /// رقم مهمّة الحملة (0 = مهمّة حرّة).
+  final int missionId;
+
   GameState? state;
   Puzzles? puzzles;
   Map<String, Player> players = {};
@@ -48,8 +58,13 @@ class GameController extends ChangeNotifier {
   static int _now() => DateTime.now().millisecondsSinceEpoch;
 
   /// وضع الهاتف الواحد: اللعبة تبدأ مباشرة.
-  GameController.local({required this.meName})
-      : online = false,
+  GameController.local({
+    required this.meName,
+    this.table = false,
+    this.rooms = kRooms,
+    this.diff = 'agent',
+    this.missionId = 0,
+  })  : online = false,
         isHost = true,
         code = '',
         meId = _rid() {
@@ -60,6 +75,10 @@ class GameController extends ChangeNotifier {
 
   GameController.online({required this.meName, required this.code, required this.isHost})
       : online = true,
+        table = false,
+        rooms = kRooms,
+        diff = 'agent',
+        missionId = 0,
         meId = _rid();
 
   Future<void> connect() async {
@@ -85,7 +104,7 @@ class GameController extends ChangeNotifier {
   double get remaining {
     final s = state;
     if (s == null) return kDuration.toDouble();
-    if (s.phase != 'playing') return s.phase == 'lobby' ? kDuration.toDouble() : 0;
+    if (s.phase != 'playing') return s.phase == 'lobby' ? s.difficulty.duration.toDouble() : 0;
     if (isHost) return remainingSeconds(s, _now());
     final r = _recvRem - (_now() - _recvAt) / 1000;
     return r < 0 ? 0 : r;
@@ -137,8 +156,8 @@ class GameController extends ChangeNotifier {
   // ───── داخلي ─────
   void _startLocal() {
     final seed = _newSeed();
-    puzzles = generatePuzzles(seed);
-    state = startGame(newState(seed), puzzles!, _now());
+    puzzles = generatePuzzles(seed, diff);
+    state = startGame(newState(seed, rooms: rooms, diff: diff), puzzles!, _now());
     localRole = 'op';
   }
 
@@ -209,7 +228,7 @@ class GameController extends ChangeNotifier {
     _hello?.cancel();
     _hello = null;
     final ns = GameState.fromJson(m['state'] as Map);
-    if (puzzles == null || state?.seed != ns.seed) puzzles = generatePuzzles(ns.seed);
+    if (puzzles == null || state?.seed != ns.seed) puzzles = generatePuzzles(ns.seed, ns.diff);
     state = ns;
     players = {
       for (final e in ps.entries)

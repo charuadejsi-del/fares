@@ -90,6 +90,66 @@ void main() {
     }
   });
 
+  test('كل الصعوبات والأقفال السبعة قابلة للحل', () {
+    for (final diff in kDifficulties.keys) {
+      final d = diffOf(diff);
+      for (int seed = 1; seed <= 60; seed++) {
+        final p = generatePuzzles(seed, diff);
+        expect(p.maze.n, d.mazeN);
+        expect(p.lights.seq.length, d.lightStages);
+        expect(p.wires.wires.length, inInclusiveRange(d.wireMin, d.wireMax));
+        var s = startGame(newState(seed, rooms: kAllRooms, diff: diff), p, t0);
+        for (final room in kAllRooms) {
+          expect(s.roomId, room);
+          switch (room) {
+            case 'keypad':
+              s = applyAction(s, p, {'type': 'submit', 'value': p.keypad.answer}, t0);
+              break;
+            case 'wires':
+              s = applyAction(s, p, {'type': 'cut', 'idx': p.wires.answer}, t0);
+              break;
+            case 'cipher':
+              s = applyAction(s, p, {'type': 'submit', 'value': p.cipher.answer}, t0);
+              break;
+            case 'maze':
+              for (final dir in _path(p.maze)) {
+                s = applyAction(s, p, {'type': 'move', 'dir': dir}, t0);
+              }
+              break;
+            case 'lights':
+              for (int st = 0; st < p.lights.seq.length; st++) {
+                for (final c in p.lights.expected(st)) {
+                  s = applyAction(s, p, {'type': 'press', 'color': c}, t0);
+                }
+              }
+              break;
+            case 'dial':
+              for (final v in p.dial.answer) {
+                s = applyAction(s, p, {'type': 'dial', 'value': v}, t0);
+              }
+              break;
+            case 'radio':
+              s = applyAction(s, p, {'type': 'tune', 'value': p.radio.answer}, t0);
+              break;
+          }
+        }
+        expect(s.phase, 'won', reason: '$diff seed $seed');
+        expect(s.penalty, 0);
+      }
+    }
+  });
+
+  test('خطأ في القرص يعيد إلى البداية بعقوبة الصعوبة', () {
+    final p = generatePuzzles(9, 'elite');
+    var s = startGame(newState(9, rooms: const ['dial'], diff: 'elite'), p, t0);
+    s = applyAction(s, p, {'type': 'dial', 'value': p.dial.answer[0]}, t0);
+    expect(s.dialStep, 1);
+    s = applyAction(s, p, {'type': 'dial', 'value': (p.dial.answer[1] + 1) % 40}, t0);
+    expect(s.dialStep, 0);
+    expect(s.penalty, diffOf('elite').penalty);
+    expect(remainingSeconds(s, t0), diffOf('elite').duration - diffOf('elite').penalty);
+  });
+
   test('العقوبات وانتهاء الوقت', () {
     final p = generatePuzzles(42);
     var s = startGame(newState(42), p, t0);

@@ -35,6 +35,8 @@ class K {
     'cipher': 'الرسالة المعترَضة',
     'maze': 'أنفاق التهوية',
     'lights': 'جهاز الإشارات',
+    'dial': 'قرص الخزنة',
+    'radio': 'تردّد الراديو',
   };
   static const roomIcons = {
     'keypad': Icons.dialpad,
@@ -42,6 +44,8 @@ class K {
     'cipher': Icons.mark_email_unread_outlined,
     'maze': Icons.grid_4x4,
     'lights': Icons.wb_incandescent_outlined,
+    'dial': Icons.settings_backup_restore,
+    'radio': Icons.cell_tower,
   };
 
   static List<BoxShadow> glow(Color c, [double r = 18, int a = 110]) =>

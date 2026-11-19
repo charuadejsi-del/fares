@@ -66,7 +66,12 @@ class Progress {
   final int won;
   final int stars;
   final int bestTime; // ثوانٍ، 0 = لا يوجد
-  const Progress({this.played = 0, this.won = 0, this.stars = 0, this.bestTime = 0});
+  final Map<int, int> missionStars; // أفضل نجوم لكل مهمّة في الحملة
+  const Progress({this.played = 0, this.won = 0, this.stars = 0, this.bestTime = 0, this.missionStars = const {}});
+
+  int starsOf(int mission) => missionStars[mission] ?? 0;
+  bool unlocked(int mission) => mission <= 1 || starsOf(mission - 1) > 0;
+  int get campaignStars => missionStars.values.fold(0, (a, b) => a + b);
 
   String get rank {
     if (stars >= 60) return 'أسطورة الاستخبارات';
@@ -95,22 +100,38 @@ int starsFor({required bool won, required int finishedIn, required int penalty})
 class ProgressNotifier extends Notifier<Progress> {
   SharedPreferences get _p => ref.read(prefsProvider);
 
+  static Map<int, int> _decode(String? raw) {
+    final m = <int, int>{};
+    for (final part in (raw ?? '').split(',')) {
+      final kv = part.split(':');
+      if (kv.length != 2) continue;
+      final k = int.tryParse(kv[0]), v = int.tryParse(kv[1]);
+      if (k != null && v != null) m[k] = v;
+    }
+    return m;
+  }
+
   @override
   Progress build() => Progress(
         played: _p.getInt('played') ?? 0,
         won: _p.getInt('won') ?? 0,
         stars: _p.getInt('stars') ?? 0,
         bestTime: _p.getInt('bestTime') ?? 0,
+        missionStars: _decode(_p.getString('missionStars')),
       );
 
-  void record({required bool won, required int finishedIn, required int stars}) {
+  void record({required bool won, required int finishedIn, required int stars, int mission = 0}) {
     final best = won && (state.bestTime == 0 || finishedIn < state.bestTime) ? finishedIn : state.bestTime;
+    final ms = Map<int, int>.of(state.missionStars);
+    if (mission > 0 && stars > (ms[mission] ?? 0)) ms[mission] = stars;
     state = Progress(
       played: state.played + 1,
       won: state.won + (won ? 1 : 0),
       stars: state.stars + stars,
       bestTime: best,
+      missionStars: ms,
     );
+    _p.setString('missionStars', ms.entries.map((e) => '${e.key}:${e.value}').join(','));
     _p.setInt('played', state.played);
     _p.setInt('won', state.won);
     _p.setInt('stars', state.stars);
@@ -118,7 +139,7 @@ class ProgressNotifier extends Notifier<Progress> {
   }
 
   void reset() {
-    for (final k in ['played', 'won', 'stars', 'bestTime']) {
+    for (final k in ['played', 'won', 'stars', 'bestTime', 'missionStars']) {
       _p.remove(k);
     }
     state = const Progress();

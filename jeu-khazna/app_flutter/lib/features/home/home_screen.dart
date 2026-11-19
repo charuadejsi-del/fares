@@ -153,8 +153,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   const SizedBox(height: 20),
                   NeonButton(
-                    label: 'مهمّة جديدة (هاتف واحد)',
+                    label: 'الحملة: خريطة المهمّات',
+                    icon: Icons.map_outlined,
+                    onTap: _busy ? null : () => context.push('/campaign'),
+                  ),
+                  const SizedBox(height: 12),
+                  NeonButton(
+                    label: 'مهمّة حرّة',
                     icon: Icons.play_arrow_rounded,
+                    filled: false,
                     onTap: _busy ? null : () => context.push('/briefing'),
                   ),
                   const SizedBox(height: 12),
