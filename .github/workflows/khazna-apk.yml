@@ -60,6 +60,30 @@ jobs:
             grep -q "android.permission.$PERM" "$MANIFEST" || \
               sed -i "s#<application#<uses-permission android:name=\"android.permission.$PERM\"/>\n    <application#" "$MANIFEST"
           done
+          # بعض الإضافات (مثل Agora) تُبنى بـ compileSdk قديم: نرفعه لكل المكتبات
+          if [ -f android/build.gradle.kts ]; then
+            cat >> android/build.gradle.kts <<'KTS'
+
+          subprojects {
+              if (name != "app") {
+                  val forceSdk: Project.() -> Unit = {
+                      extensions.findByName("android")?.withGroovyBuilder { "compileSdkVersion"(36) }
+                  }
+                  if (state.executed) forceSdk() else afterEvaluate { forceSdk() }
+              }
+          }
+          KTS
+          else
+            cat >> android/build.gradle <<'GR'
+
+          subprojects { p ->
+              if (p.name != 'app') {
+                  def f = { if (p.extensions.findByName('android') != null) { p.android.compileSdkVersion 36 } }
+                  if (p.state.executed) { f() } else { p.afterEvaluate { f() } }
+              }
+          }
+          GR
+          fi
 
       - run: flutter pub get
 
