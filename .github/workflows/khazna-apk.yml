@@ -187,11 +187,6 @@ jobs:
               urllib.request.urlretrieve(url, dest)
           PY
 
-      - name: نسخة Windows بلا صوت (Agora لا تُبنى على Windows هنا)
-        run: |
-          cp lib/core/voice_stub.dart lib/core/voice.dart
-          sed -i '/agora_rtc_engine:/d; /permission_handler:/d' pubspec.yaml
-
       - name: توليد ملفات Windows
         run: |
           flutter create --platforms=windows --org com.khazna --project-name khazna .
@@ -200,8 +195,21 @@ jobs:
 
       - run: flutter pub get
 
+      # إضافة Agora تفكّ حزمتها داخل مجلّد مرتبط برابط رمزي (symlink) فيرفض CMake ذلك:
+      # نبني مرّة أولى لتوليد الملفات، ثم نستبدل الرابط بنسخة حقيقية ونكمل البناء بـ CMake مباشرة.
       - name: بناء نسخة Windows
-        run: flutter build windows --release
+        run: |
+          flutter build windows --release || echo "المحاولة الأولى فشلت كما هو متوقّع، نصلح الرابط ونكمل"
+          if [ ! -f build/windows/x64/runner/Release/khazna.exe ]; then
+            LINK=windows/flutter/ephemeral/.plugin_symlinks/agora_rtc_engine
+            SRC=$(ls -d "$(cygpath -u "$PUB_CACHE")"/hosted/pub.dev/agora_rtc_engine-* | sort -V | tail -1)
+            echo "نسخ $SRC"
+            cmd //c "rmdir $(cygpath -w "$LINK")"
+            cp -r "$SRC" "$LINK"
+            cmake -S windows -B build/windows/x64
+            cmake --build build/windows/x64 --config Release --target INSTALL
+          fi
+          test -f build/windows/x64/runner/Release/khazna.exe
 
       - name: ضغط النسخة
         shell: pwsh

@@ -4,6 +4,9 @@ import 'dart:math';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:supabase/supabase.dart';
+
+import '../net/transport.dart';
 
 /// رقم تطبيق Agora (وضع الاختبار بلا رموز). يمكن تغييره عند البناء بـ --dart-define=AGORA_APP_ID=...
 const String kAgoraAppId = String.fromEnvironment('AGORA_APP_ID', defaultValue: 'a8a28df251784e9595dbb4c8ce4b0042');
@@ -22,6 +25,34 @@ class VoiceService extends ChangeNotifier {
 
   void _notify() {
     if (!_disposed) notifyListeners();
+  }
+
+  /// يطلب رمز Agora من دالة Supabase «agora-token». فارغ = مشروع بوضع الاختبار.
+  Future<String> _token(String channel) async {
+    try {
+      final res = await SupabaseClient(kSupabaseUrl, kSupabaseAnonKey)
+          .functions
+          .invoke('agora-token', body: {'channel': channel})
+          .timeout(const Duration(seconds: 8));
+      final data = res.data;
+      if (data is Map && data['token'] is String) return data['token'] as String;
+    } catch (_) {}
+    return '';
+  }
+
+  String _reasonText(ConnectionChangedReasonType r) {
+    switch (r) {
+      case ConnectionChangedReasonType.connectionChangedInvalidToken:
+      case ConnectionChangedReasonType.connectionChangedTokenExpired:
+        return 'مشروع Agora يطلب رمزاً (Token): أضف الـ App Certificate في Supabase';
+      case ConnectionChangedReasonType.connectionChangedInvalidAppId:
+        return 'رقم تطبيق Agora (App ID) غير صحيح';
+      case ConnectionChangedReasonType.connectionChangedRejectedByServer:
+      case ConnectionChangedReasonType.connectionChangedBannedByServer:
+        return 'خادم Agora رفض الاتصال';
+      default:
+        return 'انقطع الصوت (${r.name})';
+    }
   }
 
   Future<void> join(String room) async {
@@ -71,15 +102,35 @@ class VoiceService extends ChangeNotifier {
             _notify();
           }
         },
+        onConnectionStateChanged: (connection, state, reason) {
+          if (state == ConnectionStateType.connectionStateFailed ||
+              reason == ConnectionChangedReasonType.connectionChangedInvalidToken ||
+              reason == ConnectionChangedReasonType.connectionChangedInvalidAppId ||
+              reason == ConnectionChangedReasonType.connectionChangedTokenExpired) {
+            joined = false;
+            error = _reasonText(reason);
+            _notify();
+          } else if (state == ConnectionStateType.connectionStateConnected) {
+            error = null;
+            _notify();
+          }
+        },
         onError: (err, msg) {
-          error = 'خطأ في الصوت: $msg';
-          _notify();
+          // كثير من «الأخطاء» تحذيرات عابرة: نعرضها فقط إذا لم ينجح الاتصال
+          if (!joined) {
+            error = 'خطأ في الصوت: ${err.name}${msg.isEmpty ? '' : ' — $msg'}';
+            _notify();
+          }
         },
       ));
       await e.enableAudio();
       await e.enableAudioVolumeIndication(interval: 300, smooth: 3, reportVad: false);
+      final token = await _token('khazna-$room');
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        await e.setDefaultAudioRouteToSpeakerphone(true).catchError((_) {});
+      }
       await e.joinChannel(
-        token: '',
+        token: token,
         channelId: 'khazna-$room',
         uid: 0,
         options: const ChannelMediaOptions(
