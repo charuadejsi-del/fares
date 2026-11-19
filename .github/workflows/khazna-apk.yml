@@ -11,6 +11,9 @@ on:
       - '.github/workflows/khazna-apk.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -76,3 +79,16 @@ jobs:
           name: khazna-apk
           path: jeu-khazna/app_flutter/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
+
+      - name: نسخ الـ APK باسم واضح
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/khazna.apk
+
+      # إصدار (Release) فيه ملف الـ APK مباشرة، بلا ضغط: يُحمَّل ويُثبَّت من الهاتف مباشرة
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: khazna-build-${{ github.run_number }}
+          name: الخزنة — نسخة ${{ github.run_number }}
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          body: "ملف APK للتثبيت المباشر على أندرويد (نسخة تجريبية)."
+          files: jeu-khazna/app_flutter/build/khazna.apk
