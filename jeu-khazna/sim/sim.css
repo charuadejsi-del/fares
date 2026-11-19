@@ -1,0 +1,14 @@
+/* إضافات خاصة بالمحاكي */
+#app { max-width: 1100px; }
+.sim-badge { background: #2a2f3a; color: var(--gold); padding: 2px 10px; border-radius: 99px; font-size: .85rem; font-weight: 700; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tabs button.on { background: var(--gold); color: #1a1406; border-color: var(--gold); font-weight: 700; }
+.split { display: grid; gap: 12px; }
+.panel-title { font-weight: 700; color: var(--gold); margin-bottom: 8px; display: flex; gap: 8px; align-items: center; }
+#app[data-view="op"] .panel.ex, #app[data-view="ex"] .panel.op { display: none; }
+.wire button.armed { background: var(--bad); border-color: var(--bad); color: #fff; }
+@media (min-width: 900px) {
+  .tabs { display: none; }
+  .split { grid-template-columns: 1fr 1fr; align-items: start; }
+  #app[data-view] .panel.op, #app[data-view] .panel.ex { display: block; }
+}

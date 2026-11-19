@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f1115">
+<title>الخزنة — محاكي التجربة</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>">
+<style>
+:root {
+  --bg: #0f1115; --card: #181b22; --line: #2a2f3a; --text: #eef0f4; --muted: #8b93a3;
+  --gold: #f2b84b; --good: #3ecf8e; --bad: #ff5d5d; --op: #4aa3ff; --ex: #c48bff;
+  --r: 16px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font-family: "Segoe UI", Tahoma, "Noto Sans Arabic", system-ui, sans-serif;
+  font-size: 17px; line-height: 1.6; min-height: 100vh;
+  padding: max(12px, env(safe-area-inset-top)) 12px 24px;
+  background: radial-gradient(circle at 50% -20%, #262b38 0%, var(--bg) 60%);
+}
+#app { max-width: 560px; margin: 0 auto; display: grid; gap: 12px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; }
+h1 { margin: 4px 0; font-size: 2rem; }
+h2 { margin: 0 0 8px; font-size: 1.25rem; color: var(--gold); }
+h3 { margin: 12px 0 6px; font-size: 1rem; }
+p { margin: 6px 0; }
+.hero { text-align: center; }
+.logo { font-size: 3.2rem; }
+.sub, .muted { color: var(--muted); }
+.small { font-size: .85rem; }
+.lead { color: #cfd4de; }
+.hint { font-size: .85rem; color: var(--muted); margin-top: 14px; }
+.error { color: var(--bad); }
+
+button, input { font: inherit; color: inherit; }
+button {
+  background: #232835; border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px;
+  cursor: pointer; transition: transform .06s, background .2s;
+}
+button:active:not(:disabled) { transform: scale(.96); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary { background: var(--gold); color: #1a1406; border-color: var(--gold); font-weight: 700; }
+button.big { width: 100%; padding: 15px; font-size: 1.1rem; margin-top: 10px; }
+button.ghost { background: transparent; width: 100%; margin-top: 8px; }
+button.link { background: none; border: 0; color: var(--muted); text-decoration: underline; width: 100%; margin-top: 6px; }
+input {
+  background: #10131a; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; width: 100%;
+}
+input:focus, button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.field { display: grid; gap: 6px; text-align: start; margin: 14px 0 4px; color: var(--muted); }
+.row { display: flex; gap: 8px; margin-top: 10px; }
+.row input { flex: 1; }
+
+.room-code { font-size: 3rem; font-weight: 800; letter-spacing: .3em; color: var(--gold); text-align: center; }
+.players { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px; }
+.players li { background: #10131a; border-radius: 12px; padding: 10px 12px; }
+.players small { display: block; color: var(--muted); }
+.role { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: .85rem; font-weight: 700; }
+.role.op { background: color-mix(in srgb, var(--op) 22%, transparent); color: var(--op); }
+.role.ex { background: color-mix(in srgb, var(--ex) 22%, transparent); color: var(--ex); }
+
+.hud { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 2px; }
+.dots { display: flex; gap: 6px; }
+.dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--line); }
+.dots i.done { background: var(--good); }
+.dots i.now { background: var(--gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 30%, transparent); }
+.timer { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 1.4rem; }
+.timer.warn { color: var(--bad); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .5; } }
+
+/* الغرفة 1 */
+.symbols { display: flex; justify-content: center; gap: 10px; margin: 14px 0; }
+.symbols span, .big-symbol {
+  font-size: 2.6rem; width: 64px; height: 64px; display: grid; place-items: center;
+  background: #10131a; border: 1px solid var(--line); border-radius: 14px;
+}
+.big-symbol { margin: 12px auto; width: 84px; height: 84px; font-size: 3.4rem; }
+.display { text-align: center; font-size: 2.2rem; letter-spacing: .4em; font-weight: 800; margin: 6px 0 10px; }
+.pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pad button { font-size: 1.4rem; padding: 14px 0; }
+.manual-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+.manual-grid div { background: #10131a; border-radius: 10px; padding: 6px 2px; display: grid; justify-items: center; }
+.manual-grid b { font-size: 1.6rem; line-height: 1.2; }
+.manual-grid small { color: var(--muted); font-size: .72rem; }
+.manual-grid em { font-style: normal; font-weight: 800; color: var(--gold); font-size: 1.2rem; }
+
+/* الغرفة 2 */
+.wires { display: grid; gap: 10px; margin-top: 12px; }
+.wire { display: flex; align-items: center; gap: 10px; }
+.wire .num { width: 24px; text-align: center; color: var(--muted); font-weight: 700; }
+.wire .bar { flex: 1; height: 14px; border-radius: 7px; background: var(--c); box-shadow: inset 0 -3px 0 rgba(0,0,0,.25), 0 0 0 1px #000; }
+.wire.cut .bar { background: linear-gradient(90deg, var(--c) 45%, transparent 45% 55%, var(--c) 55%); }
+.wire button { padding: 8px 12px; }
+.rules { background: #10131a; border-radius: 12px; padding: 4px 12px 8px; margin-top: 10px; }
+.rules.current { outline: 2px solid var(--gold); }
+.rules ol, .rules ul { margin: 0; padding-inline-start: 22px; }
+.rules li { margin: 4px 0; }
+.dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--c); margin-inline-end: 6px; vertical-align: middle; }
+
+/* الغرفة 3 */
+.cipher { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 10px 0; }
+.cipher span { font-size: 1.8rem; min-width: 46px; text-align: center; background: #10131a; border-radius: 10px; padding: 4px 8px; }
+.alphabet { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.alphabet span { background: #10131a; border-radius: 8px; display: grid; justify-items: center; padding: 2px 0; }
+.alphabet b { font-size: 1.2rem; }
+.alphabet small { color: var(--muted); font-size: .7rem; }
+
+/* الغرفة 4 */
+.arrows { display: grid; grid-template-areas: ". up ." "left . right" ". down ."; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 300px; margin: 16px auto 0; }
+.arrows button { font-size: 1.6rem; padding: 14px 0; display: grid; }
+.arrows small { font-size: .75rem; color: var(--muted); }
+.arrows .up { grid-area: up; } .arrows .down { grid-area: down; } .arrows .left { grid-area: left; } .arrows .right { grid-area: right; }
+.maze { display: grid; grid-template-columns: repeat(var(--n), 1fr); max-width: 340px; margin: 14px auto 0; background: #10131a; border-radius: 6px; }
+.maze div { aspect-ratio: 1; display: grid; place-items: center; font-size: 1.5rem; border: 2px solid transparent; }
+.maze .wt { border-top-color: var(--gold); } .maze .wb { border-bottom-color: var(--gold); }
+.maze .wl { border-left-color: var(--gold); } .maze .wr { border-right-color: var(--gold); }
+
+/* الغرفة 5 */
+.lamp { width: 120px; height: 120px; border-radius: 50%; margin: 14px auto 6px; background: #10131a; border: 3px solid var(--line); transition: background .15s; box-shadow: 0 0 40px rgba(0,0,0,.4) inset; }
+.progress { display: flex; justify-content: center; gap: 8px; margin: 10px 0; }
+.progress i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); }
+.progress i.on { background: var(--gold); border-color: var(--gold); }
+.lights { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lights button { background: var(--c); color: #111; font-weight: 800; padding: 22px 0; border: 0; }
+
+.end.won h1 { color: var(--good); }
+.end.lost h1 { color: var(--bad); }
+
+#flash {
+  position: fixed; inset-inline: 12px; top: 16px; margin: 0 auto; max-width: 420px; text-align: center;
+  padding: 14px; border-radius: 14px; font-weight: 800; font-size: 1.1rem;
+  opacity: 0; transform: translateY(-20px); transition: .2s; pointer-events: none; z-index: 10;
+}
+#flash.show { opacity: 1; transform: none; }
+#flash.bad { background: var(--bad); color: #fff; }
+#flash.good { background: var(--good); color: #062014; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* إضافات خاصة بالمحاكي */
+#app { max-width: 1100px; }
+.sim-badge { background: #2a2f3a; color: var(--gold); padding: 2px 10px; border-radius: 99px; font-size: .85rem; font-weight: 700; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tabs button.on { background: var(--gold); color: #1a1406; border-color: var(--gold); font-weight: 700; }
+.split { display: grid; gap: 12px; }
+.panel-title { font-weight: 700; color: var(--gold); margin-bottom: 8px; display: flex; gap: 8px; align-items: center; }
+#app[data-view="op"] .panel.ex, #app[data-view="ex"] .panel.op { display: none; }
+.wire button.armed { background: var(--bad); border-color: var(--bad); color: #fff; }
+@media (min-width: 900px) {
+  .tabs { display: none; }
+  .split { grid-template-columns: 1fr 1fr; align-items: start; }
+  #app[data-view] .panel.op, #app[data-view] .panel.ex { display: block; }
+}
+
+</style>
+</head>
+<body>
+<main id="app" aria-live="polite"></main>
+<div id="flash" aria-hidden="true"></div>
+<script>
+"use strict";
+(() => {
+// core.js — منطق لعبة «الخزنة» (دوال صافية، مشتركة بين المتصفح والاختبارات)
+
+const DURATION = 600; // مدة اللعبة بالثواني (10 دقائق)
+const PENALTY = 30;   // عقوبة الخطأ بالثواني
+const BUMP = 10;      // عقوبة الاصطدام بجدار في السرداب
+
+const ROOMS = ['keypad', 'wires', 'cipher', 'maze', 'lights'];
+const ROOM_NAMES = {
+  keypad: 'باب الرموز',
+  wires: 'صندوق الأسلاك',
+  cipher: 'المخطوط المشفّر',
+  maze: 'السرداب المظلم',
+  lights: 'قفل الأضواء',
+};
+
+const SYMBOLS = [
+  { s: '★', n: 'نجمة' }, { s: '☾', n: 'هلال' }, { s: '◆', n: 'معيّن' },
+  { s: '▲', n: 'مثلث' }, { s: '●', n: 'دائرة' }, { s: '■', n: 'مربّع' },
+  { s: '✚', n: 'زائد' }, { s: '☀', n: 'شمس' }, { s: '♣', n: 'نفل' },
+  { s: '♠', n: 'بستوني' }, { s: '♥', n: 'قلب' }, { s: '✿', n: 'وردة' },
+];
+
+const COLORS = [
+  { id: 'red', n: 'أحمر', c: '#e53935' },
+  { id: 'blue', n: 'أزرق', c: '#1e88e5' },
+  { id: 'yellow', n: 'أصفر', c: '#fdd835' },
+  { id: 'green', n: 'أخضر', c: '#43a047' },
+  { id: 'white', n: 'أبيض', c: '#f5f5f5' },
+  { id: 'black', n: 'أسود', c: '#212121' },
+];
+const LIGHTS = COLORS.slice(0, 4);
+
+const ALPHABET = [...'ابتثجحخدذرزسشصضطظعغفقكلمنهوي'];
+const WORDS = ['مفتاح', 'كنز', 'سرداب', 'قنديل', 'ذهب', 'لغز', 'حارس', 'صندوق', 'مخطوط', 'فارس',
+  'جبل', 'نجم', 'قمر', 'سيف', 'درع', 'طريق', 'ظلام', 'شمس', 'بحر', 'صخر'];
+
+const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
+
+// مولّد أرقام عشوائية حتمي (mulberry32): نفس البذرة = نفس الألغاز عند كل اللاعبين
+function rng(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const int = (r, n) => Math.floor(r() * n);
+const pick = (r, a) => a[int(r, a.length)];
+function shuffle(r, a) {
+  a = [...a];
+  for (let i = a.length - 1; i > 0; i--) { const j = int(r, i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+function normalize(v) {
+  return String(v ?? '').replace(/\s+/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
+}
+
+// ───── الغرفة 1: باب الرموز ─────
+function genKeypad(r) {
+  const digits = SYMBOLS.map(() => int(r, 10));
+  const shown = shuffle(r, SYMBOLS.map((_, i) => i)).slice(0, 4);
+  return { manual: digits, shown, answer: shown.map(i => digits[i]).join('') };
+}
+
+// ───── الغرفة 2: صندوق الأسلاك ─────
+const count = (w, c) => w.filter(x => x === c).length;
+function evalRule(rule, wires) {
+  const n = wires.length;
+  switch (rule.type) {
+    case 'none': return count(wires, rule.color) === 0 ? rule.k - 1 : -1;
+    case 'lastIs': return wires[n - 1] === rule.color ? n - 1 : -1;
+    case 'many': return count(wires, rule.color) > 1 ? wires.lastIndexOf(rule.color) : -1;
+    case 'one': return count(wires, rule.color) === 1 ? 0 : -1;
+    case 'default': return rule.k - 1;
+  }
+  return -1;
+}
+function ruleText(rule) {
+  const C = rule.color !== undefined ? COLORS[rule.color].n : '';
+  switch (rule.type) {
+    case 'none': return `إذا لم يوجد أي سلك ${C} ← اقطع السلك رقم ${rule.k}`;
+    case 'lastIs': return `إذا كان آخر سلك ${C} ← اقطع آخر سلك`;
+    case 'many': return `إذا وُجد أكثر من سلك ${C} ← اقطع آخر سلك ${C}`;
+    case 'one': return `إذا وُجد سلك ${C} واحد فقط ← اقطع أول سلك`;
+    case 'default': return `وإلا ← اقطع السلك رقم ${rule.k}`;
+  }
+  return '';
+}
+function genWires(r) {
+  const rules = {};
+  for (let n = 3; n <= 6; n++) {
+    const list = [];
+    for (let i = 0; i < 3; i++) {
+      const type = pick(r, ['none', 'lastIs', 'many', 'one']);
+      list.push({ type, color: int(r, COLORS.length), k: 1 + int(r, n) });
+    }
+    list.push({ type: 'default', k: 1 + int(r, n) });
+    rules[n] = list;
+  }
+  const n = 3 + int(r, 4);
+  const wires = Array.from({ length: n }, () => int(r, COLORS.length));
+  let answer = -1;
+  for (const rule of rules[n]) { answer = evalRule(rule, wires); if (answer >= 0) break; }
+  return { rules, wires, answer };
+}
+
+// ───── الغرفة 3: المخطوط المشفّر ─────
+function genCipher(r) {
+  const shifts = SYMBOLS.map(() => 1 + int(r, 9));
+  const sym = int(r, SYMBOLS.length);
+  const word = pick(r, WORDS);
+  const k = shifts[sym];
+  const cipher = [...word].map(ch => ALPHABET[(ALPHABET.indexOf(ch) + k) % ALPHABET.length]).join('');
+  return { manual: shifts, sym, cipher, answer: word };
+}
+
+// ───── الغرفة 4: السرداب المظلم ─────
+function bfs(open, N, start) {
+  const dist = Array(N * N).fill(-1); dist[start] = 0;
+  const q = [start];
+  while (q.length) {
+    const c = q.shift(), x = c % N, y = Math.floor(c / N);
+    for (const d of Object.keys(DIRS)) {
+      if (!open[c][d]) continue;
+      const nc = (y + DIRS[d][1]) * N + (x + DIRS[d][0]);
+      if (dist[nc] < 0) { dist[nc] = dist[c] + 1; q.push(nc); }
+    }
+  }
+  return dist;
+}
+function genMaze(r, N = 5) {
+  const open = Array.from({ length: N * N }, () => ({}));
+  const seen = new Set([0]);
+  const stack = [[0, 0]];
+  while (stack.length) {
+    const [x, y] = stack[stack.length - 1];
+    const opts = shuffle(r, Object.keys(DIRS)).filter(d => {
+      const nx = x + DIRS[d][0], ny = y + DIRS[d][1];
+      return nx >= 0 && ny >= 0 && nx < N && ny < N && !seen.has(ny * N + nx);
+    });
+    if (!opts.length) { stack.pop(); continue; }
+    const d = opts[0], nx = x + DIRS[d][0], ny = y + DIRS[d][1];
+    open[y * N + x][d] = true; open[ny * N + nx][OPP[d]] = true;
+    seen.add(ny * N + nx); stack.push([nx, ny]);
+  }
+  const start = int(r, N * N);
+  const dist = bfs(open, N, start);
+  let exit = start;
+  dist.forEach((d, i) => { if (d > dist[exit]) exit = i; });
+  return { N, open, start, exit, distance: dist[exit] };
+}
+
+// ───── الغرفة 5: قفل الأضواء ─────
+function genLights(r) {
+  const seq = Array.from({ length: 3 }, () => int(r, LIGHTS.length));
+  const maps = [0, 1, 2].map(() => shuffle(r, [0, 1, 2, 3]));
+  return { seq, maps };
+}
+function lightsExpected(P, stage) {
+  return P.lights.seq.slice(0, stage + 1).map(c => P.lights.maps[stage][c]);
+}
+
+function generate(seed) {
+  const r = rng(seed);
+  return { keypad: genKeypad(r), wires: genWires(r), cipher: genCipher(r), maze: genMaze(r), lights: genLights(r) };
+}
+
+// ───── الحالة والقواعد ─────
+function newState(seed) {
+  return { seed, phase: 'lobby', room: 0, startedAt: 0, penalty: 0, mazePos: null,
+    lightStage: 0, lightInput: [], cut: [], lastEvent: null, eventId: 0, finishedIn: 0 };
+}
+function start(state, P, now) {
+  return { ...newState(state.seed), phase: 'playing', startedAt: now, mazePos: P.maze.start, eventId: state.eventId + 1,
+    lastEvent: { type: 'start', room: ROOMS[0] } };
+}
+function remaining(state, now) {
+  if (!state.startedAt) return DURATION;
+  return Math.max(0, DURATION - (now - state.startedAt) / 1000 - state.penalty);
+}
+function tick(state, now) {
+  if (state.phase === 'playing' && remaining(state, now) <= 0) return { ...state, phase: 'lost' };
+  return state;
+}
+
+function apply(state, P, action, now) {
+  if (state.phase !== 'playing' || !action) return state;
+  const room = ROOMS[state.room];
+  const s = { ...state };
+  const ev = (type, extra = {}) => { s.eventId = state.eventId + 1; s.lastEvent = { type, room, ...extra }; };
+  const advance = () => {
+    s.room = state.room + 1;
+    if (s.room >= ROOMS.length) { s.phase = 'won'; s.finishedIn = Math.round(DURATION - remaining(s, now)); }
+    ev('solved');
+  };
+  const wrong = (pen = PENALTY, type = 'wrong') => { s.penalty = state.penalty + pen; ev(type, { pen }); };
+
+  switch (room) {
+    case 'keypad':
+      if (action.type !== 'submit') return state;
+      String(action.value ?? '').trim() === P.keypad.answer ? advance() : wrong();
+      break;
+    case 'cipher':
+      if (action.type !== 'submit') return state;
+      normalize(action.value) === P.cipher.answer ? advance() : wrong();
+      break;
+    case 'wires':
+      if (action.type !== 'cut' || !Number.isInteger(action.idx) || state.cut.includes(action.idx)) return state;
+      if (action.idx < 0 || action.idx >= P.wires.wires.length) return state;
+      s.cut = [...state.cut, action.idx];
+      action.idx === P.wires.answer ? advance() : wrong();
+      break;
+    case 'maze': {
+      if (action.type !== 'move' || !DIRS[action.dir]) return state;
+      const { N, open, exit } = P.maze, pos = state.mazePos;
+      if (!open[pos][action.dir]) { wrong(BUMP, 'bump'); break; }
+      const np = (Math.floor(pos / N) + DIRS[action.dir][1]) * N + (pos % N + DIRS[action.dir][0]);
+      s.mazePos = np;
+      np === exit ? advance() : ev('moved');
+      break;
+    }
+    case 'lights': {
+      if (action.type !== 'press' || !Number.isInteger(action.color)) return state;
+      const st = state.lightStage, expected = lightsExpected(P, st);
+      const input = [...state.lightInput, action.color];
+      if (input[input.length - 1] !== expected[input.length - 1]) { s.lightInput = []; wrong(); break; }
+      if (input.length < expected.length) { s.lightInput = input; ev('press'); break; }
+      s.lightInput = [];
+      if (st === 2) advance(); else { s.lightStage = st + 1; ev('stage'); }
+      break;
+    }
+  }
+  return tick(s, now);
+}
+
+// sim-app.js — محاكي «الخزنة»: الشاشتان (المشغّل والخبير) على نفس الجهاز، بلا اتصال.
+// يُدمج مع core.js في ملف واحد بواسطة tools/build-sim.mjs
+/* global DURATION, PENALTY, BUMP, ROOMS, ROOM_NAMES, SYMBOLS, COLORS, LIGHTS, ALPHABET,
+   generate, newState, start, apply, tick, remaining, ruleText, lightsExpected */
+
+const app = document.getElementById('app');
+const flashEl = document.getElementById('flash');
+let state = null, P = null, entry = '', seenKey = '', playToken = 0, view = 'op', armedCut = -1;
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = sec => { sec = Math.max(0, Math.ceil(sec)); return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`; };
+
+function newGame() {
+  const seed = Math.floor(Math.random() * 2 ** 31);
+  P = generate(seed);
+  state = start(newState(seed), P, Date.now());
+  entry = ''; armedCut = -1;
+  render();
+}
+function dispatch(action) {
+  const ns = apply(state, P, action, Date.now());
+  if (ns !== state) { state = ns; render(); }
+}
+
+setInterval(() => {
+  if (!state) return;
+  const t = tick(state, Date.now());
+  if (t !== state) { state = t; render(); return; }
+  const el = document.getElementById('timer');
+  if (el && state.phase === 'playing') {
+    const r = remaining(state, Date.now());
+    el.textContent = fmt(r);
+    el.classList.toggle('warn', r < 60);
+  }
+}, 250);
+
+function flash(kind, msg) {
+  flashEl.textContent = msg;
+  flashEl.className = 'show ' + kind;
+  clearTimeout(flash.t);
+  flash.t = setTimeout(() => { flashEl.className = ''; }, 1300);
+}
+
+function handleEvent() {
+  if (!state?.lastEvent) return;
+  const key = state.seed + ':' + state.eventId;
+  if (key === seenKey) return;
+  seenKey = key;
+  const { type, pen } = state.lastEvent;
+  if (type === 'wrong') flash('bad', `❌ خطأ! −${pen} ثانية`);
+  else if (type === 'bump') flash('bad', `💥 اصطدمت بجدار! −${pen} ثوانٍ`);
+  else if (type === 'solved' && state.phase === 'playing') flash('good', '✅ فُتح القفل!');
+  else if (type === 'stage') flash('good', '✨ المرحلة التالية');
+  if (type === 'solved' || type === 'start') { entry = ''; armedCut = -1; }
+  if (ROOMS[state.room] === 'lights' && (type === 'stage' || type === 'solved' || type === 'start')) setTimeout(playLights, 500);
+}
+
+function playLights() {
+  if (state?.phase !== 'playing' || ROOMS[state.room] !== 'lights') return;
+  const tok = ++playToken;
+  const seq = P.lights.seq.slice(0, state.lightStage + 1);
+  let i = 0;
+  const step = () => {
+    const lamp = document.getElementById('lamp');
+    if (!lamp || tok !== playToken) return;
+    if (i >= seq.length * 2) { lamp.style.background = ''; return; }
+    lamp.style.background = i % 2 === 0 ? LIGHTS[seq[i / 2]].c : '';
+    i++;
+    setTimeout(step, i % 2 ? 750 : 300);
+  };
+  step();
+}
+
+// ───────── العرض ─────────
+function render() {
+  const ans = document.getElementById('answer');
+  const kept = ans ? { v: ans.value, f: document.activeElement === ans } : null;
+  if (!state) app.innerHTML = homeView();
+  else if (state.phase === 'playing') app.innerHTML = gameView();
+  else app.innerHTML = endView();
+  const ans2 = document.getElementById('answer');
+  if (ans2 && kept) { ans2.value = kept.v; if (kept.f) ans2.focus(); }
+  app.dataset.view = view;
+  handleEvent();
+}
+
+function homeView() {
+  return `
+  <section class="card hero">
+    <div class="logo">🔐</div>
+    <h1>الخزنة</h1>
+    <p class="sub">محاكي التجربة: شاشة المشغّل وشاشة الخبير على نفس الجهاز</p>
+    <button class="primary big" data-act="new">ابدأ التجربة</button>
+  </section>
+  <section class="card how">
+    <h2>كيف تُلعب؟</h2>
+    <p><b>المشغّل</b>: أمام الخزنة، يرى الأقفال لكن بلا دليل.</p>
+    <p><b>الخبير</b>: معه الدليل، يعرف الحلول لكن لا يرى الأقفال.</p>
+    <p>في اللعبة الحقيقية، كل لاعب يرى شاشته فقط ويتكلّمان لحلّ الألغاز. هنا تستطيع التنقّل بين الشاشتين لتجرّب الألغاز بنفسك، أو تعطي الهاتف لصديق مع كل دور.</p>
+    <p>افتح 5 أقفال قبل أن تنتهي 10 دقائق. كل خطأ يكلّف ${PENALTY} ثانية.</p>
+  </section>`;
+}
+
+function gameView() {
+  const room = ROOMS[state.room];
+  const dots = ROOMS.map((r, i) => `<i class="${i < state.room ? 'done' : i === state.room ? 'now' : ''}" title="${ROOM_NAMES[r]}"></i>`).join('');
+  const views = {
+    keypad: [keypadOp, keypadEx], wires: [wiresOp, wiresEx], cipher: [cipherOp, cipherEx],
+    maze: [mazeOp, mazeEx], lights: [lightsOp, lightsEx],
+  };
+  const [op, ex] = views[room];
+  return `
+  <header class="hud">
+    <span class="sim-badge">محاكي</span>
+    <div class="dots">${dots}</div>
+    <span id="timer" class="timer" dir="ltr">${fmt(remaining(state, Date.now()))}</span>
+  </header>
+  <nav class="tabs" role="tablist">
+    <button data-act="view" data-v="op" class="${view === 'op' ? 'on' : ''}" role="tab" aria-selected="${view === 'op'}">🎮 شاشة المشغّل</button>
+    <button data-act="view" data-v="ex" class="${view === 'ex' ? 'on' : ''}" role="tab" aria-selected="${view === 'ex'}">📖 شاشة الخبير</button>
+  </nav>
+  <div class="split">
+    <section class="card puzzle panel op">
+      <div class="panel-title"><span class="role op">المشغّل</span> ${state.room + 1}. ${ROOM_NAMES[room]}</div>
+      ${op()}
+    </section>
+    <section class="card puzzle panel ex">
+      <div class="panel-title"><span class="role ex">الخبير</span> ${state.room + 1}. ${ROOM_NAMES[room]}</div>
+      ${ex()}
+    </section>
+  </div>
+  <button data-act="quit" class="link">إنهاء التجربة</button>`;
+}
+
+// الغرفة 1
+function keypadOp() {
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', '✔'];
+  return `
+  <p class="lead">صِف هذه الرموز للخبير بالترتيب (من اليسار إلى اليمين)، ثم أدخل الرمز الذي يعطيك إياه.</p>
+  <div class="symbols" dir="ltr">${P.keypad.shown.map(i => `<span>${SYMBOLS[i].s}</span>`).join('')}</div>
+  <div class="display" dir="ltr">${esc(entry.padEnd(4, '·'))}</div>
+  <div class="pad" dir="ltr">${keys.map(k => `<button data-act="key" data-k="${k}" class="${k === '✔' ? 'primary' : ''}">${k}</button>`).join('')}</div>`;
+}
+function keypadEx() {
+  return `
+  <p class="lead">المشغّل سيصف لك 4 رموز. أعطه الرقم المقابل لكل رمز، بنفس الترتيب.</p>
+  <div class="manual-grid">${SYMBOLS.map((sy, i) => `<div><b>${sy.s}</b><small>${sy.n}</small><em>${P.keypad.manual[i]}</em></div>`).join('')}</div>`;
+}
+
+// الغرفة 2
+function wiresOp() {
+  return `
+  <p class="lead">صِف للخبير عدد الأسلاك وألوانها من الأعلى إلى الأسفل، ثم اقطع السلك الذي يحدّده (اضغط مرتين للتأكيد).</p>
+  <div class="wires">${P.wires.wires.map((c, i) => {
+    const cut = state.cut.includes(i), armed = armedCut === i;
+    return `<div class="wire ${cut ? 'cut' : ''}"><span class="num">${i + 1}</span>
+      <span class="bar" style="--c:${COLORS[c].c}"></span>
+      <button data-act="cut" data-i="${i}" class="${armed ? 'armed' : ''}" ${cut ? 'disabled' : ''}>${cut ? 'مقطوع' : armed ? 'متأكد؟' : '✂️ اقطع'}</button></div>`;
+  }).join('')}</div>`;
+}
+function wiresEx() {
+  return `
+  <p class="lead">اسأل المشغّل عن عدد الأسلاك وألوانها. السلك رقم 1 هو الأعلى. طبّق <b>أوّل</b> قاعدة صحيحة فقط.</p>
+  ${[3, 4, 5, 6].map(n => `<div class="rules"><h3>إذا كان هناك ${n} أسلاك</h3>
+    <ol>${P.wires.rules[n].map(r => `<li>${ruleText(r)}</li>`).join('')}</ol></div>`).join('')}`;
+}
+
+// الغرفة 3
+function cipherOp() {
+  return `
+  <p class="lead">صِف الرمز للخبير، واقرأ له الحروف المشفّرة واحداً واحداً. هو يعرف كيف تُفكّ.</p>
+  <div class="big-symbol">${SYMBOLS[P.cipher.sym].s}</div>
+  <div class="cipher">${[...P.cipher.cipher].map(c => `<span>${c}</span>`).join('')}</div>
+  <form class="row" data-form="cipher">
+    <input id="answer" autocomplete="off" placeholder="الكلمة بعد فكّ الشيفرة">
+    <button class="primary">تحقّق</button>
+  </form>`;
+}
+function cipherEx() {
+  return `
+  <p class="lead">1) اعرف الإزاحة من الرمز. 2) ارجع بكل حرف إلى الخلف في الأبجدية بعدد الإزاحة (قبل «ا» تأتي «ي»).<br>
+  <small>مثال: الإزاحة 2 ← الحرف «ث» يصبح «ب».</small></p>
+  <div class="manual-grid">${SYMBOLS.map((sy, i) => `<div><b>${sy.s}</b><small>${sy.n}</small><em>${P.cipher.manual[i]}</em></div>`).join('')}</div>
+  <h3>الأبجدية</h3>
+  <div class="alphabet">${ALPHABET.map((ch, i) => `<span><b>${ch}</b><small>${i + 1}</small></span>`).join('')}</div>`;
+}
+
+// الغرفة 4
+function mazeOp() {
+  return `
+  <p class="lead">أنت في ظلام دامس 🔦. الخبير يرى الخريطة ومكانك. اتبع توجيهاته. كل اصطدام بجدار يكلّف ${BUMP} ثوانٍ.</p>
+  <div class="arrows" dir="ltr">
+    <button data-act="move" data-d="up" class="up">▲<small>فوق</small></button>
+    <button data-act="move" data-d="left" class="left">◀<small>يسار</small></button>
+    <button data-act="move" data-d="right" class="right">▶<small>يمين</small></button>
+    <button data-act="move" data-d="down" class="down">▼<small>تحت</small></button>
+  </div>`;
+}
+function mazeEx() {
+  const { N, open, exit } = P.maze;
+  const cells = open.map((o, i) => {
+    const cls = [o.up ? '' : 'wt', o.down ? '' : 'wb', o.left ? '' : 'wl', o.right ? '' : 'wr'].join(' ');
+    return `<div class="${cls}">${i === state.mazePos ? '🔦' : i === exit ? '🚪' : ''}</div>`;
+  }).join('');
+  return `
+  <p class="lead">وجّه المشغّل (🔦) إلى الباب (🚪). الاتجاهات كما تظهر على شاشتك: فوق، تحت، يمين، يسار.</p>
+  <div class="maze" dir="ltr" style="--n:${N}">${cells}</div>`;
+}
+
+// الغرفة 5
+function lightsOp() {
+  const expected = lightsExpected(P, state.lightStage);
+  return `
+  <p class="lead">المرحلة ${state.lightStage + 1} من 3. شاهد الأضواء وصِفها للخبير، ثم اضغط الأزرار التي يحدّدها بالترتيب.</p>
+  <div id="lamp" class="lamp"></div>
+  <button data-act="replay" class="ghost">🔁 أعد عرض الأضواء</button>
+  <div class="progress">${expected.map((_, i) => `<i class="${i < state.lightInput.length ? 'on' : ''}"></i>`).join('')}</div>
+  <div class="lights">${LIGHTS.map((l, i) => `<button data-act="press" data-c="${i}" style="--c:${l.c}">${l.n}</button>`).join('')}</div>`;
+}
+function lightsEx() {
+  return `
+  <p class="lead">المشغّل يرى أضواء تومض. حوّل كل ضوء حسب جدول المرحلة الحالية. في المرحلة 2 يومض ضوءان وفي المرحلة 3 ثلاثة: يضغط المشغّل على الكل بالترتيب.</p>
+  ${[0, 1, 2].map(st => `<div class="rules ${st === state.lightStage ? 'current' : ''}">
+    <h3>المرحلة ${st + 1}${st === state.lightStage ? ' ← الآن' : ''}</h3>
+    <ul>${LIGHTS.map((l, c) => { const t = LIGHTS[P.lights.maps[st][c]];
+      return `<li><span class="dot" style="--c:${l.c}"></span>إذا ومض ${l.n} ← اضغط <b style="color:${t.c}">${t.n}</b></li>`; }).join('')}</ul>
+  </div>`).join('')}`;
+}
+
+function endView() {
+  const won = state.phase === 'won';
+  return `
+  <section class="card hero end ${won ? 'won' : 'lost'}">
+    <div class="logo">${won ? '🎉' : '⏰'}</div>
+    <h1>${won ? 'فُتحت الخزنة!' : 'انتهى الوقت…'}</h1>
+    <p class="sub">${won
+      ? `في <b dir="ltr">${fmt(state.finishedIn)}</b>، منها <b>${Math.round(state.penalty)}</b> ثانية عقوبات.`
+      : `وصلت إلى: <b>${ROOM_NAMES[ROOMS[Math.min(state.room, ROOMS.length - 1)]]}</b>`}</p>
+    <button data-act="new" class="primary big">لعبة جديدة (ألغاز مختلفة)</button>
+  </section>`;
+}
+
+// ───────── الأحداث ─────────
+app.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  switch (b.dataset.act) {
+    case 'new': newGame(); break;
+    case 'quit': state = null; render(); break;
+    case 'view': view = b.dataset.v; render(); break;
+    case 'key': {
+      const k = b.dataset.k;
+      if (k === '⌫') entry = entry.slice(0, -1);
+      else if (k === '✔') { if (entry.length === 4) { const v = entry; entry = ''; dispatch({ type: 'submit', value: v }); } }
+      else if (entry.length < 4) entry += k;
+      render();
+      break;
+    }
+    case 'cut': {
+      const i = Number(b.dataset.i);
+      if (armedCut === i) { armedCut = -1; dispatch({ type: 'cut', idx: i }); render(); }
+      else { armedCut = i; render(); }
+      break;
+    }
+    case 'move': dispatch({ type: 'move', dir: b.dataset.d }); break;
+    case 'press': dispatch({ type: 'press', color: Number(b.dataset.c) }); break;
+    case 'replay': playLights(); break;
+  }
+});
+
+app.addEventListener('submit', e => {
+  e.preventDefault();
+  if (e.target.dataset.form === 'cipher') {
+    const input = document.getElementById('answer');
+    if (input.value.trim()) { const v = input.value; input.value = ''; dispatch({ type: 'submit', value: v }); }
+  }
+});
+
+render();
+
+})();
+</script>
+</body>
+</html>
