@@ -53,7 +53,29 @@ class _KhaznaAppState extends ConsumerState<KhaznaApp> {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       routerConfig: appRouter,
-      builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child ?? const SizedBox()),
+      builder: (context, child) {
+        final app = Directionality(textDirection: TextDirection.rtl, child: child ?? const SizedBox());
+        // على الحاسوب: نعرض اللعبة في إطار بعرض هاتف وسط النافذة
+        return LayoutBuilder(builder: (context, box) {
+          if (box.maxWidth <= 700) return app;
+          return ColoredBox(
+            color: const Color(0xFF010302),
+            child: Center(
+              child: Container(
+                width: 540,
+                decoration: BoxDecoration(
+                  border: Border.symmetric(vertical: BorderSide(color: K.neon.withAlpha(60))),
+                  boxShadow: K.glow(K.neon, 40, 40),
+                ),
+                child: MediaQuery(
+                  data: MediaQuery.of(context).copyWith(size: Size(540, box.maxHeight)),
+                  child: app,
+                ),
+              ),
+            ),
+          );
+        });
+      },
     );
   }
 }

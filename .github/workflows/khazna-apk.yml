@@ -1,6 +1,6 @@
 # يبني تطبيق «الخزنة» لأندرويد (APK) عند كل تحديث لمجلّد التطبيق في فرع jeu-khazna.
 # الملف الناتج يظهر في صفحة التشغيل (Actions) تحت «Artifacts» باسم khazna-apk.
-name: Khazna APK
+name: Khazna APK + Windows
 
 on:
   push:
@@ -95,3 +95,58 @@ jobs:
           target_commitish: ${{ github.sha }}
           body: "ملف APK للتثبيت المباشر على أندرويد (نسخة تجريبية)."
           files: jeu-khazna/app_flutter/build/khazna.apk
+
+  # نسخة الحاسوب (Windows): نفس اللعبة، تلعب أونلاين مع الهاتف
+  windows:
+    needs: build
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: jeu-khazna/app_flutter
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: تحميل الأصول
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          assets = json.load(open('../tools/assets.json', encoding='utf-8'))
+          for rel, url in assets.items():
+              if rel.startswith('_'):
+                  continue
+              dest = os.path.join('assets', rel)
+              if os.path.exists(dest):
+                  continue
+              os.makedirs(os.path.dirname(dest), exist_ok=True)
+              urllib.request.urlretrieve(url, dest)
+          PY
+
+      - name: توليد ملفات Windows
+        run: |
+          flutter create --platforms=windows --org com.khazna --project-name khazna .
+          sed -i 's/Win32Window::Size size(1280, 720);/Win32Window::Size size(560, 980);/' windows/runner/main.cpp
+          sed -i 's/window.Create(L"khazna"/window.Create(L"Al Khazna"/' windows/runner/main.cpp
+
+      - run: flutter pub get
+
+      - name: بناء نسخة Windows
+        run: flutter build windows --release
+
+      - name: ضغط النسخة
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath build/khazna-windows.zip
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: khazna-build-${{ github.run_number }}
+          name: الخزنة — نسخة ${{ github.run_number }}
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          files: jeu-khazna/app_flutter/build/khazna-windows.zip
+
