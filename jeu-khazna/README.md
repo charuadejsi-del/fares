@@ -51,3 +51,25 @@ cd jeu-khazna && npm test
 1. **اختبار المتعة**: هل يضحك اللاعبون ويتحمّسون؟ (هذا هو هدف هذا النموذج)
 2. 4 لاعبين بأدوار إضافية، ونمط سباق فريق ضدّ فريق، وترتيب.
 3. نقل اللعبة إلى Godot للنسخة النهائية (رسوم، أصوات، تطبيق Android)، مع خزنة الأسبوع والمواسم.
+
+## النسخة الأصلية لأندرويد (Flutter) — `app_flutter/`
+تطبيق أصلي 100% بنفس منطق اللعبة (نسخة Dart مطابقة لـ `core.js`: نفس البذرة تعطي نفس الألغاز، فيمكن للويب والتطبيق اللعب معاً أونلاين).
+
+**ما فيه زيادة على نسخة الويب:** شرح تفاعلي في البداية، وضع «هاتف واحد» مع زرّ تبديل الدور، اهتزازات، حركات انتقال بين الأقفال، اهتزاز الشاشة عند الخطأ، وشاشة فتح الخزنة.
+
+**تحميل الـ APK:** كل تحديث لمجلّد `app_flutter/` في فرع `jeu-khazna` يشغّل البناء الآلي في GitHub Actions
+(تبويب Actions ← «Khazna APK» ← آخر تشغيل ← Artifacts ← `khazna-apk`).
+
+**تفعيل اللعب أونلاين في الـ APK:** أضف في إعدادات المستودع (Settings ← Secrets and variables ← Actions) سرّين:
+`SUPABASE_URL` و`SUPABASE_ANON_KEY`. بدونهما يعمل وضع «هاتف واحد» فقط.
+
+**البناء محلياً:**
+```bash
+cd jeu-khazna/app_flutter
+flutter create --platforms=android --org com.khazna --project-name khazna .
+flutter test
+flutter run --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...
+```
+بعد `flutter create` أضف إذن الإنترنت في `android/app/src/main/AndroidManifest.xml` (الـ CI يفعل ذلك آلياً).
+
+**تطابق النسختين:** `node tools/gen-dart-vectors.mjs` يولّد ألغازاً مرجعية من `core.js`، واختبارات Dart تتحقّق أن النسخة الأصلية تولّد نفس الألغاز.

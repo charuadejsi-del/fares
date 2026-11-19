@@ -1,0 +1,507 @@
+// منطق لعبة «الخزنة» — نسخة Dart مطابقة لـ core.js
+// نفس البذرة تعطي نفس الألغاز في نسخة الويب والنسخة الأصلية، فيمكن اللعب بينهما.
+
+const int kDuration = 600; // ثانية
+const int kPenalty = 30;
+const int kBump = 10;
+
+const List<String> kRooms = ['keypad', 'wires', 'cipher', 'maze', 'lights'];
+const Map<String, String> kRoomNames = {
+  'keypad': 'باب الرموز',
+  'wires': 'صندوق الأسلاك',
+  'cipher': 'المخطوط المشفّر',
+  'maze': 'السرداب المظلم',
+  'lights': 'قفل الأضواء',
+};
+
+class Sym {
+  final String s;
+  final String n;
+  const Sym(this.s, this.n);
+}
+
+const List<Sym> kSymbols = [
+  Sym('★', 'نجمة'), Sym('☾', 'هلال'), Sym('◆', 'معيّن'),
+  Sym('▲', 'مثلث'), Sym('●', 'دائرة'), Sym('■', 'مربّع'),
+  Sym('✚', 'زائد'), Sym('☀', 'شمس'), Sym('♣', 'نفل'),
+  Sym('♠', 'بستوني'), Sym('♥', 'قلب'), Sym('✿', 'وردة'),
+];
+
+class GColor {
+  final String id;
+  final String n;
+  final int argb;
+  const GColor(this.id, this.n, this.argb);
+}
+
+const List<GColor> kColors = [
+  GColor('red', 'أحمر', 0xFFE53935),
+  GColor('blue', 'أزرق', 0xFF1E88E5),
+  GColor('yellow', 'أصفر', 0xFFFDD835),
+  GColor('green', 'أخضر', 0xFF43A047),
+  GColor('white', 'أبيض', 0xFFF5F5F5),
+  GColor('black', 'أسود', 0xFF212121),
+];
+const List<GColor> kLights = [
+  GColor('red', 'أحمر', 0xFFE53935),
+  GColor('blue', 'أزرق', 0xFF1E88E5),
+  GColor('yellow', 'أصفر', 0xFFFDD835),
+  GColor('green', 'أخضر', 0xFF43A047),
+];
+
+final List<String> kAlphabet = 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي'.split('');
+const List<String> _words = [
+  'مفتاح', 'كنز', 'سرداب', 'قنديل', 'ذهب', 'لغز', 'حارس', 'صندوق', 'مخطوط', 'فارس',
+  'جبل', 'نجم', 'قمر', 'سيف', 'درع', 'طريق', 'ظلام', 'شمس', 'بحر', 'صخر',
+];
+
+const List<String> kDirNames = ['up', 'down', 'left', 'right'];
+const Map<String, List<int>> kDirs = {
+  'up': [0, -1],
+  'down': [0, 1],
+  'left': [-1, 0],
+  'right': [1, 0],
+};
+const Map<String, String> _opp = {'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left'};
+
+// ───── مولّد عشوائي حتمي (mulberry32)، مطابق بتّاً بتّاً لنسخة JavaScript ─────
+const int _m32 = 0xFFFFFFFF;
+int _imul(int a, int b) => ((a & _m32) * (b & _m32)) & _m32;
+
+class Rng {
+  int _s;
+  Rng(int seed) : _s = seed & _m32;
+
+  double next() {
+    _s = (_s + 0x6D2B79F5) & _m32;
+    int t = _s;
+    t = _imul(t ^ (t >>> 15), t | 1);
+    t = (t ^ ((t + _imul(t ^ (t >>> 7), t | 61)) & _m32)) & _m32;
+    return ((t ^ (t >>> 14)) & _m32) / 4294967296.0;
+  }
+
+  int nextInt(int n) => (next() * n).floor();
+
+  List<T> shuffle<T>(List<T> a) {
+    final b = List<T>.of(a);
+    for (int i = b.length - 1; i > 0; i--) {
+      final j = nextInt(i + 1);
+      final tmp = b[i];
+      b[i] = b[j];
+      b[j] = tmp;
+    }
+    return b;
+  }
+}
+
+String normalizeAnswer(String v) => v
+    .replaceAll(RegExp(r'\s+'), '')
+    .replaceAll(RegExp('[أإآ]'), 'ا')
+    .replaceAll('ى', 'ي')
+    .replaceAll('ة', 'ه');
+
+// ───── الألغاز ─────
+class Keypad {
+  final List<int> manual; // رقم لكل رمز
+  final List<int> shown; // 4 رموز
+  final String answer;
+  Keypad(this.manual, this.shown, this.answer);
+}
+
+class WireRule {
+  final String type; // none | lastIs | many | one | default
+  final int? color;
+  final int k;
+  WireRule(this.type, this.color, this.k);
+
+  int eval(List<int> wires) {
+    final n = wires.length;
+    int count(int c) => wires.where((x) => x == c).length;
+    switch (type) {
+      case 'none':
+        return count(color!) == 0 ? k - 1 : -1;
+      case 'lastIs':
+        return wires[n - 1] == color ? n - 1 : -1;
+      case 'many':
+        return count(color!) > 1 ? wires.lastIndexOf(color!) : -1;
+      case 'one':
+        return count(color!) == 1 ? 0 : -1;
+      case 'default':
+        return k - 1;
+    }
+    return -1;
+  }
+
+  String get text {
+    final c = color == null ? '' : kColors[color!].n;
+    switch (type) {
+      case 'none':
+        return 'إذا لم يوجد أي سلك $c ← اقطع السلك رقم $k';
+      case 'lastIs':
+        return 'إذا كان آخر سلك $c ← اقطع آخر سلك';
+      case 'many':
+        return 'إذا وُجد أكثر من سلك $c ← اقطع آخر سلك $c';
+      case 'one':
+        return 'إذا وُجد سلك $c واحد فقط ← اقطع أول سلك';
+      default:
+        return 'وإلا ← اقطع السلك رقم $k';
+    }
+  }
+}
+
+class Wires {
+  final Map<int, List<WireRule>> rules;
+  final List<int> wires;
+  final int answer;
+  Wires(this.rules, this.wires, this.answer);
+}
+
+class Cipher {
+  final List<int> manual; // إزاحة لكل رمز
+  final int sym;
+  final String cipher;
+  final String answer;
+  Cipher(this.manual, this.sym, this.cipher, this.answer);
+
+  String decode(String letter, int symbol) {
+    final i = kAlphabet.indexOf(letter);
+    if (i < 0) return letter;
+    final k = manual[symbol];
+    return kAlphabet[(i - k + kAlphabet.length) % kAlphabet.length];
+  }
+}
+
+class Maze {
+  final int n;
+  final List<Set<String>> open;
+  final int start;
+  final int exit;
+  final int distance;
+  Maze(this.n, this.open, this.start, this.exit, this.distance);
+
+  int? neighbor(int pos, String dir) {
+    if (!open[pos].contains(dir)) return null;
+    final d = kDirs[dir]!;
+    return (pos ~/ n + d[1]) * n + (pos % n + d[0]);
+  }
+}
+
+class Lights {
+  final List<int> seq;
+  final List<List<int>> maps;
+  Lights(this.seq, this.maps);
+  List<int> expected(int stage) => [for (final c in seq.sublist(0, stage + 1)) maps[stage][c]];
+}
+
+class Puzzles {
+  final Keypad keypad;
+  final Wires wires;
+  final Cipher cipher;
+  final Maze maze;
+  final Lights lights;
+  Puzzles(this.keypad, this.wires, this.cipher, this.maze, this.lights);
+}
+
+Keypad _genKeypad(Rng r) {
+  final digits = [for (int i = 0; i < kSymbols.length; i++) r.nextInt(10)];
+  final shown = r.shuffle([for (int i = 0; i < kSymbols.length; i++) i]).sublist(0, 4);
+  return Keypad(digits, shown, shown.map((i) => digits[i]).join());
+}
+
+Wires _genWires(Rng r) {
+  const types = ['none', 'lastIs', 'many', 'one'];
+  final rules = <int, List<WireRule>>{};
+  for (int n = 3; n <= 6; n++) {
+    final list = <WireRule>[];
+    for (int i = 0; i < 3; i++) {
+      final type = types[r.nextInt(types.length)];
+      final color = r.nextInt(kColors.length);
+      final k = 1 + r.nextInt(n);
+      list.add(WireRule(type, color, k));
+    }
+    list.add(WireRule('default', null, 1 + r.nextInt(n)));
+    rules[n] = list;
+  }
+  final n = 3 + r.nextInt(4);
+  final wires = [for (int i = 0; i < n; i++) r.nextInt(kColors.length)];
+  int answer = -1;
+  for (final rule in rules[n]!) {
+    answer = rule.eval(wires);
+    if (answer >= 0) break;
+  }
+  return Wires(rules, wires, answer);
+}
+
+Cipher _genCipher(Rng r) {
+  final shifts = [for (int i = 0; i < kSymbols.length; i++) 1 + r.nextInt(9)];
+  final sym = r.nextInt(kSymbols.length);
+  final word = _words[r.nextInt(_words.length)];
+  final k = shifts[sym];
+  final enc = word.split('').map((ch) => kAlphabet[(kAlphabet.indexOf(ch) + k) % kAlphabet.length]).join();
+  return Cipher(shifts, sym, enc, word);
+}
+
+List<int> _bfs(List<Set<String>> open, int n, int start) {
+  final dist = List<int>.filled(n * n, -1);
+  dist[start] = 0;
+  final q = <int>[start];
+  int head = 0;
+  while (head < q.length) {
+    final c = q[head++];
+    final x = c % n, y = c ~/ n;
+    for (final d in kDirNames) {
+      if (!open[c].contains(d)) continue;
+      final nc = (y + kDirs[d]![1]) * n + (x + kDirs[d]![0]);
+      if (dist[nc] < 0) {
+        dist[nc] = dist[c] + 1;
+        q.add(nc);
+      }
+    }
+  }
+  return dist;
+}
+
+Maze _genMaze(Rng r, [int n = 5]) {
+  final open = [for (int i = 0; i < n * n; i++) <String>{}];
+  final seen = <int>{0};
+  final stack = <List<int>>[
+    [0, 0]
+  ];
+  while (stack.isNotEmpty) {
+    final x = stack.last[0], y = stack.last[1];
+    final opts = r.shuffle(kDirNames).where((d) {
+      final nx = x + kDirs[d]![0], ny = y + kDirs[d]![1];
+      return nx >= 0 && ny >= 0 && nx < n && ny < n && !seen.contains(ny * n + nx);
+    }).toList();
+    if (opts.isEmpty) {
+      stack.removeLast();
+      continue;
+    }
+    final d = opts.first;
+    final nx = x + kDirs[d]![0], ny = y + kDirs[d]![1];
+    open[y * n + x].add(d);
+    open[ny * n + nx].add(_opp[d]!);
+    seen.add(ny * n + nx);
+    stack.add([nx, ny]);
+  }
+  final start = r.nextInt(n * n);
+  final dist = _bfs(open, n, start);
+  int exit = start;
+  for (int i = 0; i < dist.length; i++) {
+    if (dist[i] > dist[exit]) exit = i;
+  }
+  return Maze(n, open, start, exit, dist[exit]);
+}
+
+Lights _genLights(Rng r) {
+  final seq = [for (int i = 0; i < 3; i++) r.nextInt(kLights.length)];
+  final maps = [for (int i = 0; i < 3; i++) r.shuffle([0, 1, 2, 3])];
+  return Lights(seq, maps);
+}
+
+Puzzles generatePuzzles(int seed) {
+  final r = Rng(seed);
+  return Puzzles(_genKeypad(r), _genWires(r), _genCipher(r), _genMaze(r), _genLights(r));
+}
+
+// ───── الحالة ─────
+class GameEvent {
+  final String type; // start | solved | wrong | bump | moved | press | stage
+  final String room;
+  final int? pen;
+  const GameEvent(this.type, this.room, [this.pen]);
+
+  Map<String, dynamic> toJson() => {'type': type, 'room': room, if (pen != null) 'pen': pen};
+  static GameEvent? fromJson(dynamic j) {
+    if (j is! Map) return null;
+    return GameEvent('${j['type']}', '${j['room']}', (j['pen'] as num?)?.toInt());
+  }
+}
+
+class GameState {
+  final int seed;
+  final String phase; // lobby | playing | won | lost
+  final int room;
+  final int startedAt; // ms
+  final int penalty;
+  final int? mazePos;
+  final int lightStage;
+  final List<int> lightInput;
+  final List<int> cut;
+  final GameEvent? lastEvent;
+  final int eventId;
+  final int finishedIn;
+
+  const GameState({
+    required this.seed,
+    this.phase = 'lobby',
+    this.room = 0,
+    this.startedAt = 0,
+    this.penalty = 0,
+    this.mazePos,
+    this.lightStage = 0,
+    this.lightInput = const [],
+    this.cut = const [],
+    this.lastEvent,
+    this.eventId = 0,
+    this.finishedIn = 0,
+  });
+
+  String get roomId => kRooms[room.clamp(0, kRooms.length - 1)];
+
+  GameState copyWith({
+    String? phase,
+    int? room,
+    int? startedAt,
+    int? penalty,
+    int? mazePos,
+    int? lightStage,
+    List<int>? lightInput,
+    List<int>? cut,
+    GameEvent? lastEvent,
+    int? eventId,
+    int? finishedIn,
+  }) =>
+      GameState(
+        seed: seed,
+        phase: phase ?? this.phase,
+        room: room ?? this.room,
+        startedAt: startedAt ?? this.startedAt,
+        penalty: penalty ?? this.penalty,
+        mazePos: mazePos ?? this.mazePos,
+        lightStage: lightStage ?? this.lightStage,
+        lightInput: lightInput ?? this.lightInput,
+        cut: cut ?? this.cut,
+        lastEvent: lastEvent ?? this.lastEvent,
+        eventId: eventId ?? this.eventId,
+        finishedIn: finishedIn ?? this.finishedIn,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'seed': seed,
+        'phase': phase,
+        'room': room,
+        'startedAt': startedAt,
+        'penalty': penalty,
+        'mazePos': mazePos,
+        'lightStage': lightStage,
+        'lightInput': lightInput,
+        'cut': cut,
+        'lastEvent': lastEvent?.toJson(),
+        'eventId': eventId,
+        'finishedIn': finishedIn,
+      };
+
+  static int _i(dynamic v, [int d = 0]) => v is num ? v.toInt() : d;
+  static List<int> _l(dynamic v) => v is List ? [for (final x in v) _i(x)] : <int>[];
+
+  static GameState fromJson(Map j) => GameState(
+        seed: _i(j['seed']),
+        phase: '${j['phase'] ?? 'lobby'}',
+        room: _i(j['room']),
+        startedAt: _i(j['startedAt']),
+        penalty: _i(j['penalty']),
+        mazePos: j['mazePos'] is num ? (j['mazePos'] as num).toInt() : null,
+        lightStage: _i(j['lightStage']),
+        lightInput: _l(j['lightInput']),
+        cut: _l(j['cut']),
+        lastEvent: GameEvent.fromJson(j['lastEvent']),
+        eventId: _i(j['eventId']),
+        finishedIn: _i(j['finishedIn']),
+      );
+}
+
+GameState newState(int seed) => GameState(seed: seed);
+
+GameState startGame(GameState s, Puzzles p, int now) => GameState(
+      seed: s.seed,
+      phase: 'playing',
+      startedAt: now,
+      mazePos: p.maze.start,
+      eventId: s.eventId + 1,
+      lastEvent: const GameEvent('start', 'keypad'),
+    );
+
+double remainingSeconds(GameState s, int now) {
+  if (s.startedAt == 0) return kDuration.toDouble();
+  final r = kDuration - (now - s.startedAt) / 1000 - s.penalty;
+  return r < 0 ? 0 : r;
+}
+
+GameState tick(GameState s, int now) {
+  if (s.phase == 'playing' && remainingSeconds(s, now) <= 0) return s.copyWith(phase: 'lost');
+  return s;
+}
+
+/// يطبّق فعل اللاعب. يعيد نفس الكائن إذا لم يتغيّر شيء.
+GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
+  if (s.phase != 'playing') return s;
+  final room = s.roomId;
+  final type = a['type'];
+
+  GameState ev(GameState x, String t, [int? pen]) =>
+      x.copyWith(eventId: s.eventId + 1, lastEvent: GameEvent(t, room, pen));
+  GameState advance(GameState x) {
+    final next = s.room + 1;
+    if (next >= kRooms.length) {
+      final y = x.copyWith(room: next, phase: 'won');
+      return ev(y.copyWith(finishedIn: (kDuration - remainingSeconds(y, now)).round()), 'solved');
+    }
+    return ev(x.copyWith(room: next), 'solved');
+  }
+
+  GameState wrong(GameState x, [int pen = kPenalty, String t = 'wrong']) =>
+      ev(x.copyWith(penalty: s.penalty + pen), t, pen);
+
+  GameState out = s;
+  switch (room) {
+    case 'keypad': {
+      if (type != 'submit') return s;
+      out = '${a['value'] ?? ''}'.trim() == p.keypad.answer ? advance(s) : wrong(s);
+      break;
+    }
+    case 'cipher': {
+      if (type != 'submit') return s;
+      out = normalizeAnswer('${a['value'] ?? ''}') == p.cipher.answer ? advance(s) : wrong(s);
+      break;
+    }
+    case 'wires': {
+      final idx = a['idx'];
+      if (type != 'cut' || idx is! int || s.cut.contains(idx)) return s;
+      if (idx < 0 || idx >= p.wires.wires.length) return s;
+      final withCut = s.copyWith(cut: [...s.cut, idx]);
+      out = idx == p.wires.answer ? advance(withCut) : wrong(withCut);
+      break;
+    }
+    case 'maze': {
+      final dir = a['dir'];
+      if (type != 'move' || dir is! String || !kDirs.containsKey(dir)) return s;
+      final np = p.maze.neighbor(s.mazePos ?? p.maze.start, dir);
+      if (np == null) {
+        out = wrong(s, kBump, 'bump');
+      } else {
+        final moved = s.copyWith(mazePos: np);
+        out = np == p.maze.exit ? advance(moved) : ev(moved, 'moved');
+      }
+      break;
+    }
+    case 'lights': {
+      final c = a['color'];
+      if (type != 'press' || c is! int) return s;
+      final st = s.lightStage;
+      final expected = p.lights.expected(st);
+      final input = [...s.lightInput, c];
+      if (input.last != expected[input.length - 1]) {
+        out = wrong(s.copyWith(lightInput: const []));
+      } else if (input.length < expected.length) {
+        out = ev(s.copyWith(lightInput: input), 'press');
+      } else if (st == 2) {
+        out = advance(s.copyWith(lightInput: const []));
+      } else {
+        out = ev(s.copyWith(lightInput: const [], lightStage: st + 1), 'stage');
+      }
+      break;
+    }
+  }
+  return tick(out, now);
+}
