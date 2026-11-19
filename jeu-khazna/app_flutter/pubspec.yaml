@@ -15,6 +15,9 @@ dependencies:
   audioplayers: ^6.1.0
   # عميل Supabase بلغة Dart فقط للّعب أونلاين عبر Realtime
   supabase: ^2.6.0
+  # الكلام الصوتي أثناء اللعب أونلاين
+  agora_rtc_engine: ^6.5.0
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:

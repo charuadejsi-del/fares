@@ -11,8 +11,11 @@ import '../../app/theme.dart';
 import '../../core/controller.dart';
 import '../../core/game.dart';
 import '../../core/services.dart';
+import '../../core/stages.dart';
+import '../../core/voice.dart';
 import '../../widgets/spy_ui.dart';
 import '../briefing/briefing_screen.dart';
+import '../campaign/campaign_screen.dart';
 import 'locks/locks.dart';
 
 String fmtTime(double sec) {
@@ -38,6 +41,9 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
   Color _flashColor = K.neon;
   Timer? _flashTimer;
 
+  VoiceService? _voice;
+  int _lastCoins = 0;
+
   GameController get c => widget.controller;
 
   @override
@@ -45,6 +51,7 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
     super.initState();
     _sub = c.events.listen(_onEvent);
     c.addListener(_onChange);
+    if (c.online) _voice = VoiceService()..join(c.code);
   }
 
   @override
@@ -53,6 +60,7 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
     _flashTimer?.cancel();
     _transitionTimer?.cancel();
     c.removeListener(_onChange);
+    _voice?.dispose();
     _shake.dispose();
     c.dispose();
     super.dispose();
@@ -75,11 +83,19 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
     if (s.phase == 'won' || s.phase == 'lost') {
       _recorded = true;
       final won = s.phase == 'won';
-      ref.read(progressProvider.notifier).record(
-            won: won,
-            finishedIn: s.finishedIn,
-            stars: starsFor(won: won, finishedIn: s.finishedIn, penalty: s.penalty),
-            mission: c.missionId,
+      final stars = starsFor(won: won, finishedIn: s.finishedIn, penalty: s.penalty);
+      final stage = s.stage;
+      final coins = !won ? 0 : (stage > 0 ? stageDef(stage).coinsFor(stars) : stars * 3);
+      _lastCoins = coins;
+      final progress = ref.read(progressProvider.notifier);
+      progress.record(won: won, finishedIn: s.finishedIn, stars: stars, mission: stage, coins: coins);
+      final p = ref.read(progressProvider);
+      final name = ref.read(settingsProvider).name;
+      ref.read(leaderboardProvider).submit(
+            id: progress.playerId,
+            name: name.isEmpty ? 'عميل' : name,
+            bestStage: p.bestStage,
+            coins: p.coins,
           );
       final audio = ref.read(audioProvider);
       if (won) {
@@ -165,13 +181,13 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
                   } else if (s == null || !c.joined) {
                     body = const _Message(icon: Icons.satellite_alt, text: 'جارٍ الاتصال بالمضيف…', loading: true);
                   } else if (s.phase == 'lobby') {
-                    body = _Lobby(c: c);
+                    body = _Lobby(c: c, voice: _voice);
                   } else if (s.phase == 'playing') {
                     body = c.table
                         ? _TableGame(c: c, shake: _shake, onExit: _leave)
-                        : _Game(c: c, shake: _shake, onExit: _leave);
+                        : _Game(c: c, shake: _shake, onExit: _leave, voice: _voice);
                   } else {
-                    body = _End(c: c);
+                    body = _End(c: c, coins: _lastCoins);
                   }
                   return AnimatedSwitcher(
                     duration: const Duration(milliseconds: 400),
@@ -292,18 +308,85 @@ class _Message extends StatelessWidget {
 }
 
 // ───────── غرفة الانتظار ─────────
-class _Lobby extends StatelessWidget {
+class _Lobby extends ConsumerWidget {
   final GameController c;
-  const _Lobby({required this.c});
+  final VoiceService? voice;
+  const _Lobby({required this.c, this.voice});
+
+  void _pickStage(BuildContext context, WidgetRef ref) {
+    final progress = ref.read(progressProvider);
+    final maxStage = currentStage(progress);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 60, 12, 12),
+        child: HudPanel(
+          label: 'SELECT STAGE // اختر المرحلة',
+          child: SizedBox(
+            height: MediaQuery.of(ctx).size.height * 0.6,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              NeonButton(
+                label: 'المهمّة الكلاسيكية (5 أقفال)',
+                filled: false,
+                height: 46,
+                onTap: () {
+                  c.chooseStage(0);
+                  Navigator.of(ctx).pop();
+                },
+              ),
+              const SizedBox(height: 10),
+              Text('المراحل المفتوحة عندك: 1 إلى $maxStage', style: const TextStyle(color: K.muted, fontSize: 12.5)),
+              const SizedBox(height: 8),
+              Expanded(
+                child: GridView.count(
+                  crossAxisCount: 5,
+                  mainAxisSpacing: 6,
+                  crossAxisSpacing: 6,
+                  children: [
+                    for (int n = maxStage; n >= 1; n--)
+                      GestureDetector(
+                        onTap: () {
+                          c.chooseStage(n);
+                          Navigator.of(ctx).pop();
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: K.cell,
+                            border: Border.all(color: stageDef(n).region.color.withAlpha(c.stage == n ? 255 : 90), width: c.stage == n ? 2 : 1),
+                          ),
+                          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                            Text('$n', style: TextStyle(fontFamily: K.mono, fontSize: 18, color: stageDef(n).region.color)),
+                            Row(mainAxisSize: MainAxisSize.min, children: [
+                              for (int i = 0; i < 3; i++)
+                                Icon(Icons.star_rounded, size: 9, color: i < progress.starsOf(n) ? K.amber : K.line),
+                            ]),
+                          ]),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final list = c.players.entries.toList();
+    final s = c.state!;
+    final def = s.stage > 0 ? stageDef(s.stage) : null;
     return ListView(padding: const EdgeInsets.all(18), children: [
       Row(children: [
         IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_forward, color: K.neon)),
         const Spacer(),
-        const MonoLabel('SAFE HOUSE // غرفة آمنة'),
+        if (voice != null) VoiceButton(voice: voice!),
+        const SizedBox(width: 8),
+        const MonoLabel('SAFE HOUSE'),
       ]),
       HudPanel(
         label: 'ROOM CODE',
@@ -356,6 +439,37 @@ class _Lobby extends StatelessWidget {
             ),
         ]),
       ),
+      const SizedBox(height: 14),
+      HudPanel(
+        label: 'TARGET // الهدف',
+        color: def?.region.color ?? K.neon,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(def == null ? 'المهمّة الكلاسيكية' : 'المرحلة ${def.n}: ${def.name}',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: def?.region.color ?? K.neon)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final r in s.rooms)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(border: Border.all(color: K.line), color: K.cell),
+                child: Text(K.roomNames[r] ?? r, style: const TextStyle(fontSize: 12.5)),
+              ),
+          ]),
+          const SizedBox(height: 6),
+          Text('الصعوبة: ${s.difficulty.name} · ${s.difficulty.duration ~/ 60} دقائق',
+              style: const TextStyle(color: K.muted, fontSize: 12.5)),
+          if (c.isHost) ...[
+            const SizedBox(height: 10),
+            NeonButton(
+                label: 'اختر المرحلة من الخريطة',
+                icon: Icons.map_outlined,
+                filled: false,
+                height: 46,
+                color: K.amber,
+                onTap: () => _pickStage(context, ref)),
+          ],
+        ]),
+      ),
       const SizedBox(height: 18),
       if (c.isHost) ...[
         NeonButton(label: 'تبديل الأدوار', icon: Icons.swap_horiz, filled: false, color: K.agent, onTap: c.swapRoles),
@@ -372,7 +486,8 @@ class _Game extends StatelessWidget {
   final GameController c;
   final AnimationController shake;
   final VoidCallback onExit;
-  const _Game({required this.c, required this.shake, required this.onExit});
+  final VoiceService? voice;
+  const _Game({required this.c, required this.shake, required this.onExit, this.voice});
 
   @override
   Widget build(BuildContext context) {
@@ -386,6 +501,7 @@ class _Game extends StatelessWidget {
           InkWell(onTap: onExit, child: const Padding(padding: EdgeInsets.all(6), child: Icon(Icons.close, color: K.muted))),
           const SizedBox(width: 4),
           if (c.online) RoleBadge(role) else _RoleSwitch(c: c),
+          if (voice != null) ...[const SizedBox(width: 8), VoiceButton(voice: voice!)],
           const Spacer(),
           _RadarTimer(c: c),
         ]),
@@ -624,7 +740,20 @@ class _RingPainter extends CustomPainter {
 // ───────── النهاية ─────────
 class _End extends ConsumerWidget {
   final GameController c;
-  const _End({required this.c});
+  final int coins;
+  const _End({required this.c, this.coins = 0});
+
+  void _next(BuildContext context, WidgetRef ref, int n) {
+    if (c.online) {
+      c.chooseStage(n);
+      return;
+    }
+    final d = stageDef(n);
+    final name = ref.read(settingsProvider).name;
+    final next = GameController.local(
+        meName: name.isEmpty ? 'عميل' : name, rooms: d.rooms, diff: d.diff, table: c.table, missionId: n);
+    context.pushReplacement('/play', extra: next);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -689,11 +818,20 @@ class _End extends ConsumerWidget {
                   ),
                 ),
             ]),
+          if (won && coins > 0) ...[
+            const SizedBox(height: 8),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.monetization_on, color: K.amber, size: 26),
+              const SizedBox(width: 6),
+              Text('+$coins', style: const TextStyle(fontFamily: K.mono, color: K.amber, fontSize: 26)),
+            ]),
+          ],
           const SizedBox(height: 12),
           HudPanel(
             color: color,
             padding: const EdgeInsets.all(14),
             child: Column(children: [
+              if (s.stage > 0) _Row('المرحلة', '${s.stage} · ${stageDef(s.stage).name}'),
               _Row('الوقت', won ? fmtTime(s.finishedIn.toDouble()) : '—'),
               _Row('العقوبات', '${s.penalty} ث'),
               _Row('الأقفال', '${s.room.clamp(0, s.rooms.length)}/${s.rooms.length}'),
@@ -702,8 +840,12 @@ class _End extends ConsumerWidget {
             ]),
           ),
           const SizedBox(height: 20),
+          if (c.isHost && won && s.stage > 0) ...[
+            NeonButton(label: 'المرحلة التالية ${s.stage + 1}', icon: Icons.arrow_back, onTap: () => _next(context, ref, s.stage + 1)),
+            const SizedBox(height: 10),
+          ],
           if (c.isHost)
-            NeonButton(label: 'مهمّة جديدة', icon: Icons.refresh, onTap: c.newGame)
+            NeonButton(label: won ? 'إعادة المرحلة' : 'حاول مرّة أخرى', icon: Icons.refresh, filled: !(won && s.stage > 0), onTap: c.newGame)
           else
             const Text('قائد الفريق يستطيع بدء مهمّة جديدة.', style: TextStyle(color: K.muted)),
           const SizedBox(height: 10),
@@ -728,4 +870,48 @@ class _Row extends StatelessWidget {
           Text(v, style: const TextStyle(fontWeight: FontWeight.w800)),
         ]),
       );
+}
+
+
+/// زرّ الميكروفون: كتم/تشغيل، مع إشارة عندما يتكلّم الشريك.
+class VoiceButton extends StatelessWidget {
+  final VoiceService voice;
+  const VoiceButton({super.key, required this.voice});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: voice,
+      builder: (context, _) {
+        final on = voice.joined && !voice.muted;
+        final color = voice.error != null ? K.danger : (on ? K.neon : K.muted);
+        return GestureDetector(
+          onTap: () {
+            if (voice.error != null) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(voice.error!)));
+              return;
+            }
+            voice.toggleMute();
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              border: Border.all(color: color),
+              color: color.withAlpha(voice.meSpeaking ? 60 : 20),
+              boxShadow: voice.remoteSpeaking ? K.glow(K.agent, 14, 160) : null,
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (voice.starting)
+                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: K.neon))
+              else
+                Icon(on ? Icons.mic : Icons.mic_off, size: 18, color: color),
+              const SizedBox(width: 4),
+              Icon(Icons.headset_mic, size: 16, color: voice.remoteCount > 0 ? (voice.remoteSpeaking ? K.agent : K.neonDim) : K.line),
+            ]),
+          ),
+        );
+      },
+    );
+  }
 }

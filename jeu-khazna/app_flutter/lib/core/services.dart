@@ -1,8 +1,13 @@
 // خدمات التطبيق: الإعدادات، التقدّم والإحصائيات، الصوت، الاهتزاز.
+import 'dart:math';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase/supabase.dart';
+
+import '../net/transport.dart';
 
 /// يُملأ في main() قبل تشغيل التطبيق.
 final prefsProvider = Provider<SharedPreferences>((ref) => throw UnimplementedError('prefs not ready'));
@@ -66,8 +71,13 @@ class Progress {
   final int won;
   final int stars;
   final int bestTime; // ثوانٍ، 0 = لا يوجد
-  final Map<int, int> missionStars; // أفضل نجوم لكل مهمّة في الحملة
-  const Progress({this.played = 0, this.won = 0, this.stars = 0, this.bestTime = 0, this.missionStars = const {}});
+  final Map<int, int> missionStars; // أفضل نجوم لكل مرحلة
+  final int coins;
+  const Progress(
+      {this.played = 0, this.won = 0, this.stars = 0, this.bestTime = 0, this.missionStars = const {}, this.coins = 0});
+
+  /// أعلى مرحلة نجح فيها اللاعب.
+  int get bestStage => missionStars.entries.where((e) => e.value > 0).fold(0, (a, e) => e.key > a ? e.key : a);
 
   int starsOf(int mission) => missionStars[mission] ?? 0;
   bool unlocked(int mission) => mission <= 1 || starsOf(mission - 1) > 0;
@@ -118,9 +128,21 @@ class ProgressNotifier extends Notifier<Progress> {
         stars: _p.getInt('stars') ?? 0,
         bestTime: _p.getInt('bestTime') ?? 0,
         missionStars: _decode(_p.getString('missionStars')),
+        coins: _p.getInt('coins') ?? 0,
       );
 
-  void record({required bool won, required int finishedIn, required int stars, int mission = 0}) {
+  /// معرّف ثابت للاعب على هذا الجهاز (للترتيب العالمي).
+  String get playerId {
+    var id = _p.getString('playerId');
+    if (id == null || id.length < 8) {
+      final r = Random.secure();
+      id = List.generate(16, (_) => r.nextInt(16).toRadixString(16)).join();
+      _p.setString('playerId', id);
+    }
+    return id;
+  }
+
+  void record({required bool won, required int finishedIn, required int stars, int mission = 0, int coins = 0}) {
     final best = won && (state.bestTime == 0 || finishedIn < state.bestTime) ? finishedIn : state.bestTime;
     final ms = Map<int, int>.of(state.missionStars);
     if (mission > 0 && stars > (ms[mission] ?? 0)) ms[mission] = stars;
@@ -130,7 +152,9 @@ class ProgressNotifier extends Notifier<Progress> {
       stars: state.stars + stars,
       bestTime: best,
       missionStars: ms,
+      coins: state.coins + coins,
     );
+    _p.setInt('coins', state.coins);
     _p.setString('missionStars', ms.entries.map((e) => '${e.key}:${e.value}').join(','));
     _p.setInt('played', state.played);
     _p.setInt('won', state.won);
@@ -139,7 +163,7 @@ class ProgressNotifier extends Notifier<Progress> {
   }
 
   void reset() {
-    for (final k in ['played', 'won', 'stars', 'bestTime', 'missionStars']) {
+    for (final k in ['played', 'won', 'stars', 'bestTime', 'missionStars', 'coins']) {
       _p.remove(k);
     }
     state = const Progress();
@@ -231,3 +255,43 @@ class AudioService {
 enum HapticKind { tap, light, medium, heavy }
 
 final audioProvider = Provider<AudioService>((ref) => AudioService(ref));
+
+
+// ───────── الترتيب العالمي ─────────
+class LeaderEntry {
+  final String id;
+  final String name;
+  final int bestStage;
+  final int coins;
+  const LeaderEntry(this.id, this.name, this.bestStage, this.coins);
+}
+
+class LeaderboardService {
+  SupabaseClient? _client;
+  SupabaseClient get _c => _client ??= SupabaseClient(kSupabaseUrl, kSupabaseAnonKey);
+
+  /// يرسل تقدّم اللاعب (لا يفشل اللعب إذا لم يوجد إنترنت).
+  Future<void> submit({required String id, required String name, required int bestStage, required int coins}) async {
+    if (!onlineAvailable) return;
+    try {
+      await _c.rpc('submit_progress', params: {'p_id': id, 'p_name': name, 'p_stage': bestStage, 'p_coins': coins});
+    } catch (_) {
+      // بلا إنترنت: سيُرسل التقدّم في المرّة القادمة
+    }
+  }
+
+  Future<List<LeaderEntry>> top({int limit = 50}) async {
+    final rows = await _c
+        .from('khazna_players')
+        .select('id, name, best_stage, coins')
+        .order('best_stage', ascending: false)
+        .order('coins', ascending: false)
+        .limit(limit);
+    return [
+      for (final r in rows)
+        LeaderEntry('${r['id']}', '${r['name']}', (r['best_stage'] as num?)?.toInt() ?? 0, (r['coins'] as num?)?.toInt() ?? 0),
+    ];
+  }
+}
+
+final leaderboardProvider = Provider<LeaderboardService>((ref) => LeaderboardService());

@@ -56,6 +56,10 @@ jobs:
           grep -q 'android.permission.INTERNET' "$MANIFEST" || \
             sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' "$MANIFEST"
           sed -i 's#android:label="khazna"#android:label="الخزنة"#' "$MANIFEST"
+          for PERM in RECORD_AUDIO MODIFY_AUDIO_SETTINGS; do
+            grep -q "android.permission.$PERM" "$MANIFEST" || \
+              sed -i "s#<application#<uses-permission android:name=\"android.permission.$PERM\"/>\n    <application#" "$MANIFEST"
+          done
 
       - run: flutter pub get
 

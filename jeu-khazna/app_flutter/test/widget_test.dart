@@ -150,6 +150,15 @@ void main() {
     expect(remainingSeconds(s, t0), diffOf('elite').duration - diffOf('elite').penalty);
   });
 
+  test('المرحلة تُنقل في JSON', () {
+    final p = generatePuzzles(3, 'elite');
+    final s = startGame(newState(3, rooms: const ['dial', 'radio'], diff: 'elite', stage: 42), p, t0);
+    final back = GameState.fromJson(jsonDecode(jsonEncode(s.toJson())) as Map);
+    expect(back.stage, 42);
+    expect(back.rooms, ['dial', 'radio']);
+    expect(back.diff, 'elite');
+  });
+
   test('العقوبات وانتهاء الوقت', () {
     final p = generatePuzzles(42);
     var s = startGame(newState(42), p, t0);

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../net/transport.dart';
 import 'game.dart';
+import 'stages.dart';
 
 class Player {
   final String name;
@@ -28,8 +29,11 @@ class GameController extends ChangeNotifier {
   final List<String> rooms;
   final String diff;
 
-  /// رقم مهمّة الحملة (0 = مهمّة حرّة).
+  /// رقم المرحلة في وضع الهاتف الواحد (0 = مهمّة حرّة). أونلاين تأتي المرحلة من الحالة.
   final int missionId;
+
+  /// المرحلة الحالية (محلياً أو أونلاين).
+  int get stage => state?.stage ?? missionId;
 
   GameState? state;
   Puzzles? puzzles;
@@ -140,6 +144,21 @@ class GameController extends ChangeNotifier {
     _notify();
   }
 
+  /// قائد الغرفة يختار مرحلة من الحملة (0 = المهمّة الكلاسيكية).
+  void chooseStage(int n) {
+    if (!isHost || !online || state?.phase == 'playing') return;
+    final seed = _newSeed();
+    if (n <= 0) {
+      state = newState(seed);
+    } else {
+      final d = stageDef(n);
+      state = newState(seed, rooms: d.rooms, diff: d.diff, stage: n);
+    }
+    puzzles = generatePuzzles(seed, state!.diff);
+    _broadcast();
+    _notify();
+  }
+
   void newGame() {
     if (!isHost) return;
     if (!online) {
@@ -147,8 +166,10 @@ class GameController extends ChangeNotifier {
       _changed();
       return;
     }
-    state = newState(_newSeed());
-    puzzles = generatePuzzles(state!.seed);
+    final old = state;
+    final seed = _newSeed();
+    state = old == null ? newState(seed) : newState(seed, rooms: old.rooms, diff: old.diff, stage: old.stage);
+    puzzles = generatePuzzles(seed, state!.diff);
     _broadcast();
     _notify();
   }
@@ -157,7 +178,7 @@ class GameController extends ChangeNotifier {
   void _startLocal() {
     final seed = _newSeed();
     puzzles = generatePuzzles(seed, diff);
-    state = startGame(newState(seed, rooms: rooms, diff: diff), puzzles!, _now());
+    state = startGame(newState(seed, rooms: rooms, diff: diff, stage: missionId), puzzles!, _now());
     localRole = 'op';
   }
 

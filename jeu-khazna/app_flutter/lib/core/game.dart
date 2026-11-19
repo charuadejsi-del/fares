@@ -395,6 +395,7 @@ class GameState {
   final List<String> rooms;
   final String diff;
   final int dialStep;
+  final int stage; // رقم المرحلة في الحملة (0 = مهمّة حرّة)
   final String phase; // lobby | playing | won | lost
   final int room;
   final int startedAt; // ms
@@ -412,6 +413,7 @@ class GameState {
     this.rooms = kRooms,
     this.diff = 'agent',
     this.dialStep = 0,
+    this.stage = 0,
     this.phase = 'lobby',
     this.room = 0,
     this.startedAt = 0,
@@ -446,6 +448,7 @@ class GameState {
         seed: seed,
         rooms: rooms,
         diff: diff,
+        stage: stage,
         dialStep: dialStep ?? this.dialStep,
         phase: phase ?? this.phase,
         room: room ?? this.room,
@@ -465,6 +468,7 @@ class GameState {
         'rooms': rooms,
         'diff': diff,
         'dialStep': dialStep,
+        'stage': stage,
         'phase': phase,
         'room': room,
         'startedAt': startedAt,
@@ -488,6 +492,7 @@ class GameState {
             : kRooms,
         diff: '${j['diff'] ?? 'agent'}',
         dialStep: _i(j['dialStep']),
+        stage: _i(j['stage']),
         phase: '${j['phase'] ?? 'lobby'}',
         room: _i(j['room']),
         startedAt: _i(j['startedAt']),
@@ -502,13 +507,14 @@ class GameState {
       );
 }
 
-GameState newState(int seed, {List<String> rooms = kRooms, String diff = 'agent'}) =>
-    GameState(seed: seed, rooms: rooms, diff: diff);
+GameState newState(int seed, {List<String> rooms = kRooms, String diff = 'agent', int stage = 0}) =>
+    GameState(seed: seed, rooms: rooms, diff: diff, stage: stage);
 
 GameState startGame(GameState s, Puzzles p, int now) => GameState(
       seed: s.seed,
       rooms: s.rooms,
       diff: s.diff,
+      stage: s.stage,
       phase: 'playing',
       startedAt: now,
       mazePos: p.maze.start,
