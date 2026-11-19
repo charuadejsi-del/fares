@@ -1,0 +1,13 @@
+{
+  "_doc": "أصول مولّدة بالذكاء الاصطناعي (Creative Claw) — تُحمَّل في GitHub Actions إلى app_flutter/assets قبل البناء.",
+  "images/icon.jpg": "https://cdn.creativeclaw.co/u/260347d3/images/96e20491-0724-460a-8c79-b1769d4244d1.jpg",
+  "images/home_bg.jpg": "https://cdn.creativeclaw.co/u/260347d3/images/d9d01290-fb04-4c27-bc11-f5669e070823.jpg",
+  "images/vault.jpg": "https://cdn.creativeclaw.co/u/260347d3/images/3725ca36-19ac-4e7d-a71a-b0377f0f4be8.jpg",
+  "images/panel_bg.jpg": "https://cdn.creativeclaw.co/u/260347d3/images/d4702a4b-8b9b-445d-a8c1-4a9cbf654972.jpg",
+  "audio/theme.mp3": "https://cdn.creativeclaw.co/u/260347d3/audio/f42d2bbc-15e7-4116-99fc-dfe690855cfc.mp3",
+  "fonts/Tajawal-Regular.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/tajawal/Tajawal-Regular.ttf",
+  "fonts/Tajawal-Bold.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/tajawal/Tajawal-Bold.ttf",
+  "fonts/Tajawal-ExtraBold.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/tajawal/Tajawal-ExtraBold.ttf",
+  "fonts/Tajawal-Black.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/tajawal/Tajawal-Black.ttf",
+  "fonts/ShareTechMono-Regular.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/sharetechmono/ShareTechMono-Regular.ttf"
+}

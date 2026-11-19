@@ -7,11 +7,9 @@ on:
     branches: [jeu-khazna]
     paths:
       - 'jeu-khazna/app_flutter/**'
+      - 'jeu-khazna/tools/assets.json'
       - '.github/workflows/khazna-apk.yml'
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build:
@@ -32,6 +30,23 @@ jobs:
           channel: stable
           cache: true
 
+      - name: تحميل الأصول (صور، موسيقى، خطوط)
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          assets = json.load(open('../tools/assets.json', encoding='utf-8'))
+          for rel, url in assets.items():
+              if rel.startswith('_'):
+                  continue
+              dest = os.path.join('assets', rel)
+              if os.path.exists(dest):
+                  print('موجود:', rel); continue
+              os.makedirs(os.path.dirname(dest), exist_ok=True)
+              urllib.request.urlretrieve(url, dest)
+              print('حُمّل:', rel, os.path.getsize(dest))
+          PY
+          convert assets/images/icon.jpg -resize 1024x1024 assets/images/icon.png
+
       - name: توليد ملفات أندرويد
         run: |
           flutter create --platforms=android --org com.khazna --project-name khazna .
@@ -41,6 +56,9 @@ jobs:
           sed -i 's#android:label="khazna"#android:label="الخزنة"#' "$MANIFEST"
 
       - run: flutter pub get
+
+      - name: الأيقونة
+        run: dart run flutter_launcher_icons
 
       - name: التحليل
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
@@ -59,14 +77,3 @@ jobs:
           name: khazna-apk
           path: jeu-khazna/app_flutter/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
-
-      # نسخة من الـ APK في فرع مستقل (khazna-apk) ليسهل تحميلها بدون فتح صفحة Actions
-      - name: نشر الـ APK في فرع khazna-apk
-        working-directory: ${{ github.workspace }}
-        run: |
-          mkdir -p /tmp/apkrepo && cd /tmp/apkrepo
-          git init -q -b khazna-apk
-          cp "$GITHUB_WORKSPACE/jeu-khazna/app_flutter/build/app/outputs/flutter-apk/app-release.apk" khazna.apk
-          git add khazna.apk
-          git -c user.name="github-actions" -c user.email="actions@github.com" commit -q -m "APK ${GITHUB_SHA::7}"
-          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" khazna-apk
