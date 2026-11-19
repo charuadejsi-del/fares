@@ -131,16 +131,18 @@ jobs:
           cp "$GITHUB_WORKSPACE/jeu-khazna/tools/realtime-check.mjs" . && node realtime-check.mjs
 
       - name: بناء APK
-        run: flutter build apk --release --target-platform android-arm,android-arm64
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
 
       - uses: actions/upload-artifact@v4
         with:
           name: khazna-apk
-          path: jeu-khazna/app_flutter/build/app/outputs/flutter-apk/app-release.apk
+          path: jeu-khazna/app_flutter/build/app/outputs/flutter-apk/*.apk
           retention-days: 30
 
       - name: نسخ الـ APK باسم واضح
-        run: cp build/app/outputs/flutter-apk/app-release.apk build/khazna.apk
+        run: |
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/khazna.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/khazna-old-phones.apk
 
       # إصدار (Release) فيه ملف الـ APK مباشرة، بلا ضغط: يُحمَّل ويُثبَّت من الهاتف مباشرة
       - uses: softprops/action-gh-release@v2
@@ -149,8 +151,10 @@ jobs:
           name: الخزنة — نسخة ${{ github.run_number }}
           prerelease: true
           target_commitish: ${{ github.sha }}
-          body: "ملف APK للتثبيت المباشر على أندرويد (نسخة تجريبية)."
-          files: jeu-khazna/app_flutter/build/khazna.apk
+          body: "khazna.apk لأغلب الهواتف (64 بت)، و khazna-old-phones.apk للهواتف القديمة (32 بت). khazna-windows.zip للحاسوب."
+          files: |
+            jeu-khazna/app_flutter/build/khazna.apk
+            jeu-khazna/app_flutter/build/khazna-old-phones.apk
 
   # نسخة الحاسوب (Windows): نفس اللعبة، تلعب أونلاين مع الهاتف
   windows:
