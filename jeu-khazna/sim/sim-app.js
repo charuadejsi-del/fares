@@ -5,7 +5,7 @@
 
 const app = document.getElementById('app');
 const flashEl = document.getElementById('flash');
-let state = null, P = null, entry = '', seenKey = '', playToken = 0, view = 'op', armedCut = -1;
+let state = null, P = null, entry = '', seenKey = '', playToken = 0, view = 'op', armedCut = -1, decSym = -1;
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = sec => { sec = Math.max(0, Math.ceil(sec)); return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`; };
@@ -14,7 +14,7 @@ function newGame() {
   const seed = Math.floor(Math.random() * 2 ** 31);
   P = generate(seed);
   state = start(newState(seed), P, Date.now());
-  entry = ''; armedCut = -1;
+  entry = ''; armedCut = -1; decSym = -1;
   render();
 }
 function dispatch(action) {
@@ -51,7 +51,7 @@ function handleEvent() {
   else if (type === 'bump') flash('bad', `💥 اصطدمت بجدار! −${pen} ثوانٍ`);
   else if (type === 'solved' && state.phase === 'playing') flash('good', '✅ فُتح القفل!');
   else if (type === 'stage') flash('good', '✨ المرحلة التالية');
-  if (type === 'solved' || type === 'start') { entry = ''; armedCut = -1; }
+  if (type === 'solved' || type === 'start') { entry = ''; armedCut = -1; decSym = -1; }
   if (ROOMS[state.room] === 'lights' && (type === 'stage' || type === 'solved' || type === 'start')) setTimeout(playLights, 500);
 }
 
@@ -168,7 +168,7 @@ function wiresEx() {
 // الغرفة 3
 function cipherOp() {
   return `
-  <p class="lead">صِف الرمز للخبير، واقرأ له الحروف المشفّرة واحداً واحداً. هو يعرف كيف تُفكّ.</p>
+  <p class="lead">صِف الرمز للخبير، ثم اقرأ له الحروف المشفّرة واحداً واحداً من اليمين إلى اليسار. هو يقول لك الحرف الأصلي لكل واحد.</p>
   <div class="big-symbol">${SYMBOLS[P.cipher.sym].s}</div>
   <div class="cipher">${[...P.cipher.cipher].map(c => `<span>${c}</span>`).join('')}</div>
   <form class="row" data-form="cipher">
@@ -177,12 +177,14 @@ function cipherOp() {
   </form>`;
 }
 function cipherEx() {
+  const k = decSym >= 0 ? P.cipher.manual[decSym] : 0;
   return `
-  <p class="lead">1) اعرف الإزاحة من الرمز. 2) ارجع بكل حرف إلى الخلف في الأبجدية بعدد الإزاحة (قبل «ا» تأتي «ي»).<br>
-  <small>مثال: الإزاحة 2 ← الحرف «ث» يصبح «ب».</small></p>
-  <div class="manual-grid">${SYMBOLS.map((sy, i) => `<div><b>${sy.s}</b><small>${sy.n}</small><em>${P.cipher.manual[i]}</em></div>`).join('')}</div>
-  <h3>الأبجدية</h3>
-  <div class="alphabet">${ALPHABET.map((ch, i) => `<span><b>${ch}</b><small>${i + 1}</small></span>`).join('')}</div>`;
+  <p class="lead">1) اسأل المشغّل عن الرمز، واضغط عليه هنا. 2) سيظهر لك جدول الفكّ. 3) المشغّل يقرأ لك الحروف، وأنت تقول له الحرف الأصلي لكل واحد.</p>
+  <div class="manual-grid pick">${SYMBOLS.map((sy, i) => `<button data-act="decsym" data-i="${i}" class="${decSym === i ? 'on' : ''}"><b>${sy.s}</b><small>${sy.n}</small></button>`).join('')}</div>
+  ${decSym < 0 ? '<p class="muted">اختر الرمز لترى جدول الفكّ.</p>' : `
+  <h3>جدول الفكّ للرمز ${SYMBOLS[decSym].s} (${SYMBOLS[decSym].n})</h3>
+  <p class="muted small">ابحث عن الحرف الذي يقرؤه المشغّل في الأعلى، والحرف الأصلي هو الذي تحته.</p>
+  <div class="decoder">${ALPHABET.map((ch, i) => `<span><b>${ch}</b><i>↓</i><em>${ALPHABET[(i - k + ALPHABET.length) % ALPHABET.length]}</em></span>`).join('')}</div>`}`;
 }
 
 // الغرفة 4
@@ -265,6 +267,7 @@ app.addEventListener('click', e => {
     case 'move': dispatch({ type: 'move', dir: b.dataset.d }); break;
     case 'press': dispatch({ type: 'press', color: Number(b.dataset.c) }); break;
     case 'replay': playLights(); break;
+    case 'decsym': decSym = Number(b.dataset.i); render(true); break;
   }
 });
 

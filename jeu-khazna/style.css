@@ -129,3 +129,12 @@ input:focus, button:focus-visible { outline: 2px solid var(--gold); outline-offs
 #flash.good { background: var(--good); color: #062014; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* الغرفة 3: اختيار الرمز وجدول الفكّ */
+.manual-grid.pick button { background: #10131a; border: 1px solid var(--line); border-radius: 10px; padding: 6px 2px; display: grid; justify-items: center; }
+.manual-grid.pick button.on { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 18%, #10131a); }
+.decoder { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.decoder span { background: #10131a; border-radius: 8px; display: grid; justify-items: center; padding: 4px 0; line-height: 1.15; }
+.decoder b { font-size: 1.15rem; }
+.decoder i { font-style: normal; color: var(--muted); font-size: .7rem; }
+.decoder em { font-style: normal; font-weight: 800; color: var(--gold); font-size: 1.25rem; }
