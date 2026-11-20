@@ -55,7 +55,7 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
     super.initState();
     _sub = c.events.listen(_onEvent);
     c.addListener(_onChange);
-    if (c.online) _voice = VoiceService()..join(c.code);
+    if (c.online) _voice = VoiceService()..join(c.channel);
   }
 
   @override

@@ -23,6 +23,9 @@ class GameController extends ChangeNotifier {
   final bool online;
   final bool isHost;
   final String code;
+
+  /// القناة السرّية للغرفة (الرمز + مفتاح فريد): الصوت والبيانات لا تختلط بين غرفتين أبداً.
+  final String channel;
   final String meId;
   final String meName;
 
@@ -57,6 +60,7 @@ class GameController extends ChangeNotifier {
   Timer? _beat;
   Timer? _ping;
   String _penaltyKey = '';
+  int _lastTouch = 0;
 
   /// الضيف: انقطع وصول حالة القائد.
   bool get hostLost => online && !isHost && state?.phase == 'playing' && _recvAt > 0 && _now() - _recvAt > 9000;
@@ -92,6 +96,7 @@ class GameController extends ChangeNotifier {
   })  : online = false,
         isHost = true,
         code = '',
+        channel = '',
         meId = _rid() {
     players = {meId: Player(meName, 'op', authService.uid)};
     authService.addListener(_onAuth);
@@ -99,8 +104,9 @@ class GameController extends ChangeNotifier {
     _loop = Timer.periodic(const Duration(seconds: 1), (_) => _tickLoop());
   }
 
-  GameController.online({required this.meName, required this.code, required this.isHost})
-      : online = true,
+  GameController.online({required this.meName, required this.code, required this.isHost, String? channel})
+      : channel = channel ?? code,
+        online = true,
         table = false,
         rooms = kRooms,
         diff = 'agent',
@@ -110,9 +116,8 @@ class GameController extends ChangeNotifier {
   }
 
   Future<void> connect() async {
-    _net = await SupabaseTransport.connect(code, _onMessage);
+    _net = await SupabaseTransport.connect(channel, _onMessage);
     if (isHost) {
-      SessionService.roomOpen(code).catchError((_) {});
       state = newState(_newSeed());
       puzzles = generatePuzzles(state!.seed);
       players = {meId: Player(meName, 'op', authService.uid)};
@@ -381,6 +386,10 @@ class GameController extends ChangeNotifier {
       return;
     }
     if (online && _now() - _lastBroadcast > 2000) _broadcast(); // للمتأخرين ومزامنة المؤقّت
+    if (online && isHost && s.phase != 'playing' && _now() - _lastTouch > 60000) {
+      _lastTouch = _now();
+      SessionService.roomTouch(code).catchError((_) {});
+    }
   }
 
   void _sendHello() => _net?.send({'kind': 'hello', 'id': meId, 'name': meName, 'uid': authService.uid});
@@ -437,7 +446,6 @@ class GameController extends ChangeNotifier {
       }
       return; // ننتظر أن يضيفنا المضيف
     }
-    if (_hello != null) SessionService.roomJoin(code).catchError((_) {});
     _hello?.cancel();
     _hello = null;
     final sid = m['session'];

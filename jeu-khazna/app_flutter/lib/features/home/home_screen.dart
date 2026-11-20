@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/auth.dart';
 import '../../core/controller.dart';
+import '../../core/session.dart';
 import '../../core/shop.dart';
 import '../../core/stages.dart';
 import '../../core/team.dart';
@@ -66,7 +67,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
     setState(() => _busy = true);
-    final c = GameController.online(meName: _name, code: host ? GameController.newRoomCode() : code, isHost: host);
+    // رمز فريد من الخادم + قناة سرّية للغرفة
+    String channel;
+    try {
+      if (host) {
+        final r = await SessionService.roomCreate();
+        code = r.$1;
+        channel = r.$2;
+      } else {
+        channel = await SessionService.roomResolve(code);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        _toast('$e'.contains('room not found')
+            ? 'لا توجد غرفة نشطة بهذا الرمز — تأكّد من الرقم'
+            : 'تعذّر الاتصال بالخادم. تحقّق من الإنترنت.');
+      }
+      return;
+    }
+    final c = GameController.online(meName: _name, code: code, channel: channel, isHost: host);
     try {
       await c.connect();
     } catch (_) {

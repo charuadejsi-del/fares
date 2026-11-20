@@ -25,6 +25,21 @@ class SessionService {
   static Future<int> end(String session, String status) async =>
       ((await supa.rpc('session_end', params: {'p_session': session, 'p_status': status})) as num).toInt();
 
+  /// ينشئ غرفة برمز فريد بين الغرف النشطة. يُرجع (الرمز، القناة السرّية).
+  static Future<(String, String)> roomCreate() async {
+    final r = Map<String, dynamic>.from(await supa.rpc('room_create') as Map);
+    final code = '${r['code']}';
+    return (code, '$code-${r['key']}');
+  }
+
+  /// الضيف: من الرمز إلى القناة السرّية للغرفة.
+  static Future<String> roomResolve(String code) async {
+    final k = await supa.rpc('room_resolve', params: {'p_code': code});
+    return '$code-$k';
+  }
+
+  static Future<void> roomTouch(String code) => supa.rpc('room_touch', params: {'p_code': code});
+
   static Future<void> roomOpen(String code) => supa.rpc('room_open', params: {'p_code': code});
   static Future<void> roomJoin(String code) => supa.rpc('room_join', params: {'p_code': code});
   static Future<void> roomClose(String code) => supa.rpc('room_close', params: {'p_code': code});
