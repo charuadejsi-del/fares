@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:khazna/core/ext_locks.dart';
 import 'package:khazna/core/game.dart';
@@ -70,5 +71,35 @@ void main() {
     expect(v.answer.split('').toSet(), {for (final i in [0, 1]) '${vaultDigit(42, i)}'});
     s = applyAction(s, p, {'type': 'ext', 'value': v.answer}, 5000);
     expect(s.phase, 'won');
+  });
+
+  test('قفل من جزأين + الحارس يغيّر الشيفرة + الإعادة', () {
+    final rooms = ['switches', 'equation', 'clock', kVaultCode];
+    final p = generatePuzzles(7);
+    var s = GameState(seed: 7, rooms: rooms, phase: 'playing', startedAt: 1000, stage: 31);
+    expect(twoPartStage(31), true);
+    expect(specialRoomFor(s), 1);
+    s = applyAction(s, p, {'type': 'ext', 'value': extFor(s).answer}, 2000);
+    expect(s.room, 1);
+    final first = extFor(s).answer;
+    s = applyAction(s, p, {'type': 'ext', 'value': first}, 3000);
+    expect(s.room, 1);
+    expect(s.lastEvent?.type, 'part2');
+    expect(s.curVariant, 2);
+    s = applyAction(s, p, {'type': 'ext', 'value': extFor(s).answer}, 4000);
+    expect(s.room, 2);
+    expect(s.curVariant, 0);
+    final back = GameState.fromJson(jsonDecode(jsonEncode(s.toJson())) as Map);
+    expect(back.variantRoom, s.variantRoom);
+
+    var t = GameState(seed: 9, rooms: rooms, phase: 'playing', startedAt: 1000, stage: 8, room: 1);
+    t = applyAction(t, p, {'type': 'twist'}, 2000);
+    expect(t.lastEvent?.type, 'twist');
+    expect(t.curVariant, 1);
+    expect(applyAction(t, p, {'type': 'twist'}, 2500).eventId, t.eventId);
+
+    final r = shuffleForReplay(rooms, 5);
+    expect(r.last, kVaultCode);
+    expect(r.toSet(), rooms.toSet());
   });
 }

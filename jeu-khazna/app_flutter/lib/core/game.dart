@@ -1,5 +1,7 @@
 // منطق لعبة «الخزنة» — نسخة Dart مطابقة لـ core.js
 // نفس البذرة تعطي نفس الألغاز في نسخة الويب والنسخة الأصلية، فيمكن اللعب بينهما.
+import 'dart:math' show Random;
+
 import 'ext_locks.dart';
 import 'stages.dart' show stageMods;
 
@@ -434,6 +436,11 @@ class GameState {
   final int syncOp;
   final int syncEx;
 
+  /// نسخة بديلة من القفل الحالي: 1 = «الحارس غيّر الشيفرة»، 2 = «الجزء الثاني».
+  /// variantRoom = رقم القفل الذي تنطبق عليه (‎-1 = لا شيء).
+  final int variant;
+  final int variantRoom;
+
   const GameState({
     required this.seed,
     this.rooms = kRooms,
@@ -459,7 +466,12 @@ class GameState {
     this.errors = 0,
     this.syncOp = 0,
     this.syncEx = 0,
+    this.variant = 0,
+    this.variantRoom = -1,
   });
+
+  /// النسخة الفعّالة للقفل الحالي.
+  int get curVariant => variantRoom == room ? variant : 0;
 
   bool get paused => pausedAt > 0;
   int get effectiveDuration => duration > 0 ? duration : difficulty.duration;
@@ -487,6 +499,8 @@ class GameState {
     int? errors,
     int? syncOp,
     int? syncEx,
+    int? variant,
+    int? variantRoom,
   }) =>
       GameState(
         seed: seed,
@@ -513,6 +527,8 @@ class GameState {
         errors: errors ?? this.errors,
         syncOp: syncOp ?? this.syncOp,
         syncEx: syncEx ?? this.syncEx,
+        variant: variant ?? this.variant,
+        variantRoom: variantRoom ?? this.variantRoom,
       );
 
   /// نسخة بمدّة مختلفة (تأتي من الخادم عند بداية الجلسة).
@@ -521,7 +537,7 @@ class GameState {
         startedAt: startedAt, penalty: penalty, mazePos: mazePos, lightStage: lightStage, lightInput: lightInput,
         cut: cut, lastEvent: lastEvent, eventId: eventId, finishedIn: finishedIn, duration: seconds,
         pausedAt: pausedAt, pauseReason: pauseReason, hints: hints, hint: hint,
-        errors: errors, syncOp: syncOp, syncEx: syncEx,
+        errors: errors, syncOp: syncOp, syncEx: syncEx, variant: variant, variantRoom: variantRoom,
       );
 
   Map<String, dynamic> toJson() => {
@@ -549,6 +565,8 @@ class GameState {
         if (errors > 0) 'errors': errors,
         if (syncOp > 0) 'syncOp': syncOp,
         if (syncEx > 0) 'syncEx': syncEx,
+        if (variant > 0) 'variant': variant,
+        if (variantRoom >= 0) 'variantRoom': variantRoom,
       };
 
   static int _i(dynamic v, [int d = 0]) => v is num ? v.toInt() : d;
@@ -581,7 +599,39 @@ class GameState {
         errors: _i(j['errors']),
         syncOp: _i(j['syncOp']),
         syncEx: _i(j['syncEx']),
+        variant: _i(j['variant']),
+        variantRoom: _i(j['variantRoom'], -1),
       );
+}
+
+// ───── مفاجآت الأقفال ─────
+/// «الحارس غيّر الشيفرة»: في المراحل 8–30 (كل ثالثة) يتبدّل قفل واحد بعد 25 ثانية.
+bool twistStage(int n) => n >= 8 && n <= 30 && n % 3 == 2;
+
+/// «قفل من جزأين»: من المرحلة 31 (الفردية) يجب حلّ قفل واحد مرّتين.
+bool twoPartStage(int n) => n >= 31 && n.isOdd;
+
+/// القفل الذي تقع عليه المفاجأة: أوّل قفل موسّع بعد الأوّل (ليس الخزنة ولا المفتاحين).
+int specialRoomFor(GameState s) {
+  for (int i = 1; i < s.rooms.length - 1; i++) {
+    final id = s.rooms[i];
+    if (kExtRooms.contains(id) && id != 'sync') return i;
+  }
+  return -1;
+}
+
+/// عند الإعادة: الأقفال نفسها بترتيب جديد (يبقى الأخير — الخزنة — في مكانه).
+List<String> shuffleForReplay(List<String> rooms, int seed) {
+  if (rooms.length < 3) return rooms;
+  final body = rooms.sublist(0, rooms.length - 1);
+  final r = Random(seed);
+  for (int i = body.length - 1; i > 0; i--) {
+    final j = r.nextInt(i + 1);
+    final t = body[i];
+    body[i] = body[j];
+    body[j] = t;
+  }
+  return [...body, rooms.last];
 }
 
 GameState newState(int seed, {List<String> rooms = kRooms, String diff = 'agent', int stage = 0, int duration = 0}) =>
@@ -702,9 +752,19 @@ GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
   final room = s.roomId;
   final type = a['type'];
 
+  // «الحارس غيّر الشيفرة»: نسخة جديدة من القفل الحالي (مرّة واحدة لكل قفل).
+  if (type == 'twist') {
+    if (s.variantRoom == s.room || !isExtRoom(room)) return s;
+    return s.copyWith(variant: 1, variantRoom: s.room, hint: '', eventId: s.eventId + 1, lastEvent: GameEvent('twist', room));
+  }
+
   GameState ev(GameState x, String t, [int? pen]) =>
       x.copyWith(eventId: s.eventId + 1, lastEvent: GameEvent(t, room, pen));
   GameState advance(GameState x) {
+    // قفل من جزأين: الحلّ الأوّل يكشف الجزء الثاني بدل الانتقال.
+    if (twoPartStage(s.stage) && s.room == specialRoomFor(s) && !(s.variantRoom == s.room && s.variant == 2)) {
+      return x.copyWith(variant: 2, variantRoom: s.room, hint: '', eventId: s.eventId + 1, lastEvent: GameEvent('part2', room));
+    }
     final next = s.room + 1;
     if (next >= s.rooms.length) {
       final y = x.copyWith(room: next, phase: 'won');

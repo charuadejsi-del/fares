@@ -43,8 +43,10 @@ class PlayScreen extends ConsumerStatefulWidget {
   ConsumerState<PlayScreen> createState() => _PlayScreenState();
 }
 
-class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProviderStateMixin {
+class _PlayScreenState extends ConsumerState<PlayScreen> with TickerProviderStateMixin {
   late final AnimationController _shake = AnimationController(vsync: this, duration: const Duration(milliseconds: 450));
+  /// وميض الخطر الأحمر عند الخطأ.
+  late final AnimationController _danger = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
   StreamSubscription<GameEvent>? _sub;
   bool _recorded = false;
   String? _flash; // رسالة قصيرة فوق الشاشة
@@ -79,6 +81,7 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
     c.removeListener(_onChange);
     _voice?.dispose();
     _shake.dispose();
+    _danger.dispose();
     c.dispose();
     super.dispose();
   }
@@ -152,12 +155,15 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
     switch (e.type) {
       case 'wrong':
         audio.fx(Sfx.error, HapticKind.heavy);
+        audio.fx(Sfx.alarm, HapticKind.heavy, volume: 0.3);
         _shake.forward(from: 0);
+        _danger.forward(from: 0);
         _showFlash('إنذار! −${e.pen} ثانية', K.danger);
         break;
       case 'bump':
         audio.fx(Sfx.bump, HapticKind.medium);
         _shake.forward(from: 0);
+        _danger.forward(from: 0);
         _showFlash('جدار! −${e.pen} ثوانٍ', K.danger);
         break;
       case 'solved':
@@ -175,7 +181,7 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
           audio.fx(Sfx.success, HapticKind.medium);
           _transitionTimer?.cancel();
           setState(() => _transition = K.room(st.roomId));
-          _transitionTimer = Timer(const Duration(milliseconds: 1250), () {
+          _transitionTimer = Timer(const Duration(milliseconds: 1400), () {
             if (mounted) setState(() => _transition = null);
           });
         }
@@ -203,6 +209,16 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
         break;
       case 'start':
         audio.play(Sfx.success, volume: 0.5);
+        if (c.replayed) _showFlash('خزنة جديدة: تغيّرت الرموز والترتيب', K.neon);
+        break;
+      case 'twist':
+        audio.fx(Sfx.alarm, HapticKind.heavy, volume: 0.6);
+        _danger.forward(from: 0);
+        _showFlash('الحارس غيّر الشيفرة! صِف القفل من جديد', K.danger);
+        break;
+      case 'part2':
+        audio.fx(Sfx.success, HapticKind.medium);
+        _showFlash('الجزء الأوّل فُتح — بقي الجزء الثاني!', K.neon);
         break;
     }
   }
@@ -286,6 +302,27 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
                     ),
                   ),
                 ),
+              // وميض الخطر: حوافّ حمراء تنبض ثم تختفي
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AnimatedBuilder(
+                    animation: _danger,
+                    builder: (context, _) {
+                      final v = _danger.isAnimating ? sin(_danger.value * pi) : 0.0;
+                      if (v <= 0) return const SizedBox.shrink();
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            radius: 1.1,
+                            colors: [Colors.transparent, K.danger.withAlpha((150 * v).round())],
+                            stops: const [.55, 1],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
               if (_transition != null) Positioned.fill(child: _AccessGranted(next: _transition!)),
             ]),
           ),
@@ -295,7 +332,7 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
   }
 }
 
-/// مشهد قصير بين قفلين: «تمّ الاختراق» ثم اسم القفل التالي.
+/// مشهد قصير بين قفلين: قفل معدني ينفتح (الحلقة ترتفع وتدور)، ضوء أخضر، ثم اسم القفل التالي.
 class _AccessGranted extends StatelessWidget {
   final String next;
   const _AccessGranted({required this.next});
@@ -305,40 +342,34 @@ class _AccessGranted extends StatelessWidget {
     return IgnorePointer(
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: 1),
-        duration: const Duration(milliseconds: 1250),
+        duration: const Duration(milliseconds: 1400),
         builder: (context, t, _) {
-          final fadeIn = (t / 0.15).clamp(0.0, 1.0).toDouble();
-          final fadeOut = ((1 - t) / 0.2).clamp(0.0, 1.0).toDouble();
-          final o = min(fadeIn, fadeOut);
+          final fadeIn = (t / 0.12).clamp(0.0, 1.0).toDouble();
+          final fadeOut = ((1 - t) / 0.18).clamp(0.0, 1.0).toDouble();
+          final open = Curves.easeOutBack.transform(((t - 0.12) / 0.3).clamp(0.0, 1.0).toDouble());
+          final green = ((t - 0.3) / 0.15).clamp(0.0, 1.0).toDouble();
           return Opacity(
-            opacity: o,
+            opacity: min(fadeIn, fadeOut),
             child: Container(
-              color: K.bg.withAlpha(225),
+              color: K.bg.withAlpha(235),
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Transform.rotate(
-                  angle: Curves.easeOutCubic.transform(min(1.0, t / 0.6)) * pi,
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: K.glow(K.neon, 40, 160)),
-                    child: ClipOval(
-                      child: Image.asset('assets/images/vault.jpg',
-                          fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.lock_open, size: 70, color: K.neon)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 22),
-                const MonoLabel('ACCESS GRANTED', color: K.neon, size: 16),
-                const SizedBox(height: 6),
-                const Text('تمّ اختراق القفل',
-                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: K.neon)),
-                const SizedBox(height: 16),
+                SizedBox(width: 120, height: 150, child: CustomPaint(painter: _PadlockPainter(open, green))),
+                const SizedBox(height: 18),
                 Opacity(
-                  opacity: (t - 0.35).clamp(0.0, 1.0).toDouble() > 0 ? 1 : 0,
+                  opacity: green,
+                  child: Column(children: [
+                    const MonoLabel('ACCESS GRANTED', color: K.ok, size: 13),
+                    const SizedBox(height: 6),
+                    const Text('تمّ الاختراق', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
+                  ]),
+                ),
+                const SizedBox(height: 18),
+                Opacity(
+                  opacity: ((t - 0.5) / 0.15).clamp(0.0, 1.0).toDouble(),
                   child: Column(children: [
                     const MonoLabel('NEXT TARGET', color: K.muted),
                     const SizedBox(height: 4),
-                    Text(next, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: K.amber)),
+                    Text(next, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: K.neon)),
                   ]),
                 ),
               ]),
@@ -348,6 +379,62 @@ class _AccessGranted extends StatelessWidget {
       ),
     );
   }
+}
+
+/// قفل معدني: الجسم فولاذي والحلقة ترتفع ثم تدور، والمؤشّر يتحوّل للأخضر.
+class _PadlockPainter extends CustomPainter {
+  final double open; // 0..1
+  final double green; // 0..1
+  _PadlockPainter(this.open, this.green);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final body = Rect.fromLTWH(w * .1, h * .45, w * .8, h * .52);
+    // الحلقة
+    final lift = open * h * .16;
+    canvas.save();
+    final pivot = Offset(w * .74, h * .45 - lift);
+    canvas.translate(pivot.dx, pivot.dy);
+    canvas.rotate(-open.clamp(0.0, 1.0) * .55);
+    canvas.translate(-pivot.dx, -pivot.dy);
+    final shackle = Path()
+      ..moveTo(w * .26, h * .5 - lift)
+      ..lineTo(w * .26, h * .27 - lift)
+      ..arcToPoint(Offset(w * .74, h * .27 - lift), radius: Radius.circular(w * .24))
+      ..lineTo(w * .74, h * .5 - lift);
+    canvas.drawPath(
+        shackle,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = w * .1
+          ..strokeCap = StrokeCap.butt
+          ..shader = const LinearGradient(colors: [Color(0xFF9AA1A8), Color(0xFFE1E4E7), Color(0xFF7C838A)])
+              .createShader(Rect.fromLTWH(0, 0, w, h * .5)));
+    canvas.restore();
+    // الجسم
+    final rr = RRect.fromRectAndRadius(body, Radius.circular(w * .08));
+    canvas.drawRRect(
+        rr,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF5B6168), Color(0xFF2E3237), Color(0xFF1C1F23)],
+          ).createShader(body));
+    canvas.drawRRect(rr, Paint()..style = PaintingStyle.stroke..strokeWidth = 1.5..color = const Color(0xFF6E757C));
+    // ثقب المفتاح + المؤشّر
+    final c = body.center;
+    canvas.drawCircle(c - Offset(0, body.height * .08), w * .06, Paint()..color = const Color(0xFF0B0C0E));
+    canvas.drawRect(Rect.fromCenter(center: c + Offset(0, body.height * .08), width: w * .05, height: body.height * .22),
+        Paint()..color = const Color(0xFF0B0C0E));
+    final led = Color.lerp(K.danger, K.ok, green)!;
+    canvas.drawCircle(Offset(body.right - w * .1, body.top + w * .1), w * .035, Paint()..color = led);
+    canvas.drawCircle(Offset(body.right - w * .1, body.top + w * .1), w * .08, Paint()..color = led.withAlpha(50));
+  }
+
+  @override
+  bool shouldRepaint(covariant _PadlockPainter o) => o.open != open || o.green != green;
 }
 
 class _Message extends StatelessWidget {
@@ -616,7 +703,7 @@ class _Game extends StatelessWidget {
               layoutBuilder: (cur, prev) => cur ?? const SizedBox.shrink(),
               transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
               child: Column(
-                key: ValueKey('${s.seed}-${s.room}-$role'),
+                key: ValueKey('${s.seed}-${s.room}-${s.curVariant}-$role'),
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // ── عنوان القفل + أزرار التلميح والشرح والصوت
@@ -625,7 +712,11 @@ class _Game extends StatelessWidget {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         MonoLabel('LOCK ${idx.toString().padLeft(2, '0')} · ${K.roleName(role)}', color: K.neon, size: 10.5),
                         const SizedBox(height: 2),
-                        Text(K.room(s.roomId), style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+                        Text(
+                            twoPartStage(s.stage) && s.room == specialRoomFor(s)
+                                ? '${K.room(s.roomId)} · الجزء ${s.curVariant == 2 ? 2 : 1}/2'
+                                : K.room(s.roomId),
+                            style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
                       ]),
                     ),
                     if (voice != null && !silent) ...[VoiceButton(voice: voice!), const SizedBox(width: 6)],
@@ -722,7 +813,7 @@ class _TableGame extends StatelessWidget {
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 350),
           child: KeyedSubtree(
-            key: ValueKey('${s.seed}-${s.room}-$role'),
+            key: ValueKey('${s.seed}-${s.room}-${s.curVariant}-$role'),
             child: HudPanel(
               color: K.role(role),
               padding: const EdgeInsets.all(12),
@@ -957,6 +1048,59 @@ class _End extends ConsumerWidget {
                   child: Image.asset('assets/images/vault.jpg',
                       fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: K.surface)),
                 ),
+                // باب الخزنة ينفتح: نصفان فولاذيان ينزلقان للجانبين ويكشفان الضوء الذهبي
+                if (won)
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: 1),
+                    duration: const Duration(milliseconds: 1500),
+                    curve: const Interval(.25, 1, curve: Curves.easeInOutCubic),
+                    builder: (context, v, _) => v >= 1
+                        ? const SizedBox.shrink()
+                        : Stack(fit: StackFit.expand, children: [
+                            for (final left in [true, false])
+                              Align(
+                                alignment: left ? Alignment.centerLeft : Alignment.centerRight,
+                                child: FractionallySizedBox(
+                                  widthFactor: .5,
+                                  heightFactor: 1,
+                                  child: FractionalTranslation(
+                                    translation: Offset(left ? -v : v, 0),
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: left ? Alignment.centerLeft : Alignment.centerRight,
+                                          end: left ? Alignment.centerRight : Alignment.centerLeft,
+                                          colors: const [Color(0xFF2A2E33), Color(0xFF4A5057), Color(0xFF6B7178)],
+                                        ),
+                                        border: Border(
+                                          left: left ? BorderSide.none : const BorderSide(color: Color(0xFF15171A), width: 2),
+                                          right: left ? const BorderSide(color: Color(0xFF15171A), width: 2) : BorderSide.none,
+                                        ),
+                                      ),
+                                      child: Align(
+                                        alignment: left ? Alignment.centerRight : Alignment.centerLeft,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                                          child: Column(mainAxisSize: MainAxisSize.min, children: [
+                                            for (int b = 0; b < 3; b++)
+                                              Container(
+                                                width: 26 * (1 - v),
+                                                height: 10,
+                                                margin: const EdgeInsets.symmetric(vertical: 14),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFB9BEC4),
+                                                  borderRadius: BorderRadius.circular(3),
+                                                ),
+                                              ),
+                                          ]),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ]),
+                  ),
                 TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0, end: 1),
                   duration: const Duration(milliseconds: 1600),

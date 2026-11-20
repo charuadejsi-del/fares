@@ -15,7 +15,7 @@ String botKey(GameState s) {
     case 'dial':
       return 'dial:${s.room}:${s.dialStep}';
     default:
-      return '${s.roomId}:${s.room}';
+      return '${s.roomId}:${s.room}:${s.curVariant}';
   }
 }
 

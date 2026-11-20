@@ -146,6 +146,11 @@ class GameController extends ChangeNotifier {
 
   /// رسالة للّاعب (رصيد غير كافٍ...).
   String? notice;
+
+  /// أُعيدت المرحلة (بذرة وترتيب جديدان) — لإظهار «خزنة جديدة».
+  bool replayed = false;
+  int _roomIdx = -1;
+  int _roomAt = 0;
   bool meBroke = false;
   bool _peerBroke = false;
   int _lastPeerSeen = 0;
@@ -456,24 +461,28 @@ class GameController extends ChangeNotifier {
     _finishSession('abandoned');
     sessionId = null;
     notice = null;
+    replayed = true;
     if (!online) {
-      _startLocal();
+      _startLocal(replay: true);
       _changed();
       return;
     }
     final old = state;
     final seed = _newSeed();
-    state = old == null ? newState(seed) : newState(seed, rooms: old.rooms, diff: old.diff, stage: old.stage);
+    state = old == null
+        ? newState(seed)
+        : newState(seed, rooms: old.stage > 0 ? shuffleForReplay(old.rooms, seed) : old.rooms, diff: old.diff, stage: old.stage);
     puzzles = generatePuzzles(seed, state!.diff);
     _broadcast();
     _notify();
   }
 
   // ───── داخلي ─────
-  void _startLocal() {
+  void _startLocal({bool replay = false}) {
     final seed = _newSeed();
     puzzles = generatePuzzles(seed, diff);
-    state = startGame(newState(seed, rooms: rooms, diff: diff, stage: missionId), puzzles!, _now());
+    final rs = replay && missionId > 0 ? shuffleForReplay(rooms, seed) : rooms;
+    state = startGame(newState(seed, rooms: rs, diff: diff, stage: missionId), puzzles!, _now());
     localRole = 'op';
     _openLocalSession();
   }
@@ -598,6 +607,16 @@ class GameController extends ChangeNotifier {
   void _tickLoop() {
     final s = state;
     if (s == null) return;
+    // «الحارس غيّر الشيفرة»: بعد 25 ثانية في القفل المحدّد (القائد فقط يقرّر).
+    if (isHost && s.phase == 'playing' && !s.paused) {
+      if (s.room != _roomIdx) {
+        _roomIdx = s.room;
+        _roomAt = _now();
+      } else if (twistStage(s.stage) && s.room == specialRoomFor(s) && s.variantRoom != s.room && _now() - _roomAt > 25000) {
+        _apply({'type': 'twist'});
+        return;
+      }
+    }
     _botTick();
     if (online && s.phase == 'playing' && _now() - _lastSnap > 3000) _snapshot();
     _evalPause();

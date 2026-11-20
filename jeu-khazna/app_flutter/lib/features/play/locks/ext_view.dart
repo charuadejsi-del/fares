@@ -43,7 +43,7 @@ class ExtLockView extends StatelessWidget {
             ),
           ),
         for (final it in x.op) Padding(padding: const EdgeInsets.only(bottom: 14), child: OpItemView(item: it)),
-        ExtInput(key: ValueKey('${state.seed}-${state.room}'), x: x, state: state, dispatch: dispatch, role: 'op'),
+        ExtInput(key: ValueKey('${state.seed}-${state.room}-${state.curVariant}'), x: x, state: state, dispatch: dispatch, role: 'op'),
       ]);
       return mods.contains('blackout') ? Blackout(seed: state.seed + state.room, child: body) : body;
     }
@@ -82,7 +82,7 @@ class ExtLockView extends StatelessWidget {
             seed: state.seed + state.room,
           ),
         ),
-      if (x.id == 'sync') ExtInput(key: ValueKey('ex-${state.seed}-${state.room}'), x: x, state: state, dispatch: dispatch, role: 'ex'),
+      if (x.id == 'sync') ExtInput(key: ValueKey('ex-${state.seed}-${state.room}-${state.curVariant}'), x: x, state: state, dispatch: dispatch, role: 'ex'),
     ]);
   }
 }
@@ -334,7 +334,11 @@ class OpItemView extends StatelessWidget {
           child: Wrap(alignment: WrapAlignment.center, spacing: 10, runSpacing: 10, children: [
             for (int i = 0; i < n.length ~/ 3; i++)
               Column(mainAxisSize: MainAxisSize.min, children: [
-                SizedBox(width: 72, height: 86, child: CustomPaint(painter: _PrintPainter(n[i * 3], n[i * 3 + 1], Color(kLights[n[i * 3 + 2]].argb)))),
+                PowderReveal(
+                  width: 72,
+                  height: 86,
+                  child: CustomPaint(painter: _PrintPainter(n[i * 3], n[i * 3 + 1], Color(kLights[n[i * 3 + 2]].argb))),
+                ),
                 Text('${i + 1}', style: const TextStyle(fontFamily: K.mono, color: K.muted)),
               ]),
           ]),
@@ -438,7 +442,7 @@ class OpItemView extends StatelessWidget {
         return Column(children: [
           Text('الهدف: ${item.text}', style: const TextStyle(color: K.agent, fontWeight: FontWeight.w800, fontSize: 16)),
           const SizedBox(height: 8),
-          Center(child: SizedBox(width: 230, height: 230, child: CustomPaint(painter: _SonarPainter(n)))),
+          Center(child: SonarLive(n: n)),
         ]);
       case 'evidence':
         return Column(children: [
@@ -619,6 +623,37 @@ class _ExtInputState extends ConsumerState<ExtInput> {
 
   InputSpec get spec => widget.x.input;
 
+  // الأنابيب: الماء يجري خليةً خلية قبل الإرسال
+  Timer? _flowTimer;
+  int _flow = 0;
+
+  void _startFlow() {
+    _flow = 0;
+    ref.read(audioProvider).fx(Sfx.light, HapticKind.light, volume: .5);
+    _flowTimer = Timer.periodic(const Duration(milliseconds: 110), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() => _flow++);
+      if (_flow > _seq.length + 2) {
+        t.cancel();
+        final v = _seq.join(',');
+        setState(() {
+          _flowTimer = null;
+          _seq.clear();
+        });
+        _submit(v);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _flowTimer?.cancel();
+    super.dispose();
+  }
+
   void _submit(String v) {
     ref.read(audioProvider).fx(Sfx.click, HapticKind.medium, volume: 0.6);
     widget.dispatch({'type': 'ext', 'value': v});
@@ -646,6 +681,9 @@ class _ExtInputState extends ConsumerState<ExtInput> {
         const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'];
         final ready = len == 0 ? _digits.isNotEmpty : _digits.length == len;
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (widget.x.id == kVaultCode)
+            VaultReels(digits: _digits, len: maxLen)
+          else
           Container(
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
@@ -782,6 +820,8 @@ class _ExtInputState extends ConsumerState<ExtInput> {
         ]);
       case 'cyclers':
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (widget.x.id == 'laser')
+            LaserBeamView(colors: spec.colors, dirs: [for (int i = 0; i < spec.options.length; i++) spec.options[i][_cyc[i]]]),
           Directionality(
             textDirection: TextDirection.ltr,
             child: Wrap(alignment: WrapAlignment.center, spacing: 10, runSpacing: 10, children: [
@@ -835,18 +875,24 @@ class _ExtInputState extends ConsumerState<ExtInput> {
                           _submit('$i');
                           return;
                         }
-                        if (_seq.contains(i)) return;
+                        if (_seq.contains(i) || _flowTimer != null) return;
                         setState(() => _seq.add(i));
                         if (_seq.length >= spec.len) {
-                          final v = _seq.join(',');
-                          _seq.clear();
-                          _submit(v);
+                          if (widget.x.id == 'pipes') {
+                            _startFlow();
+                          } else {
+                            final v = _seq.join(',');
+                            _seq.clear();
+                            _submit(v);
+                          }
                         }
                       },
                       child: Container(
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: _seq.contains(i) ? const Color(0xFF0D3B5A) : K.cell,
+                          color: _flowTimer != null && _seq.indexOf(i) >= 0 && _seq.indexOf(i) < _flow
+                              ? const Color(0xFF1E6FA8)
+                              : (_seq.contains(i) ? const Color(0xFF16313F) : K.cell),
                           border: Border.all(
                             color: seqMode && spec.colors.isNotEmpty && (i == spec.colors[0] || i == spec.colors[1]) ? K.neon : K.line,
                             width: seqMode && spec.colors.isNotEmpty && (i == spec.colors[0] || i == spec.colors[1]) ? 2.5 : 1,
@@ -1223,4 +1269,298 @@ class _SonarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SonarPainter o) => o.n.join() != n.join();
+}
+
+// ═════════ تطوير خاص: البصمات، الليزر، الأنابيب، السونار، الخزنة ═════════
+
+/// بصمة مغطّاة بطبقة غبار: يمسحها العميل بإصبعه فتظهر تدريجياً (كرشّ مسحوق البصمات).
+class PowderReveal extends StatefulWidget {
+  final Widget child;
+  final double width, height;
+  const PowderReveal({super.key, required this.child, required this.width, required this.height});
+
+  @override
+  State<PowderReveal> createState() => _PowderRevealState();
+}
+
+class _PowderRevealState extends State<PowderReveal> {
+  final List<Offset> _pts = [];
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onPanStart: (d) => setState(() => _pts.add(d.localPosition)),
+        onPanUpdate: (d) => setState(() => _pts.add(d.localPosition)),
+        onTap: () => setState(() {
+          // نقرة واحدة تكشف بقعة صغيرة
+          for (double a = 0; a < 2 * pi; a += pi / 4) {
+            _pts.add(Offset(widget.width / 2 + cos(a) * 10, widget.height / 2 + sin(a) * 10));
+          }
+        }),
+        child: SizedBox(
+          width: widget.width,
+          height: widget.height,
+          child: Stack(fit: StackFit.expand, children: [
+            widget.child,
+            IgnorePointer(child: CustomPaint(painter: _PowderPainter(List.of(_pts)))),
+          ]),
+        ),
+      );
+}
+
+class _PowderPainter extends CustomPainter {
+  final List<Offset> pts;
+  _PowderPainter(this.pts);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.saveLayer(rect, Paint());
+    canvas.drawRect(rect, Paint()..color = const Color(0xFF26292D));
+    // حبيبات الغبار
+    final r = Random(7);
+    final dust = Paint()..color = const Color(0xFF3A3F45);
+    for (int i = 0; i < 90; i++) {
+      canvas.drawCircle(Offset(r.nextDouble() * size.width, r.nextDouble() * size.height), .8 + r.nextDouble(), dust);
+    }
+    final clear = Paint()
+      ..blendMode = BlendMode.clear
+      ..strokeWidth = 22
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    for (int i = 0; i < pts.length; i++) {
+      if (i > 0 && (pts[i] - pts[i - 1]).distance < 40) {
+        canvas.drawLine(pts[i - 1], pts[i], clear);
+      } else {
+        canvas.drawCircle(pts[i], 11, clear);
+      }
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _PowderPainter o) => o.pts.length != pts.length;
+}
+
+/// شعاع الليزر: يخرج من المُرسِل، يمرّ بالمرايا، وينعكس كل مرّة باتجاه المرآة المختار.
+class LaserBeamView extends StatefulWidget {
+  final List<int> colors;
+  final List<String> dirs;
+  const LaserBeamView({super.key, required this.colors, required this.dirs});
+
+  @override
+  State<LaserBeamView> createState() => _LaserBeamViewState();
+}
+
+class _LaserBeamViewState extends State<LaserBeamView> with SingleTickerProviderStateMixin {
+  late final AnimationController _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat();
+
+  @override
+  void dispose() {
+    _a.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 130,
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF050607),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: K.border),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: AnimatedBuilder(
+            animation: _a,
+            builder: (context, _) => CustomPaint(painter: _LaserPainter(widget.colors, widget.dirs, _a.value)),
+          ),
+        ),
+      );
+}
+
+class _LaserPainter extends CustomPainter {
+  final List<int> colors;
+  final List<String> dirs;
+  final double t;
+  _LaserPainter(this.colors, this.dirs, this.t);
+
+  static Offset _vec(String d) => switch (d) {
+        '↗' => const Offset(1, -1),
+        '↘' => const Offset(1, 1),
+        '↙' => const Offset(-1, 1),
+        _ => const Offset(-1, -1),
+      };
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = colors.length;
+    final y = size.height / 2;
+    final emitter = Offset(14, y);
+    final xs = [for (int i = 0; i < n; i++) 50 + (size.width - 80) * (n == 1 ? .5 : i / (n - 1))];
+    final flicker = .75 + .25 * sin(t * 2 * pi * 3);
+    final glow = Paint()
+      ..color = const Color(0xFFFF2E3A).withAlpha((90 * flicker).round())
+      ..strokeWidth = 7
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+    final core = Paint()
+      ..color = const Color(0xFFFF6B73)
+      ..strokeWidth = 1.6;
+    // المُرسِل
+    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: emitter, width: 18, height: 26), const Radius.circular(3)),
+        Paint()..color = const Color(0xFF3A3F45));
+    // الشعاع الرئيسي
+    final end = Offset(size.width - 8, y);
+    canvas.drawLine(emitter, end, glow);
+    canvas.drawLine(emitter, end, core);
+    // نبضة تسير على الشعاع
+    canvas.drawCircle(Offset(emitter.dx + (end.dx - emitter.dx) * t, y), 3, Paint()..color = Colors.white.withAlpha(200));
+    for (int i = 0; i < n; i++) {
+      final m = Offset(xs[i], y);
+      final v = i < dirs.length ? _vec(dirs[i]) : const Offset(1, -1);
+      // الانعكاس
+      final tip = m + v * 34;
+      canvas.drawLine(m, tip, glow);
+      canvas.drawLine(m, tip, core);
+      canvas.drawCircle(tip, 3.5, Paint()..color = const Color(0xFFFF6B73));
+      // المرآة: خطّ ملوّن عمودي على اتجاه الانعكاس تقريباً
+      final perp = Offset(-v.dy, v.dx) / v.distance * 14;
+      canvas.drawLine(m - perp, m + perp,
+          Paint()
+            ..color = Color(colors[i])
+            ..strokeWidth = 5
+            ..strokeCap = StrokeCap.round);
+      final tp = TextPainter(
+          text: TextSpan(text: '${i + 1}', style: const TextStyle(color: K.muted, fontSize: 11, fontFamily: K.mono)),
+          textDirection: TextDirection.ltr)
+        ..layout();
+      tp.paint(canvas, Offset(m.dx - tp.width / 2, size.height - 16));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LaserPainter o) => true;
+}
+
+/// شاشة السونار الحيّة: خطّ مسح يدور، والأصداء تتوهّج حين يمرّ عليها، و«بينغ» مع كل دورة.
+class SonarLive extends ConsumerStatefulWidget {
+  final List<int> n;
+  const SonarLive({super.key, required this.n});
+
+  @override
+  ConsumerState<SonarLive> createState() => _SonarLiveState();
+}
+
+class _SonarLiveState extends ConsumerState<SonarLive> with SingleTickerProviderStateMixin {
+  late final AnimationController _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 3200))
+    ..addStatusListener((s) {
+      if (s == AnimationStatus.completed) {
+        ref.read(audioProvider).fx(Sfx.beep, HapticKind.light, volume: .45);
+        _a.forward(from: 0);
+      }
+    })
+    ..forward();
+
+  @override
+  void dispose() {
+    _a.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 230,
+        height: 230,
+        child: Stack(fit: StackFit.expand, children: [
+          CustomPaint(painter: _SonarPainter(widget.n)),
+          AnimatedBuilder(animation: _a, builder: (context, _) => CustomPaint(painter: _SweepPainter(_a.value))),
+        ]),
+      );
+}
+
+class _SweepPainter extends CustomPainter {
+  final double t;
+  _SweepPainter(this.t);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.width / 2;
+    // الزاوية بنظام البوصلة: 0 شمالاً ومع عقارب الساعة
+    final a = t * 2 * pi - pi / 2;
+    final sweep = Paint()
+      ..shader = SweepGradient(
+        startAngle: 0,
+        endAngle: pi / 3,
+        colors: [const Color(0x0039FF88), const Color(0x6639FF88)],
+        transform: GradientRotation(a - pi / 3),
+      ).createShader(Rect.fromCircle(center: c, radius: r));
+    canvas.drawArc(Rect.fromCircle(center: c, radius: r), a - pi / 3, pi / 3, true, sweep);
+    canvas.drawLine(c, c + Offset(cos(a), sin(a)) * r, Paint()..color = const Color(0xCC39FF88)..strokeWidth = 1.5);
+    // نبضة دائرية تخرج من المركز
+    final pr = r * ((t * 2) % 1);
+    canvas.drawCircle(c, pr, Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = const Color(0xFF39FF88).withAlpha((90 * (1 - pr / r)).round()));
+  }
+
+  @override
+  bool shouldRepaint(covariant _SweepPainter o) => o.t != t;
+}
+
+/// بكرات الخزنة: كل رقم على أسطوانة تدور عند الإدخال.
+class VaultReels extends StatelessWidget {
+  final String digits;
+  final int len;
+  const VaultReels({super.key, required this.digits, required this.len});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF3A3F45), Color(0xFF1C1F23), Color(0xFF2E3237)],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF5B6168), width: 2),
+        ),
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            for (int i = 0; i < len; i++)
+              Container(
+                width: 44,
+                height: 64,
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF0B0C0E), Color(0xFFE9E4D8), Color(0xFFF4F0E6), Color(0xFFE9E4D8), Color(0xFF0B0C0E)],
+                    stops: [0, .22, .5, .78, 1],
+                  ),
+                ),
+                child: ClipRect(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 380),
+                    transitionBuilder: (child, anim) => SlideTransition(
+                      position: Tween(begin: const Offset(0, -1), end: Offset.zero)
+                          .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutBack)),
+                      child: child,
+                    ),
+                    child: Center(
+                      key: ValueKey('$i-${i < digits.length ? digits[i] : '-'}'),
+                      child: Text(i < digits.length ? digits[i] : '·',
+                          style: const TextStyle(fontFamily: K.mono, fontSize: 32, fontWeight: FontWeight.w700, color: Color(0xFF15171A))),
+                    ),
+                  ),
+                ),
+              ),
+          ]),
+        ),
+      );
 }

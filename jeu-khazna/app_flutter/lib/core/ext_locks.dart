@@ -137,7 +137,12 @@ List<int> _distinct(Rng r, int n, int pool) => r.shuffle([for (int i = 0; i < po
 final Map<String, ExtPuzzle> _cache = {};
 
 /// القفل الموسّع للغرفة الحالية.
-ExtPuzzle extFor(GameState s) => extPuzzle(s.roomId, s.seed, s.diff, room: s.room, rooms: s.rooms);
+/// القفل الموسّع الحالي (مع نسخته البديلة إن غيّر الحارس الشيفرة أو بدأ الجزء الثاني).
+ExtPuzzle extFor(GameState s) {
+  final v = s.curVariant;
+  final seed = v == 0 || s.roomId == kVaultCode ? s.seed : (s.seed ^ (0x2545F491 * v)) & 0x7fffffff;
+  return extPuzzle(s.roomId, seed, s.diff, room: s.room, rooms: s.rooms);
+}
 
 ExtPuzzle extPuzzle(String id, int seed, String diff, {int room = 0, List<String> rooms = const []}) {
   final key = '$id:$seed:$diff:$room:${rooms.join(",")}';
