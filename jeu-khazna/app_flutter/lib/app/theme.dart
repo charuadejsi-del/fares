@@ -26,10 +26,10 @@ class K {
   static const borderStrong = Color(0xFF2C3238);
   static const text2 = Color(0xFFA3AAB1);
   static const violet = Color(0xFFA99BEA);
-  static const ink = Color(0xFF120C02)
+  static const ink = Color(0xFF120C02);
   static const ok = Color(0xFF6CD995); // الحالة السليمة (متّصل، صحيح)
   static const steel = Color(0xFFC9CED3);
-  static const radius = 8.0;;
+  static const radius = 8.0;
 
   // الخطوط
   static const font = 'Tajawal';
