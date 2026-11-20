@@ -50,6 +50,7 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
 
   VoiceService? _voice;
   int? _unlocked; // المرحلة التي فُتحت بهذا الفوز
+  bool _autoStageTried = false;
 
   GameController get c => widget.controller;
 
@@ -88,7 +89,26 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
     });
   }
 
+  /// غرفة أونلاين: بمجرد انضمام الشريك يختار القائد تلقائياً مرحلة الفريق الحالية.
+  /// (كانت الغرفة تبقى على «المهمّة الكلاسيكية» stage 0 فلا يُسجَّل الفوز ولا تُفتح المرحلة التالية.)
+  Future<void> _maybeAutoStage() async {
+    final s = c.state;
+    if (_autoStageTried || !c.online || !c.isHost || s == null || s.phase != 'lobby' || s.stage > 0 || !c.teamReady) return;
+    final partner = c.partnerUid;
+    if (partner == null) return;
+    _autoStageTried = true;
+    try {
+      final p = await ref.read(teamProgressProvider(partner).future);
+      final st = c.state;
+      if (!mounted || st == null || st.phase != 'lobby' || st.stage > 0) return;
+      c.chooseStage(p.current < 1 ? 1 : p.current);
+    } catch (_) {
+      _autoStageTried = false;
+    }
+  }
+
   void _onChange() {
+    _maybeAutoStage();
     final s = c.state;
     if (s == null || _recorded) return;
     if (s.phase == 'won' || s.phase == 'lost') {
