@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>الخزنة — لوحة المدير</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#030605; --panel:#08110d; --cell:#0c1712; --line:#163027; --neon:#00ff9c; --dim:#0a9f63; --amber:#ffb020; --danger:#ff3b4e; --cyan:#00e5ff; --text:#d9fbe9; --muted:#6f8f80; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:Tajawal, system-ui, sans-serif; font-size:15px; }
+  body::before { content:''; position:fixed; inset:0; pointer-events:none; background:
+    linear-gradient(rgba(0,255,156,.035) 1px, transparent 1px) 0 0/100% 32px,
+    linear-gradient(90deg, rgba(0,255,156,.035) 1px, transparent 1px) 0 0/32px 100%; }
+  .mono { font-family:'Share Tech Mono', monospace; letter-spacing:.5px; }
+  header { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:12px; padding:12px 16px; background:rgba(3,6,5,.92); border-bottom:1px solid var(--line); backdrop-filter:blur(6px); }
+  header h1 { margin:0; font-size:22px; font-weight:800; color:var(--neon); text-shadow:0 0 12px rgba(0,255,156,.5); }
+  header .sp { flex:1; }
+  nav { display:flex; gap:6px; padding:10px 16px; overflow-x:auto; border-bottom:1px solid var(--line); }
+  nav button { white-space:nowrap; }
+  main { padding:16px; max-width:1200px; margin:0 auto; }
+  button { font:inherit; font-weight:700; cursor:pointer; color:var(--neon); background:transparent; border:1px solid var(--line); padding:8px 14px; border-radius:3px; }
+  button:hover { border-color:var(--neon); }
+  button.on, button.primary { background:var(--neon); color:#002414; border-color:var(--neon); }
+  button.danger { color:var(--danger); border-color:rgba(255,59,78,.4); }
+  button.amber { color:var(--amber); border-color:rgba(255,176,32,.4); }
+  button:disabled { opacity:.4; cursor:default; }
+  input, select { font:inherit; color:var(--text); background:var(--cell); border:1px solid var(--line); border-radius:3px; padding:8px 10px; min-width:0; }
+  input:focus, select:focus { outline:none; border-color:var(--neon); }
+  .panel { position:relative; background:var(--panel); border:1px solid var(--line); padding:16px; margin-bottom:14px; }
+  .panel > .lbl { position:absolute; top:-9px; right:12px; background:var(--bg); padding:0 6px; font-size:11px; color:var(--dim); }
+  .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); }
+  .kpi { background:var(--cell); border:1px solid var(--line); padding:14px; }
+  .kpi b { display:block; font-size:28px; color:var(--neon); font-family:'Share Tech Mono', monospace; }
+  .kpi span { color:var(--muted); font-size:13px; }
+  .kpi.amber b { color:var(--amber); } .kpi.cyan b { color:var(--cyan); } .kpi.red b { color:var(--danger); }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:right; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  th { color:var(--muted); font-weight:700; font-size:13px; }
+  .scroll { overflow-x:auto; }
+  .tag { display:inline-block; padding:2px 8px; font-size:12px; border:1px solid var(--line); border-radius:20px; }
+  .tag.on { color:var(--neon); border-color:var(--dim); } .tag.red { color:var(--danger); border-color:rgba(255,59,78,.5); } .tag.amber { color:var(--amber); border-color:rgba(255,176,32,.5); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .muted { color:var(--muted); }
+  .bars { display:flex; align-items:flex-end; gap:4px; height:110px; padding-top:10px; }
+  .bars div { flex:1; background:linear-gradient(var(--neon), var(--dim)); min-height:2px; position:relative; }
+  .bars div i { position:absolute; top:-18px; left:0; right:0; text-align:center; font-style:normal; font-size:11px; color:var(--muted); }
+  .bars.amber div { background:linear-gradient(var(--amber), #7a5200); }
+  .axis { display:flex; gap:4px; font-size:10px; color:var(--muted); } .axis span { flex:1; text-align:center; }
+  #login { max-width:380px; margin:12vh auto; }
+  #login input { width:100%; margin-bottom:10px; }
+  .err { color:var(--danger); font-weight:700; min-height:22px; }
+  .badge { background:var(--danger); color:#fff; border-radius:10px; padding:0 7px; font-size:12px; margin-right:4px; }
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.85); display:flex; align-items:center; justify-content:center; z-index:20; padding:16px; }
+  .modal img { max-width:100%; max-height:85vh; border:1px solid var(--line); }
+  #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel); border:1px solid var(--neon); padding:10px 18px; display:none; z-index:30; }
+  .stages { display:grid; gap:8px; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); }
+  .stages label { display:flex; align-items:center; gap:6px; background:var(--cell); border:1px solid var(--line); padding:6px 8px; }
+  .stages input { width:64px; }
+  @media (max-width:640px) { .hide-sm { display:none; } th, td { padding:8px 5px; font-size:13.5px; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
+
+const SUPABASE_URL = 'https://ubdamgzqqwgcxjvvegwk.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViZGFtZ3pxcXdnY3hqdnZlZ3drIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ4ODAzNzksImV4cCI6MjExMDQ1NjM3OX0.eAQ0bOVJ139YKR3VUOa3mQNV5BOeALEYV4zyobD48RI';
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+const $app = document.getElementById('app');
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtDate = (d) => d ? new Date(d).toLocaleString('fr-DZ', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+const mins = (s) => Math.floor((s || 0) / 60);
+const dzd = (n) => `${Number(n || 0).toLocaleString('fr-DZ')} دج`;
+function toast(m, bad = false) {
+  const t = document.getElementById('toast');
+  t.textContent = m; t.style.borderColor = bad ? 'var(--danger)' : 'var(--neon)'; t.style.display = 'block';
+  clearTimeout(toast._t); toast._t = setTimeout(() => (t.style.display = 'none'), 2600);
+}
+function errText(e) {
+  const m = String(e?.message || e);
+  if (m.includes('admin only')) return 'هذا الحساب ليس مديراً';
+  if (m.includes('Invalid login')) return 'البريد أو كلمة السر غير صحيحة';
+  if (m.includes('already reviewed')) return 'هذا الطلب عولج من قبل';
+  return m;
+}
+function beep() {
+  try {
+    const a = new AudioContext(), o = a.createOscillator(), g = a.createGain();
+    o.frequency.value = 880; o.connect(g); g.connect(a.destination); g.gain.setValueAtTime(.15, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, a.currentTime + .5); o.start(); o.stop(a.currentTime + .5);
+  } catch {}
+}
+
+const state = { tab: 'home', players: [], filter: { q: '', f: 'all' }, pending: 0 };
+
+// ───── الدخول ─────
+function renderLogin(msg = '') {
+  $app.innerHTML = `
+  <div id="login" class="panel"><span class="lbl mono">ADMIN ACCESS</span>
+    <h1 style="color:var(--neon);margin:0 0 4px">الخزنة</h1>
+    <p class="muted" style="margin:0 0 16px">لوحة المدير — دخول بحساب اللعبة</p>
+    <input id="em" type="email" placeholder="البريد" dir="ltr" autocomplete="username">
+    <input id="pw" type="password" placeholder="كلمة السر" dir="ltr" autocomplete="current-password">
+    <div class="err" id="er">${esc(msg)}</div>
+    <button class="primary" id="go" style="width:100%">دخول</button>
+  </div>`;
+  const go = async () => {
+    document.getElementById('go').disabled = true;
+    const { error } = await sb.auth.signInWithPassword({ email: em.value.trim(), password: pw.value });
+    if (error) { document.getElementById('er').textContent = errText(error); document.getElementById('go').disabled = false; return; }
+    boot();
+  };
+  document.getElementById('go').onclick = go;
+  pw.onkeydown = (e) => e.key === 'Enter' && go();
+}
+
+async function boot() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return renderLogin();
+  const { data: admin } = await sb.rpc('is_admin');
+  if (!admin) { await sb.auth.signOut(); return renderLogin('هذا الحساب ليس مديراً'); }
+  renderShell();
+  pollPending(true);
+  setInterval(() => pollPending(false), 20000);
+  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+}
+
+// ───── الهيكل ─────
+const TABS = [['home', 'الإحصائيات'], ['players', 'اللاعبون'], ['payments', 'الدفع'], ['settings', 'الإعدادات'], ['rooms', 'الغرف']];
+function renderShell() {
+  $app.innerHTML = `
+  <header><h1>الخزنة</h1><span class="mono muted hide-sm">ADMIN // HQ</span><span class="sp"></span>
+    <button id="out" class="danger">خروج</button></header>
+  <nav id="nav"></nav><main id="main"></main>`;
+  document.getElementById('out').onclick = async () => { await sb.auth.signOut(); location.reload(); };
+  renderNav(); show(state.tab);
+}
+function renderNav() {
+  document.getElementById('nav').innerHTML = TABS.map(([k, l]) =>
+    `<button data-t="${k}" class="${state.tab === k ? 'on' : ''}">${l}${k === 'payments' && state.pending ? `<span class="badge">${state.pending}</span>` : ''}</button>`).join('');
+  document.querySelectorAll('#nav button').forEach((b) => (b.onclick = () => show(b.dataset.t)));
+}
+async function show(tab) {
+  state.tab = tab; renderNav();
+  const m = document.getElementById('main');
+  m.innerHTML = '<p class="muted">جارٍ التحميل…</p>';
+  try { await ({ home: viewHome, players: viewPlayers, payments: viewPayments, settings: viewSettings, rooms: viewRooms })[tab](m); }
+  catch (e) { m.innerHTML = `<p class="err">${esc(errText(e))}</p>`; }
+}
+
+// إشعار الدفع داخل اللوحة
+async function pollPending(first) {
+  const { count } = await sb.from('payment_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+  const n = count || 0;
+  if (!first && n > state.pending) {
+    beep(); toast(`💳 طلب دفع جديد (${n} معلّق)`);
+    if ('Notification' in window && Notification.permission === 'granted') new Notification('الخزنة: طلب دفع جديد', { body: `${n} طلب معلّق` });
+  }
+  state.pending = n; document.title = n ? `(${n}) الخزنة — لوحة المدير` : 'الخزنة — لوحة المدير';
+  if (document.getElementById('nav')) renderNav();
+}
+
+function bars(list, amber = false) {
+  const max = Math.max(1, ...list.map((x) => x.n));
+  return `<div class="bars ${amber ? 'amber' : ''}">${list.map((x) => `<div style="height:${(x.n / max) * 100}%"><i>${x.n || ''}</i></div>`).join('')}</div>
+    <div class="axis">${list.map((x) => `<span>${new Date(x.day).getDate()}</span>`).join('')}</div>`;
+}
+
+// ───── الإحصائيات ─────
+async function viewHome(m) {
+  const { data: s, error } = await sb.rpc('admin_stats');
+  if (error) throw error;
+  m.innerHTML = `
+  <div class="grid" style="margin-bottom:14px">
+    <div class="kpi"><b>${s.players_total}</b><span>إجمالي اللاعبين</span></div>
+    <div class="kpi cyan"><b>${s.online_now}</b><span>متصل الآن</span></div>
+    <div class="kpi"><b>${s.active_24h}</b><span>نشط آخر 24 ساعة</span></div>
+    <div class="kpi"><b>${s.active_7d}</b><span>نشط آخر 7 أيام</span></div>
+    <div class="kpi amber"><b>${dzd(s.revenue_today)}</b><span>أرباح اليوم</span></div>
+    <div class="kpi amber"><b>${dzd(s.revenue_month)}</b><span>أرباح الشهر</span></div>
+    <div class="kpi red"><b>${s.pending_payments}</b><span>طلبات دفع معلّقة</span></div>
+  </div>
+  <div class="panel"><span class="lbl">لاعبون جدد يومياً (14 يوماً)</span>${bars(s.new_per_day)}</div>
+  <div class="panel"><span class="lbl">الأرباح يومياً (دج)</span>${bars(s.revenue_per_day, true)}</div>
+  <div class="panel"><span class="lbl">المراحل التي يتوقف عندها اللاعبون</span>
+    ${s.stuck_stages.length ? `<table><tr><th>المرحلة</th><th>خسارة / انسحاب</th><th>فوز</th><th>نسبة النجاح</th></tr>
+      ${s.stuck_stages.map((x) => `<tr><td class="mono">${x.stage}</td><td style="color:var(--danger)">${x.fails}</td><td>${x.wins}</td>
+      <td>${Math.round((x.wins * 100) / Math.max(1, x.wins + x.fails))}%</td></tr>`).join('')}</table>`
+      : '<p class="muted">لا توجد بيانات بعد (تظهر بعد تفعيل العداد في الخادم).</p>'}
+  </div>`;
+}
+
+// ───── اللاعبون ─────
+async function viewPlayers(m) {
+  const { data, error } = await sb.rpc('admin_list_players');
+  if (error) throw error;
+  state.players = data;
+  m.innerHTML = `
+  <div class="panel"><span class="lbl">بحث</span><div class="row">
+    <input id="q" placeholder="الاسم أو البريد" value="${esc(state.filter.q)}" style="flex:1;min-width:180px">
+    <select id="f">
+      ${[['all', 'الكل'], ['online', 'متصل الآن'], ['banned', 'محظور'], ['low', 'رصيد أقل من 10 د'], ['new', 'جديد (7 أيام)']]
+        .map(([k, l]) => `<option value="${k}" ${state.filter.f === k ? 'selected' : ''}>${l}</option>`).join('')}
+    </select><span class="muted" id="cnt"></span></div></div>
+  <div class="panel scroll"><table id="tb"></table></div>`;
+  q.oninput = () => { state.filter.q = q.value; drawPlayers(); };
+  f.onchange = () => { state.filter.f = f.value; drawPlayers(); };
+  drawPlayers();
+}
+function drawPlayers() {
+  const q = state.filter.q.trim().toLowerCase(), f = state.filter.f, week = Date.now() - 7 * 864e5;
+  const list = state.players.filter((p) =>
+    (!q || p.nickname.toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q)) &&
+    (f === 'all' || (f === 'online' && p.online) || (f === 'banned' && p.banned) ||
+     (f === 'low' && p.balance_seconds < 600) || (f === 'new' && new Date(p.created_at) > week)));
+  document.getElementById('cnt').textContent = `${list.length} لاعب`;
+  document.getElementById('tb').innerHTML = `<tr><th>اللاعب</th><th class="hide-sm">التسجيل</th><th class="hide-sm">آخر دخول</th><th>الرصيد</th><th>المرحلة</th><th>إجراءات</th></tr>` +
+    list.map((p) => `<tr>
+      <td><b>${esc(p.nickname)}</b> ${p.online ? '<span class="tag on">متصل</span>' : ''} ${p.banned ? '<span class="tag red">محظور</span>' : ''} ${p.role === 'admin' ? '<span class="tag amber">مدير</span>' : ''}
+        <div class="muted mono" style="font-size:12px" dir="ltr">${esc(p.email)}</div></td>
+      <td class="hide-sm">${fmtDate(p.created_at)}</td><td class="hide-sm">${fmtDate(p.last_seen)}</td>
+      <td class="mono">${mins(p.balance_seconds)} د</td><td class="mono">${p.best_stage}</td>
+      <td><div class="row">
+        <button data-a="time" data-id="${p.id}">± وقت</button>
+        ${p.role === 'admin' ? '' : `<button data-a="ban" data-id="${p.id}" class="${p.banned ? '' : 'danger'}">${p.banned ? 'رفع الحظر' : 'حظر'}</button>`}
+      </div></td></tr>`).join('');
+  document.querySelectorAll('#tb button').forEach((b) => (b.onclick = () => playerAction(b.dataset.a, b.dataset.id)));
+}
+async function playerAction(a, id) {
+  const p = state.players.find((x) => x.id === id);
+  if (a === 'time') {
+    const v = prompt(`دقائق لإضافتها لـ «${p.nickname}» (اكتب رقماً سالباً للخصم، مثلاً -30):`);
+    if (v === null) return;
+    const n = parseInt(v, 10);
+    if (!n) return toast('رقم غير صحيح', true);
+    const note = prompt('ملاحظة (اختياري):') || null;
+    const { data, error } = await sb.rpc('admin_adjust_time', { p_user: id, p_delta_seconds: n * 60, p_note: note });
+    if (error) return toast(errText(error), true);
+    p.balance_seconds = data; toast(`✓ الرصيد الآن ${mins(data)} دقيقة`);
+  } else {
+    if (!confirm(p.banned ? `رفع الحظر عن «${p.nickname}»؟` : `حظر «${p.nickname}»؟ لن يستطيع الدخول للعبة.`)) return;
+    const { error } = await sb.rpc('admin_set_banned', { p_user: id, p_banned: !p.banned });
+    if (error) return toast(errText(error), true);
+    p.banned = !p.banned; toast('✓ تم');
+  }
+  drawPlayers();
+}
+
+// ───── الدفع ─────
+async function viewPayments(m) {
+  const { data, error } = await sb.from('payment_requests')
+    .select('id, user_id, minutes, amount_dzd, transaction_ref, receipt_path, status, admin_note, created_at, reviewed_at, profiles!payment_requests_user_id_fkey(nickname)')
+    .order('created_at', { ascending: false }).limit(200);
+  if (error) throw error;
+  const pend = data.filter((r) => r.status === 'pending'), done = data.filter((r) => r.status !== 'pending');
+  const row = (r, act) => `<tr>
+    <td><b>${esc(r.profiles?.nickname)}</b><div class="muted" style="font-size:12px">${fmtDate(r.created_at)}</div></td>
+    <td class="mono">${r.minutes} د</td><td class="mono">${dzd(r.amount_dzd)}</td>
+    <td class="mono" dir="ltr">${esc(r.transaction_ref)}</td>
+    <td>${r.receipt_path ? `<button data-a="img" data-p="${esc(r.receipt_path)}">🧾 الوصل</button>` : '<span class="muted">—</span>'}</td>
+    <td>${act ? `<div class="row"><button class="primary" data-a="ok" data-id="${r.id}">قبول</button><button class="danger" data-a="no" data-id="${r.id}">رفض</button></div>`
+      : `<span class="tag ${r.status === 'approved' ? 'on' : 'red'}">${r.status === 'approved' ? 'مقبول' : 'مرفوض'}</span> <span class="muted" style="font-size:12px">${esc(r.admin_note || '')}</span>`}</td></tr>`;
+  const head = '<tr><th>اللاعب</th><th>الدقائق</th><th>المبلغ</th><th>رقم العملية</th><th>الوصل</th><th></th></tr>';
+  m.innerHTML = `
+  <div class="panel scroll"><span class="lbl">معلّقة (${pend.length})</span>
+    ${pend.length ? `<table>${head}${pend.map((r) => row(r, true)).join('')}</table>` : '<p class="muted">لا توجد طلبات معلّقة.</p>'}</div>
+  <div class="panel scroll"><span class="lbl">السجلّ</span>
+    ${done.length ? `<table>${head}${done.map((r) => row(r, false)).join('')}</table>` : '<p class="muted">لا شيء بعد.</p>'}</div>`;
+  m.querySelectorAll('button[data-a]').forEach((b) => (b.onclick = async () => {
+    if (b.dataset.a === 'img') {
+      const { data: u, error: e } = await sb.storage.from('receipts').createSignedUrl(b.dataset.p, 300);
+      if (e) return toast(errText(e), true);
+      const d = document.createElement('div'); d.className = 'modal'; d.innerHTML = `<img src="${u.signedUrl}" alt="وصل">`;
+      d.onclick = () => d.remove(); document.body.appendChild(d); return;
+    }
+    const ok = b.dataset.a === 'ok';
+    const r = data.find((x) => x.id === b.dataset.id);
+    let note = null;
+    if (ok) { if (!confirm(`قبول ${dzd(r.amount_dzd)} وإضافة ${r.minutes} دقيقة لـ «${r.profiles?.nickname}»؟\nتأكّد أنّ المبلغ وصل فعلاً إلى حسابك.`)) return; }
+    else { note = prompt('سبب الرفض (يراه اللاعب):'); if (note === null) return; }
+    const { error: e } = await sb.rpc('admin_review_payment', { p_id: r.id, p_approve: ok, p_note: note });
+    if (e) return toast(errText(e), true);
+    toast(ok ? '✓ قُبل وأُضيفت الدقائق' : '✓ رُفض'); await pollPending(true); show('payments');
+  }));
+}
+
+// ───── الإعدادات ─────
+const SETTING_LABELS = {
+  signup_bonus_seconds: ['هدية التسجيل', 'min'], daily_free_seconds: ['الوقت المجاني اليومي', 'min'],
+  error_penalty_seconds: ['عقوبة كل خطأ (من اللاعبَين)', 'sec'], max_penalty_per_stage_seconds: ['أقصى عقوبة في المرحلة', 'sec'],
+  hint_cost_seconds: ['ثمن التلميح', 'min'], baridimob_rip: ['RIP بريدي موب', 'text'], baridimob_name: ['اسم صاحب الحساب', 'text'],
+};
+async function viewSettings(m) {
+  const [{ data: st, error: e1 }, { data: sc, error: e2 }, { data: pk, error: e3 }] = await Promise.all([
+    sb.from('settings').select('*'), sb.from('stage_config').select('*').order('stage'), sb.from('packages').select('*').order('sort')]);
+  if (e1 || e2 || e3) throw e1 || e2 || e3;
+  const sv = Object.fromEntries(st.map((r) => [r.key, r.value]));
+  m.innerHTML = `
+  <div class="panel"><span class="lbl">إعدادات عامة</span>
+    <div class="grid">${Object.entries(SETTING_LABELS).map(([k, [l, t]]) => `
+      <label style="display:flex;flex-direction:column;gap:6px"><span class="muted">${l}${t === 'min' ? ' (دقيقة)' : t === 'sec' ? ' (ثانية)' : ''}</span>
+        <input data-k="${k}" data-t="${t}" ${t === 'text' ? 'dir="ltr"' : 'type="number" min="0"'} value="${esc(t === 'min' ? (sv[k] ?? 0) / 60 : sv[k] ?? '')}"></label>`).join('')}</div>
+    <div class="row" style="margin-top:12px"><button class="primary" id="saveS">حفظ الإعدادات</button></div></div>
+
+  <div class="panel"><span class="lbl">الباقات</span><div class="scroll"><table id="pk">
+    <tr><th>الدقائق</th><th>السعر (دج)</th><th>مفعّلة</th><th>الترتيب</th></tr>
+    ${pk.map((p) => `<tr data-id="${p.id}"><td><input type="number" min="1" class="pm" value="${p.minutes}" style="width:90px"></td>
+      <td><input type="number" min="1" class="pp" value="${p.price_dzd}" style="width:100px"></td>
+      <td><input type="checkbox" class="pa" ${p.active ? 'checked' : ''}></td>
+      <td><input type="number" class="ps" value="${p.sort}" style="width:70px"></td></tr>`).join('')}
+  </table></div><div class="row" style="margin-top:12px"><button class="primary" id="saveP">حفظ الباقات</button><button id="addP">+ باقة جديدة</button></div></div>
+
+  <div class="panel"><span class="lbl">وقت كل مرحلة (بالدقائق)</span>
+    <div class="row" style="margin-bottom:10px"><span class="muted">تعديل جماعي: من المرحلة</span><input id="b1" type="number" value="1" style="width:70px">
+      <span class="muted">إلى</span><input id="b2" type="number" value="60" style="width:70px"><span class="muted">=</span>
+      <input id="bv" type="number" step="0.5" placeholder="دقائق" style="width:90px"><button id="bulk">تطبيق</button></div>
+    <div class="stages">${sc.map((s) => `<label><span class="mono muted">${s.stage}</span><input type="number" step="0.5" min="1" data-s="${s.stage}" value="${s.time_limit_seconds / 60}"></label>`).join('')}</div>
+    <div class="row" style="margin-top:12px"><button class="primary" id="saveC">حفظ أوقات المراحل</button></div></div>`;
+
+  saveS.onclick = async () => {
+    const rows = [...m.querySelectorAll('input[data-k]')].map((i) => {
+      const t = i.dataset.t; let v = i.value.trim();
+      v = t === 'text' ? v : t === 'min' ? Math.round(parseFloat(v || 0) * 60) : parseInt(v || 0, 10);
+      return { key: i.dataset.k, value: v, updated_at: new Date().toISOString() };
+    });
+    const { error } = await sb.from('settings').upsert(rows); error ? toast(errText(error), true) : toast('✓ حُفظت الإعدادات');
+  };
+  saveP.onclick = async () => {
+    for (const tr of m.querySelectorAll('#pk tr[data-id]')) {
+      const row = { minutes: +tr.querySelector('.pm').value, price_dzd: +tr.querySelector('.pp').value, active: tr.querySelector('.pa').checked, sort: +tr.querySelector('.ps').value };
+      if (!(row.minutes > 0 && row.price_dzd > 0)) return toast('الدقائق والسعر يجب أن تكون أكبر من 0', true);
+      const { error } = await sb.from('packages').update(row).eq('id', tr.dataset.id);
+      if (error) return toast(errText(error), true);
+    }
+    toast('✓ حُفظت الباقات');
+  };
+  addP.onclick = async () => {
+    const { error } = await sb.from('packages').insert({ minutes: 60, price_dzd: 100, active: false, sort: pk.length + 1 });
+    error ? toast(errText(error), true) : show('settings');
+  };
+  bulk.onclick = () => {
+    const a = +b1.value, b = +b2.value, v = parseFloat(bv.value);
+    if (!(v > 0)) return toast('اكتب عدد الدقائق', true);
+    m.querySelectorAll('input[data-s]').forEach((i) => { const s = +i.dataset.s; if (s >= a && s <= b) i.value = v; });
+  };
+  saveC.onclick = async () => {
+    const rows = [...m.querySelectorAll('input[data-s]')].map((i) => ({ stage: +i.dataset.s, time_limit_seconds: Math.round(parseFloat(i.value) * 60), updated_at: new Date().toISOString() }));
+    if (rows.some((r) => !(r.time_limit_seconds >= 60 && r.time_limit_seconds <= 7200))) return toast('وقت المرحلة بين 1 و 120 دقيقة', true);
+    const { error } = await sb.from('stage_config').upsert(rows); error ? toast(errText(error), true) : toast('✓ حُفظت أوقات المراحل');
+  };
+}
+
+// ───── الغرف ─────
+async function viewRooms(m) {
+  const { data, error } = await sb.rpc('admin_rooms');
+  if (error) throw error;
+  m.innerHTML = `<div class="panel scroll"><span class="lbl">الغرف المفتوحة (${data.length})</span>
+    ${data.length ? `<table><tr><th>الرمز</th><th>الحالة</th><th>المرحلة</th><th>المضيف</th><th>الضيف</th><th>آخر نشاط</th></tr>
+      ${data.map((r) => `<tr><td class="mono">${esc(r.code)}</td><td><span class="tag ${r.status === 'playing' ? 'on' : 'amber'}">${r.status === 'playing' ? 'يلعبون' : 'انتظار'}</span></td>
+        <td class="mono">${r.stage ?? '—'}</td><td>${esc(r.host)}</td><td>${esc(r.guest ?? '—')}</td><td>${fmtDate(r.updated_at)}</td></tr>`).join('')}</table>`
+      : '<p class="muted">لا توجد غرف مفتوحة الآن. (تُسجَّل الغرف في الخادم مع مرحلة العداد)</p>'}
+    <div class="row"><button id="rf">تحديث</button></div></div>`;
+  rf.onclick = () => show('rooms');
+}
+
+boot();
+</script>
+</body>
+</html>
