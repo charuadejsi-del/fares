@@ -18,6 +18,10 @@ const RULES = [
   ['challenge_reward_seconds', 'مكافأة التحدي اليومي', 'min', 'flag', 'violet', 'لكل تحدٍّ مكتمل (3 تحديات يومياً)'],
   ['streak_step_seconds', 'زيادة سلسلة الأيام', 'min', 'zap', 'warn', 'تُضاف للمكافأة اليومية عن كل يوم متتالٍ حتى اليوم السابع'],
   ['bot_after_seconds', 'ظهور العميل الآلي بعد', 'sec', 'clock', 'info', 'مدّة البحث على الرادار قبل اقتراح العميل الآلي'],
+  ['light_lock_seconds', 'ضوء لقفل واحد', 'min', 'zap', 'warn', 'عند انقطاع الكهرباء: يعيد الضوء للقفل الحالي'],
+  ['light_round_seconds', 'ضوء للجولة كاملة', 'min', 'zap', 'warn', 'عند انقطاع الكهرباء: يعيد الضوء حتى نهاية المرحلة'],
+  ['morse_replay_seconds', 'إعادة بثّ مورس', 'sec', 'clock', 'info', 'الرسالة تُبثّ مرّة واحدة؛ كل إعادة تُشترى'],
+  ['morse_text_seconds', 'رموز مورس مكتوبة', 'min', 'flag', 'violet', 'تُظهر النقاط والشرطات مكتوبة للقفل الحالي'],
 ];
 
 export async function renderSettings(page) {

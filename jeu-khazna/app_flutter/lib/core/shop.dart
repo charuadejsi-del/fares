@@ -103,7 +103,13 @@ class GameRules {
   final int dailyMinutes;
   final int dailySeconds;
   final int streakStepSeconds;
-  const GameRules(this.hintMinutes, this.penaltySeconds, this.dailyMinutes, [this.dailySeconds = 600, this.streakStepSeconds = 200]);
+
+  /// أسعار المشتريات أثناء المهمّة (بالثواني، يحدّدها المدير).
+  final Map<String, int> buyCosts;
+  const GameRules(this.hintMinutes, this.penaltySeconds, this.dailyMinutes,
+      [this.dailySeconds = 600, this.streakStepSeconds = 200, this.buyCosts = const {}]);
+
+  int cost(String item) => buyCosts[item] ?? const {'light_lock': 60, 'light_round': 120, 'morse_replay': 30, 'morse_text': 90}[item] ?? 60;
 
   /// مكافأة يوم السلسلة n (يصل للحدّ الأقصى في اليوم السابع).
   int rewardMinutes(int day) => ((dailySeconds + streakStepSeconds * (day.clamp(1, 7) - 1)) / 60).round();
@@ -113,7 +119,10 @@ final gameRulesProvider = FutureProvider<GameRules>((ref) async {
   final rows = await supa
       .from('settings')
       .select('key, value')
-      .inFilter('key', ['hint_cost_seconds', 'error_penalty_seconds', 'daily_free_seconds', 'streak_step_seconds']);
+      .inFilter('key', [
+        'hint_cost_seconds', 'error_penalty_seconds', 'daily_free_seconds', 'streak_step_seconds',
+        'light_lock_seconds', 'light_round_seconds', 'morse_replay_seconds', 'morse_text_seconds',
+      ]);
   int v(String k, int d) {
     for (final r in rows) {
       if (r['key'] == k) return int.tryParse('${r['value']}') ?? d;
@@ -122,5 +131,13 @@ final gameRulesProvider = FutureProvider<GameRules>((ref) async {
   }
 
   return GameRules((v('hint_cost_seconds', 120) / 60).ceil(), v('error_penalty_seconds', 30), v('daily_free_seconds', 600) ~/ 60,
-      v('daily_free_seconds', 600), v('streak_step_seconds', 200));
+      v('daily_free_seconds', 600), v('streak_step_seconds', 200), {
+    'light_lock': v('light_lock_seconds', 60),
+    'light_round': v('light_round_seconds', 120),
+    'morse_replay': v('morse_replay_seconds', 30),
+    'morse_text': v('morse_text_seconds', 90),
+  });
 });
+
+/// «30 ث» · «2 د» · «1.5 د»
+String fmtCost(int sec) => sec < 60 ? '$sec ث' : (sec % 60 == 0 ? '${sec ~/ 60} د' : '${(sec / 60).toStringAsFixed(1)} د');

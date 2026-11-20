@@ -22,6 +22,10 @@ class SessionService {
 
   static Future<int> hint(String session) async => ((await supa.rpc('session_hint', params: {'p_session': session})) as num).toInt();
 
+  /// شراء أثناء المهمّة: light_lock · light_round · morse_replay · morse_text. يُرجع الرصيد الجديد.
+  static Future<int> buy(String session, String item) async =>
+      ((await supa.rpc('session_buy', params: {'p_session': session, 'p_item': item})) as num).toInt();
+
   static Future<int> end(String session, String status) async =>
       ((await supa.rpc('session_end', params: {'p_session': session, 'p_status': status})) as num).toInt();
 

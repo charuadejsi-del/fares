@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme.dart';
 import '../../../core/ext_locks.dart';
 import '../../../core/game.dart';
+import '../../../core/shop.dart' show gameRulesProvider, fmtCost;
 import '../../../core/services.dart';
 import '../../../core/stages.dart';
 import 'locks.dart';
@@ -16,7 +17,8 @@ class ExtLockView extends StatelessWidget {
   final GameState state;
   final String role;
   final Dispatch dispatch;
-  const ExtLockView({super.key, required this.state, required this.role, required this.dispatch});
+  final BuyFn? buy;
+  const ExtLockView({super.key, required this.state, required this.role, required this.dispatch, this.buy});
 
   @override
   Widget build(BuildContext context) {
@@ -42,10 +44,10 @@ class ExtLockView extends StatelessWidget {
                   textDirection: TextDirection.ltr, style: const TextStyle(fontFamily: K.mono, color: K.amber, fontSize: 15)),
             ),
           ),
-        for (final it in x.op) Padding(padding: const EdgeInsets.only(bottom: 14), child: OpItemView(item: it)),
+        for (final it in x.op) Padding(padding: const EdgeInsets.only(bottom: 14), child: OpItemView(item: it, state: state, buy: buy)),
         ExtInput(key: ValueKey('${state.seed}-${state.room}-${state.curVariant}'), x: x, state: state, dispatch: dispatch, role: 'op'),
       ]);
-      return mods.contains('blackout') ? Blackout(seed: state.seed + state.room, child: body) : body;
+      return mods.contains('blackout') && !state.lit ? Blackout(seed: state.seed + state.room, buy: buy, child: body) : body;
     }
     // المحلّل
     final torn = mods.contains('torn');
@@ -88,16 +90,31 @@ class ExtLockView extends StatelessWidget {
 }
 
 // ───── المؤثّر: انقطاع الكهرباء ─────
-class Blackout extends StatefulWidget {
+class Blackout extends ConsumerStatefulWidget {
   final Widget child;
   final int seed;
-  const Blackout({super.key, required this.child, required this.seed});
+  final BuyFn? buy;
+  const Blackout({super.key, required this.child, required this.seed, this.buy});
 
   @override
-  State<Blackout> createState() => _BlackoutState();
+  ConsumerState<Blackout> createState() => _BlackoutState();
 }
 
-class _BlackoutState extends State<Blackout> {
+class _BlackoutState extends ConsumerState<Blackout> {
+  bool _buying = false;
+
+  Future<void> _buyLight(String kind) async {
+    final b = widget.buy;
+    if (b == null || _buying) return;
+    setState(() => _buying = true);
+    final err = await b(kind);
+    if (!mounted) return;
+    setState(() => _buying = false);
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    }
+  }
+
   late final Random _r = Random(widget.seed);
   Timer? _t;
   double _dark = 0;
@@ -141,7 +158,34 @@ class _BlackoutState extends State<Blackout> {
               child: Container(
                 color: Colors.black,
                 alignment: Alignment.center,
-                child: const Text('🌑 انقطعت الكهرباء…', style: TextStyle(color: K.muted, fontSize: 16)),
+                padding: const EdgeInsets.all(16),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.power_off_outlined, color: K.muted, size: 28),
+                  const SizedBox(height: 6),
+                  const Text('انقطعت الكهرباء…', style: TextStyle(color: K.muted, fontSize: 16)),
+                  if (widget.buy != null) ...[
+                    const SizedBox(height: 14),
+                    Builder(builder: (context) {
+                      final rules = ref.watch(gameRulesProvider).valueOrNull;
+                      final lockCost = fmtCost(rules?.cost('light_lock') ?? 60);
+                      final roundCost = fmtCost(rules?.cost('light_round') ?? 120);
+                      return Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
+                        OutlinedButton.icon(
+                          onPressed: _buying ? null : () => _buyLight('light_lock'),
+                          icon: const Icon(Icons.flashlight_on_outlined, size: 18),
+                          label: Text('ضوء لهذا القفل · $lockCost'),
+                          style: OutlinedButton.styleFrom(foregroundColor: K.neon, side: const BorderSide(color: K.neon)),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _buying ? null : () => _buyLight('light_round'),
+                          icon: const Icon(Icons.wb_incandescent_outlined, size: 18),
+                          label: Text('ضوء للجولة كاملة · $roundCost'),
+                          style: FilledButton.styleFrom(backgroundColor: K.neon, foregroundColor: K.ink),
+                        ),
+                      ]);
+                    }),
+                  ],
+                ]),
               ),
             ),
           ),
@@ -222,7 +266,9 @@ class ManualView extends StatelessWidget {
 // ───── ما يراه العميل ─────
 class OpItemView extends StatelessWidget {
   final OpItem item;
-  const OpItemView({super.key, required this.item});
+  final GameState? state;
+  final BuyFn? buy;
+  const OpItemView({super.key, required this.item, this.state, this.buy});
 
   Widget _glowGlyph(String g, {double size = 34, Color color = K.neon}) => Text(g,
       style: TextStyle(fontSize: size, color: color));
@@ -267,7 +313,12 @@ class OpItemView extends StatelessWidget {
       case 'clock':
         return Center(child: SizedBox(width: 190, height: 190, child: CustomPaint(painter: _ClockPainter(n[0], n[1], kSymbols[n[2]].s))));
       case 'flash':
-        return MorseFlasher(patterns: item.glyphs);
+        return MorseFlasher(
+          key: ValueKey('morse-${state?.room}-${state?.morseReplays ?? 0}'),
+          patterns: item.glyphs,
+          showText: state?.morseText ?? false,
+          buy: buy,
+        );
       case 'flags':
         final count = n.length ~/ 4;
         return Directionality(
@@ -467,7 +518,13 @@ class OpItemView extends StatelessWidget {
 // ───── شفرة مورس المتحرّكة ─────
 class MorseFlasher extends ConsumerStatefulWidget {
   final List<String> patterns;
-  const MorseFlasher({super.key, required this.patterns});
+
+  /// الرموز مشتراة: تُكتب تحت الضوء (• ▬).
+  final bool showText;
+
+  /// شراء إعادة البثّ أو الرموز المكتوبة. null = بثّ متكرّر مجّاني (بلا جلسة).
+  final BuyFn? buy;
+  const MorseFlasher({super.key, required this.patterns, this.showText = false, this.buy});
 
   @override
   ConsumerState<MorseFlasher> createState() => _MorseFlasherState();
@@ -477,6 +534,18 @@ class _MorseFlasherState extends ConsumerState<MorseFlasher> {
   bool _on = false;
   int _digit = -1;
   bool _alive = true;
+  bool _done = false;
+  bool _buying = false;
+
+  Future<void> _buy(String kind) async {
+    final b = widget.buy;
+    if (b == null || _buying) return;
+    setState(() => _buying = true);
+    final err = await b(kind);
+    if (!mounted) return;
+    setState(() => _buying = false);
+    if (err != null) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+  }
 
   @override
   void initState() {
@@ -506,6 +575,11 @@ class _MorseFlasherState extends ConsumerState<MorseFlasher> {
         await Future.delayed(const Duration(milliseconds: 1100));
       }
       if (mounted) setState(() => _digit = -1);
+      // بثّ واحد فقط حين يكون الشراء متاحاً؛ الإعادة تُشترى.
+      if (widget.buy != null) {
+        if (mounted) setState(() => _done = true);
+        return;
+      }
       await Future.delayed(const Duration(milliseconds: 2600));
     }
   }
@@ -538,8 +612,44 @@ class _MorseFlasherState extends ConsumerState<MorseFlasher> {
         ]),
       ),
       const SizedBox(height: 4),
-      Text(_digit < 0 ? 'تتكرّر الإشارة بعد لحظة…' : 'الرقم ${_digit + 1} من ${widget.patterns.length}',
+      Text(
+          _done
+              ? 'انتهى البثّ'
+              : (_digit < 0 ? (widget.buy != null ? 'يبدأ البثّ…' : 'تتكرّر الإشارة بعد لحظة…') : 'الرقم ${_digit + 1} من ${widget.patterns.length}'),
           style: const TextStyle(color: K.muted, fontSize: 12.5)),
+      if (widget.showText) ...[
+        const SizedBox(height: 10),
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 6, children: [
+            for (int i = 0; i < widget.patterns.length; i++)
+              Text('${i + 1}: ${widget.patterns[i].replaceAll('.', '•').replaceAll('-', '▬')}',
+                  style: const TextStyle(fontFamily: K.mono, fontSize: 15, color: K.text)),
+          ]),
+        ),
+      ],
+      if (widget.buy != null && (_done || !widget.showText)) ...[
+        const SizedBox(height: 10),
+        Builder(builder: (context) {
+          final rules = ref.watch(gameRulesProvider).valueOrNull;
+          return Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
+            if (_done)
+              OutlinedButton.icon(
+                onPressed: _buying ? null : () => _buy('morse_replay'),
+                icon: const Icon(Icons.replay, size: 18),
+                label: Text('إعادة البثّ · ${fmtCost(rules?.cost('morse_replay') ?? 30)}'),
+                style: OutlinedButton.styleFrom(foregroundColor: K.neon, side: const BorderSide(color: K.neon)),
+              ),
+            if (!widget.showText)
+              OutlinedButton.icon(
+                onPressed: _buying ? null : () => _buy('morse_text'),
+                icon: const Icon(Icons.text_fields, size: 18),
+                label: Text('الرموز مكتوبة · ${fmtCost(rules?.cost('morse_text') ?? 90)}'),
+                style: OutlinedButton.styleFrom(foregroundColor: K.text2, side: const BorderSide(color: K.borderStrong)),
+              ),
+          ]);
+        }),
+      ],
     ]);
   }
 }

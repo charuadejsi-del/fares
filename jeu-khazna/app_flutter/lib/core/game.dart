@@ -441,6 +441,9 @@ class GameState {
   final int variant;
   final int variantRoom;
 
+  /// المشتريات أثناء المهمّة: light_round · light_lock:<room> · morse_text:<room> · morse_replay:<room>
+  final List<String> bought;
+
   const GameState({
     required this.seed,
     this.rooms = kRooms,
@@ -468,7 +471,17 @@ class GameState {
     this.syncEx = 0,
     this.variant = 0,
     this.variantRoom = -1,
+    this.bought = const [],
   });
+
+  /// الضوء مشترى للقفل الحالي أو للجولة كاملة (يلغي انقطاع الكهرباء).
+  bool get lit => bought.contains('light_round') || bought.contains('light_lock:$room');
+
+  /// رموز مورس مكتوبة للقفل الحالي.
+  bool get morseText => bought.contains('morse_text:$room');
+
+  /// عدد مرّات إعادة بثّ مورس المشتراة للقفل الحالي.
+  int get morseReplays => bought.where((b) => b == 'morse_replay:$room').length;
 
   /// النسخة الفعّالة للقفل الحالي.
   int get curVariant => variantRoom == room ? variant : 0;
@@ -501,6 +514,7 @@ class GameState {
     int? syncEx,
     int? variant,
     int? variantRoom,
+    List<String>? bought,
   }) =>
       GameState(
         seed: seed,
@@ -529,6 +543,7 @@ class GameState {
         syncEx: syncEx ?? this.syncEx,
         variant: variant ?? this.variant,
         variantRoom: variantRoom ?? this.variantRoom,
+        bought: bought ?? this.bought,
       );
 
   /// نسخة بمدّة مختلفة (تأتي من الخادم عند بداية الجلسة).
@@ -537,7 +552,7 @@ class GameState {
         startedAt: startedAt, penalty: penalty, mazePos: mazePos, lightStage: lightStage, lightInput: lightInput,
         cut: cut, lastEvent: lastEvent, eventId: eventId, finishedIn: finishedIn, duration: seconds,
         pausedAt: pausedAt, pauseReason: pauseReason, hints: hints, hint: hint,
-        errors: errors, syncOp: syncOp, syncEx: syncEx, variant: variant, variantRoom: variantRoom,
+        errors: errors, syncOp: syncOp, syncEx: syncEx, variant: variant, variantRoom: variantRoom, bought: bought,
       );
 
   Map<String, dynamic> toJson() => {
@@ -567,6 +582,7 @@ class GameState {
         if (syncEx > 0) 'syncEx': syncEx,
         if (variant > 0) 'variant': variant,
         if (variantRoom >= 0) 'variantRoom': variantRoom,
+        if (bought.isNotEmpty) 'bought': bought,
       };
 
   static int _i(dynamic v, [int d = 0]) => v is num ? v.toInt() : d;
@@ -601,6 +617,7 @@ class GameState {
         syncEx: _i(j['syncEx']),
         variant: _i(j['variant']),
         variantRoom: _i(j['variantRoom'], -1),
+        bought: j['bought'] is List ? [for (final b in j['bought'] as List) '$b'] : const [],
       );
 }
 
@@ -751,6 +768,13 @@ GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
   if (s.phase != 'playing' || s.paused) return s;
   final room = s.roomId;
   final type = a['type'];
+
+  // شراء مدفوع (الضوء / مورس): الخصم تمّ في الخادم قبل الإرسال.
+  if (type == 'buy') {
+    final item = '${a['item'] ?? ''}';
+    if (item.isEmpty) return s;
+    return s.copyWith(bought: [...s.bought, item], eventId: s.eventId + 1, lastEvent: GameEvent('bought', room));
+  }
 
   // «الحارس غيّر الشيفرة»: نسخة جديدة من القفل الحالي (مرّة واحدة لكل قفل).
   if (type == 'twist') {

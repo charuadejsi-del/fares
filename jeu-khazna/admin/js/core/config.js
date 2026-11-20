@@ -25,4 +25,6 @@ export const REASONS = {
   admin: ['تعديل المدير', 'warn'],
   referral: ['مكافأة دعوة', 'ok'],
   challenge: ['تحدٍّ يومي', 'violet'],
+  light: ['شراء ضوء', 'warn'],
+  morse: ['مساعدة مورس', 'info'],
 };

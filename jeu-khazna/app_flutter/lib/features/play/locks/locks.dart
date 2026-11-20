@@ -14,17 +14,21 @@ import 'ext_view.dart';
 
 typedef Dispatch = void Function(Map<String, dynamic> action);
 
+/// شراء أثناء المهمّة (الضوء، مورس): يُرجع رسالة خطأ أو null.
+typedef BuyFn = Future<String?> Function(String kind);
+
 class LockView extends StatelessWidget {
   final GameState state;
   final Puzzles puzzles;
   final String role;
   final Dispatch dispatch;
-  const LockView({super.key, required this.state, required this.puzzles, required this.role, required this.dispatch});
+  final BuyFn? buy;
+  const LockView({super.key, required this.state, required this.puzzles, required this.role, required this.dispatch, this.buy});
 
   @override
   Widget build(BuildContext context) {
     final op = role == 'op';
-    if (isExtRoom(state.roomId)) return ExtLockView(state: state, role: role, dispatch: dispatch);
+    if (isExtRoom(state.roomId)) return ExtLockView(state: state, role: role, dispatch: dispatch, buy: buy);
     switch (state.roomId) {
       case 'keypad':
         return op ? KeypadOp(p: puzzles, dispatch: dispatch) : KeypadEx(p: puzzles);

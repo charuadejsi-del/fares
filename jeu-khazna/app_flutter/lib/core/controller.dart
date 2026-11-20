@@ -415,6 +415,22 @@ class GameController extends ChangeNotifier {
   }
 
   /// تلميح مدفوع من رصيد من يطلبه. يُرجع رسالة خطأ أو null.
+  /// شراء الضوء أو مساعدة مورس من رصيد من يضغط. يُرجع رسالة خطأ أو null.
+  Future<String?> buy(String kind) async {
+    final sid = sessionId;
+    final s = state;
+    if (sid == null || s == null || s.phase != 'playing') return 'متاح أثناء المهمّة فقط';
+    try {
+      final bal = await SessionService.buy(sid, kind);
+      authService.setBalance(bal);
+      final cur = state ?? s;
+      dispatch({'type': 'buy', 'item': kind == 'light_round' ? kind : '$kind:${cur.room}'});
+      return null;
+    } catch (e) {
+      return authErrorText(e);
+    }
+  }
+
   Future<String?> buyHint() async {
     final sid = sessionId;
     final s = state;

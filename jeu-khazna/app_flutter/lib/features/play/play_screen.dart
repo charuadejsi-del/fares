@@ -216,6 +216,9 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with TickerProviderStat
         _danger.forward(from: 0);
         _showFlash('الحارس غيّر الشيفرة! صِف القفل من جديد', K.danger);
         break;
+      case 'bought':
+        audio.fx(Sfx.light, HapticKind.light, volume: .6);
+        break;
       case 'part2':
         audio.fx(Sfx.success, HapticKind.medium);
         _showFlash('الجزء الأوّل فُتح — بقي الجزء الثاني!', K.neon);
@@ -732,7 +735,7 @@ class _Game extends StatelessWidget {
                   const SizedBox(height: 10),
                   HudPanel(
                     padding: const EdgeInsets.all(14),
-                    child: LockView(state: s, puzzles: p, role: role, dispatch: c.dispatch),
+                    child: LockView(state: s, puzzles: p, role: role, dispatch: c.dispatch, buy: c.sessionId == null ? null : c.buy),
                   ),
                 ],
               ),
