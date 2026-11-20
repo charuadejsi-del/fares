@@ -71,6 +71,8 @@ jobs:
                   }
                   if (state.executed) forceSdk() else afterEvaluate { forceSdk() }
               }
+              // فحص lint للمكتبات ينهار مع JDK 17 (image_picker) ولا يفيد في بناء الإصدار
+              tasks.matching { it.name.startsWith("lintVital") || it.name.startsWith("lintAnalyze") }.configureEach { enabled = false }
           }
           KTS
             # حذف إضافات Agora الخاصة بالفيديو والمؤثّرات (لا نحتاج إلا الصوت) لتصغير الـ APK
