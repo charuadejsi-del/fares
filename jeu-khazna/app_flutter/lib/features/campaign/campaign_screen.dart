@@ -10,20 +10,24 @@ import '../../core/controller.dart';
 import '../../core/game.dart';
 import '../../core/services.dart';
 import '../../core/stages.dart';
+import '../../core/team.dart';
+import '../../widgets/ui_kit.dart';
 import '../../widgets/spy_ui.dart';
 
-bool stageUnlocked(Progress p, int n) => n <= 1 || p.starsOf(n - 1) > 0;
+bool stageUnlocked(StarSource p, int n) => n <= 1 || p.starsOf(n - 1) > 0;
 
-int currentStage(Progress p) {
+int currentStage(StarSource p) {
   int n = 1;
-  while (stageUnlocked(p, n + 1)) {
+  while (n < 100000 && stageUnlocked(p, n + 1)) {
     n++;
   }
   return n;
 }
 
 class CampaignScreen extends ConsumerStatefulWidget {
-  const CampaignScreen({super.key});
+  /// داخل الشريط السفلي (بلا زر رجوع).
+  final bool embedded;
+  const CampaignScreen({super.key, this.embedded = false});
 
   @override
   ConsumerState<CampaignScreen> createState() => _CampaignScreenState();
@@ -37,7 +41,7 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _pages = PageController(initialPage: pageOf(currentStage(ref.read(progressProvider))));
+    _pages = PageController(initialPage: pageOf(currentStage(ref.read(teamProgressProvider(null)).valueOrNull ?? TeamProgress.empty)));
   }
 
   @override
@@ -59,27 +63,28 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> with SingleTick
 
   @override
   Widget build(BuildContext context) {
-    final progress = ref.watch(progressProvider);
+    final async = ref.watch(teamProgressProvider(null));
+    final progress = async.valueOrNull ?? TeamProgress.empty;
     final current = currentStage(progress);
     final pageCount = max(pageOf(current) + 2, kRegions.length + 1);
-    return Scaffold(
-      body: SpyBackground(
-        dim: 0.2,
-        child: SafeArea(
-          child: Column(children: [
+    final content = Column(children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 4, 16, 4),
               child: Row(children: [
-                IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_forward, color: K.neon)),
-                const MonoLabel('CAMPAIGN // الحملة'),
+                if (!widget.embedded)
+                  IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_forward, color: K.neon))
+                else
+                  const SizedBox(width: 8),
+                const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('الحملة', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                  MonoLabel('SOLO CAMPAIGN // هاتف واحد', size: 10),
+                ]),
                 const Spacer(),
-                const Icon(Icons.monetization_on, color: K.amber, size: 20),
-                const SizedBox(width: 4),
-                Text('${progress.coins}', style: const TextStyle(fontFamily: K.mono, color: K.amber, fontSize: 16)),
-                const SizedBox(width: 12),
-                const Icon(Icons.star_rounded, color: K.amber, size: 20),
-                const SizedBox(width: 4),
-                Text('${progress.campaignStars}', style: const TextStyle(fontFamily: K.mono, color: K.amber, fontSize: 16)),
+                if (async.isLoading) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: K.neon)),
+                const SizedBox(width: 10),
+                Pill(icon: Icons.star_rounded, text: '${progress.totalStars}', color: K.amber),
+                const SizedBox(width: 8),
+                const BalanceChip(),
               ]),
             ),
             Expanded(
@@ -99,16 +104,15 @@ class _CampaignScreenState extends ConsumerState<CampaignScreen> with SingleTick
               padding: EdgeInsets.only(bottom: 6),
               child: Text('اسحب يميناً ويساراً للتنقّل بين الخرائط', style: TextStyle(color: K.muted, fontSize: 12)),
             ),
-          ]),
-        ),
-      ),
-    );
+          ]);
+    if (widget.embedded) return content;
+    return Scaffold(body: SpyBackground(dim: 0.2, child: SafeArea(child: content)));
   }
 }
 
 class _MapPage extends StatelessWidget {
   final int page;
-  final Progress progress;
+  final StarSource progress;
   final int current;
   final Animation<double> pulse;
   final void Function(int) onOpen;
@@ -195,7 +199,7 @@ class _MapPage extends StatelessWidget {
 
 class _RoutePainter extends CustomPainter {
   final int first;
-  final Progress progress;
+  final StarSource progress;
   final double t;
   final Color color;
   _RoutePainter(this.first, this.progress, this.t, this.color);
@@ -325,7 +329,7 @@ class StageSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final def = stageDef(n);
     final d = diffOf(def.diff);
-    final stars = ref.watch(progressProvider).starsOf(n);
+    final stars = (ref.watch(teamProgressProvider(null)).valueOrNull ?? TeamProgress.empty).starsOf(n);
     final color = def.region.color;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -342,7 +346,7 @@ class StageSheet extends ConsumerWidget {
             ]),
             if (def.milestone) ...[
               const SizedBox(height: 6),
-              const Text('🏆 مرحلة مسابقة: من يصل إليها يظهر في الترتيب العالمي.',
+              const Text('🏆 مرحلة مسابقة: تظهر في الترتيب العالمي.',
                   style: TextStyle(color: K.amber, fontWeight: FontWeight.w700)),
             ],
             const SizedBox(height: 12),
@@ -364,10 +368,6 @@ class StageSheet extends ConsumerWidget {
               const SizedBox(width: 6),
               Text(d.name, style: const TextStyle(color: K.amber, fontWeight: FontWeight.w700)),
               const Spacer(),
-              const Icon(Icons.monetization_on, color: K.amber, size: 18),
-              const SizedBox(width: 4),
-              Text('حتى ${def.coinsFor(3)}', style: const TextStyle(color: K.amber, fontWeight: FontWeight.w700)),
-              const SizedBox(width: 12),
               const Icon(Icons.timer_outlined, color: K.danger, size: 18),
               const SizedBox(width: 4),
               Text('${d.duration ~/ 60} د', style: const TextStyle(color: K.danger, fontWeight: FontWeight.w700)),

@@ -26,6 +26,7 @@ class Profile {
   final bool banned;
   final DateTime createdAt;
   final DateTime lastSeen;
+  final DateTime? dailyClaimedOn;
   const Profile({
     required this.id,
     required this.nickname,
@@ -34,10 +35,19 @@ class Profile {
     required this.banned,
     required this.createdAt,
     required this.lastSeen,
+    this.dailyClaimedOn,
   });
 
   bool get isAdmin => role == 'admin';
   int get balanceMinutes => balanceSeconds ~/ 60;
+
+  /// المكافأة اليومية متاحة؟ (اليوم بتوقيت الجزائر UTC+1)
+  bool get dailyAvailable {
+    final d = dailyClaimedOn;
+    if (d == null) return true;
+    final t = algiersToday();
+    return DateTime(d.year, d.month, d.day).isBefore(t);
+  }
 
   factory Profile.fromJson(Map<String, dynamic> j) => Profile(
         id: '${j['id']}',
@@ -47,7 +57,20 @@ class Profile {
         banned: j['banned'] == true,
         createdAt: DateTime.tryParse('${j['created_at']}')?.toLocal() ?? DateTime.now(),
         lastSeen: DateTime.tryParse('${j['last_seen']}')?.toLocal() ?? DateTime.now(),
+        dailyClaimedOn: DateTime.tryParse('${j['daily_claimed_on'] ?? ''}'),
       );
+}
+
+DateTime algiersToday() {
+  final n = DateTime.now().toUtc().add(const Duration(hours: 1));
+  return DateTime(n.year, n.month, n.day);
+}
+
+/// الوقت المتبقّي حتى منتصف الليل بتوقيت الجزائر.
+Duration untilAlgiersMidnight() {
+  final n = DateTime.now().toUtc().add(const Duration(hours: 1));
+  final next = DateTime.utc(n.year, n.month, n.day + 1);
+  return next.difference(DateTime.utc(n.year, n.month, n.day, n.hour, n.minute, n.second));
 }
 
 class AuthService extends ChangeNotifier {
@@ -117,6 +140,15 @@ class AuthService extends ChangeNotifier {
     await refreshProfile();
   }
 
+  /// المكافأة اليومية: يُرجع الرصيد الجديد بالثواني.
+  Future<int> claimDaily() async {
+    final bal = await supa.rpc('claim_daily');
+    await refreshProfile();
+    return (bal as num).toInt();
+  }
+
+  String? get uid => supa.auth.currentUser?.id;
+
   Future<void> signOut() async {
     try {
       await supa.auth.signOut();
@@ -145,6 +177,13 @@ String authErrorText(Object e) {
   if (m.contains('password') && m.contains('6')) return 'كلمة السر 6 أحرف على الأقل';
   if (m.contains('email') && m.contains('invalid')) return 'البريد غير صحيح';
   if (m.contains('nickname taken')) return 'هذا الاسم مأخوذ';
+  if (m.contains('already claimed')) return 'أخذت مكافأة اليوم، عُد غداً';
+  if (m.contains('ref used')) return 'رقم العملية هذا مستعمل من قبل';
+  if (m.contains('too many pending')) return 'لديك 3 طلبات قيد المراجعة، انتظر الردّ';
+  if (m.contains('invalid ref')) return 'رقم العملية غير صحيح';
+  if (m.contains('package unavailable')) return 'هذه الباقة غير متوفّرة';
+  if (m.contains('invalid receipt')) return 'أرفق صورة الوصل';
+  if (m.contains('stage locked')) return 'هذه المرحلة مقفلة';
   if (m.contains('rate limit')) return 'محاولات كثيرة، انتظر قليلاً';
   if (m.contains('socket') || m.contains('failed host') || m.contains('timeout')) return 'لا يوجد اتصال بالإنترنت';
   final raw = (e is AuthException ? e.message : '$e');

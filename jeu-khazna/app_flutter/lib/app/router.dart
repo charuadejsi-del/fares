@@ -7,12 +7,12 @@ import '../features/auth/auth_screen.dart';
 import '../features/auth/privacy_screen.dart';
 import '../features/briefing/briefing_screen.dart';
 import '../features/campaign/campaign_screen.dart';
-import '../features/home/home_screen.dart';
 import '../features/leaderboard/leaderboard_screen.dart';
 import '../features/intro/intro_screen.dart';
 import '../features/play/play_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/shell/main_shell.dart';
 import '../features/tutorial/tutorial_screen.dart';
 
 /// انتقال تلاشي + انزلاق خفيف بين الشاشات.
@@ -45,7 +45,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/login', pageBuilder: (c, s) => _fade(s, const AuthScreen())),
     GoRoute(path: '/privacy', pageBuilder: (c, s) => _fade(s, const PrivacyScreen())),
     GoRoute(path: '/', pageBuilder: (c, s) => _fade(s, const IntroScreen())),
-    GoRoute(path: '/home', pageBuilder: (c, s) => _fade(s, const HomeScreen())),
+    GoRoute(path: '/home', pageBuilder: (c, s) => _fade(s, const MainShell())),
     GoRoute(path: '/tutorial', pageBuilder: (c, s) => _fade(s, const TutorialScreen())),
     GoRoute(path: '/briefing', pageBuilder: (c, s) => _fade(s, const BriefingScreen())),
     GoRoute(path: '/campaign', pageBuilder: (c, s) => _fade(s, const CampaignScreen())),
@@ -56,7 +56,7 @@ final GoRouter appRouter = GoRouter(
       path: '/play',
       pageBuilder: (c, s) {
         final controller = s.extra;
-        if (controller is! GameController) return _fade(s, const HomeScreen());
+        if (controller is! GameController) return _fade(s, const MainShell());
         return _fade(s, PlayScreen(controller: controller));
       },
     ),

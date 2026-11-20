@@ -1,41 +1,23 @@
-// الترتيب العالمي: أعلى مرحلة ثم العملات.
+// الترتيب العالمي للفرق: أعلى مرحلة ثم مجموع النجوم (من الخادم).
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
-import '../../core/services.dart';
+import '../../core/auth.dart';
+import '../../core/team.dart';
 import '../../widgets/spy_ui.dart';
+import '../../widgets/ui_kit.dart';
 
-class LeaderboardScreen extends ConsumerStatefulWidget {
+final leaderboardRowsProvider = FutureProvider.autoDispose<List<LeaderRow>>((ref) => TeamService.leaderboard());
+
+class LeaderboardScreen extends ConsumerWidget {
   const LeaderboardScreen({super.key});
 
   @override
-  ConsumerState<LeaderboardScreen> createState() => _LeaderboardScreenState();
-}
-
-class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
-  late Future<List<LeaderEntry>> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  void _load() {
-    final notifier = ref.read(progressProvider.notifier);
-    final p = ref.read(progressProvider);
-    final name = ref.read(settingsProvider).name;
-    final lb = ref.read(leaderboardProvider);
-    _future = lb
-        .submit(id: notifier.playerId, name: name.isEmpty ? 'عميل' : name, bestStage: p.bestStage, coins: p.coins)
-        .then((_) => lb.top());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final myId = ref.read(progressProvider.notifier).playerId;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rows = ref.watch(leaderboardRowsProvider);
+    final me = authService.profile?.nickname;
     return Scaffold(
       body: SpyBackground(
         child: SafeArea(
@@ -44,81 +26,34 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
               padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
               child: Row(children: [
                 IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_forward, color: K.neon)),
-                const MonoLabel('GLOBAL RANKING // الترتيب'),
+                const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('الترتيب العالمي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                  MonoLabel('TOP TEAMS // أقوى الفرق', size: 10),
+                ]),
                 const Spacer(),
-                IconButton(
-                    onPressed: () => setState(_load), icon: const Icon(Icons.refresh, color: K.neon)),
+                IconButton(onPressed: () => ref.invalidate(leaderboardRowsProvider), icon: const Icon(Icons.refresh, color: K.muted)),
               ]),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 18),
-              child: HudPanel(
-                label: 'CONTESTS // المسابقات',
-                color: K.amber,
-                padding: EdgeInsets.all(12),
-                child: Text(
-                  'المسابقات والجوائز يعلن عنها فريق «الخزنة». الترتيب هنا حسب أعلى مرحلة ثم العملات، '
-                  'ويُتحقَّق من الفائزين قبل تسليم أي جائزة.',
-                  style: TextStyle(fontSize: 13, height: 1.5),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
             Expanded(
-              child: FutureBuilder<List<LeaderEntry>>(
-                future: _future,
-                builder: (context, snap) {
-                  if (snap.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator(color: K.neon));
-                  }
-                  if (snap.hasError) {
-                    return const Center(
-                        child: Text('تعذّر تحميل الترتيب. تحقّق من الإنترنت.', style: TextStyle(color: K.muted)));
-                  }
-                  final list = snap.data ?? [];
-                  if (list.isEmpty) {
-                    return const Center(child: Text('لا أحد في الترتيب بعد. كن الأوّل!', style: TextStyle(color: K.muted)));
-                  }
-                  return ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                    itemCount: list.length,
-                    itemBuilder: (context, i) {
-                      final e = list[i];
-                      final me = e.id == myId;
-                      final medal = i == 0 ? K.amber : (i == 1 ? const Color(0xFFC0C8C4) : (i == 2 ? const Color(0xFFCD7F32) : K.muted));
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: me ? K.neon.withAlpha(25) : K.panel,
-                          border: Border.all(color: me ? K.neon : K.line),
-                        ),
-                        child: Row(children: [
-                          SizedBox(
-                            width: 34,
-                            child: i < 3
-                                ? Icon(Icons.emoji_events, color: medal)
-                                : MonoLabel('${i + 1}', color: K.muted, size: 15),
-                          ),
-                          Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text('${e.name}${me ? ' (أنت)' : ''}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                              MonoLabel('ID ${e.id.substring(0, 6)}', color: K.muted, size: 10),
-                            ]),
-                          ),
-                          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                            Text('مرحلة ${e.bestStage}', style: const TextStyle(color: K.neon, fontWeight: FontWeight.w800)),
-                            Row(mainAxisSize: MainAxisSize.min, children: [
-                              const Icon(Icons.monetization_on, size: 14, color: K.amber),
-                              const SizedBox(width: 3),
-                              Text('${e.coins}', style: const TextStyle(fontFamily: K.mono, color: K.amber)),
-                            ]),
-                          ]),
-                        ]),
-                      );
-                    },
-                  );
-                },
+              child: rows.when(
+                loading: () => const Center(child: CircularProgressIndicator(color: K.neon)),
+                error: (e, _) => Center(
+                  child: TextButton(
+                    onPressed: () => ref.invalidate(leaderboardRowsProvider),
+                    child: const Text('تعذّر التحميل — إعادة المحاولة', style: TextStyle(color: K.danger)),
+                  ),
+                ),
+                data: (list) => list.isEmpty
+                    ? const Center(child: Text('لا توجد فرق بعد — كن الأوّل!', style: TextStyle(color: K.muted)))
+                    : ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 24), children: [
+                        if (list.isNotEmpty) _Podium(list.take(3).toList()),
+                        const SizedBox(height: 16),
+                        for (int i = 3; i < list.length; i++)
+                          _Row(rank: i + 1, row: list[i], mine: me != null && (list[i].nameA == me || list[i].nameB == me)),
+                        const SizedBox(height: 10),
+                        const Text('الترتيب حسب أعلى مرحلة ثم مجموع النجوم. لا جوائز مالية.',
+                            textAlign: TextAlign.center, style: TextStyle(color: K.muted, fontSize: 12)),
+                      ]),
               ),
             ),
           ]),
@@ -126,4 +61,76 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
       ),
     );
   }
+}
+
+class _Podium extends StatelessWidget {
+  final List<LeaderRow> top;
+  const _Podium(this.top);
+
+  @override
+  Widget build(BuildContext context) {
+    const colors = [Color(0xFFFFC94D), Color(0xFFC9D6DF), Color(0xFFE29A5C)];
+    Widget place(int i, double h) {
+      if (i >= top.length) return const Expanded(child: SizedBox());
+      final r = top[i];
+      return Expanded(
+        child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+          Icon(i == 0 ? Icons.emoji_events : Icons.military_tech, color: colors[i], size: i == 0 ? 40 : 30),
+          const SizedBox(height: 6),
+          Text(r.title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
+          const SizedBox(height: 6),
+          Container(
+            height: h,
+            decoration: BoxDecoration(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+              gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [colors[i].withAlpha(90), colors[i].withAlpha(15)]),
+              border: Border.all(color: colors[i].withAlpha(120)),
+            ),
+            alignment: Alignment.center,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text('${i + 1}', style: TextStyle(fontFamily: K.mono, fontSize: 26, color: colors[i])),
+              Text('مرحلة ${r.bestStage}', style: const TextStyle(fontSize: 11.5, color: K.text2)),
+            ]),
+          ),
+        ]),
+      );
+    }
+
+    return SizedBox(
+      height: 220,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        place(1, 90),
+        const SizedBox(width: 8),
+        place(0, 120),
+        const SizedBox(width: 8),
+        place(2, 70),
+      ]),
+    );
+  }
+}
+
+class _Row extends StatelessWidget {
+  final int rank;
+  final LeaderRow row;
+  final bool mine;
+  const _Row({required this.rank, required this.row, required this.mine});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: GlassCard(
+          accent: mine ? K.neon : K.border,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(children: [
+            SizedBox(width: 34, child: Text('$rank', style: const TextStyle(fontFamily: K.mono, color: K.muted, fontSize: 16))),
+            Avatar(row.nameA, size: 34),
+            const SizedBox(width: 10),
+            Expanded(child: Text(row.title, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700))),
+            Pill(icon: Icons.flag, text: '${row.bestStage}', color: K.neon),
+            const SizedBox(width: 6),
+            Pill(icon: Icons.star_rounded, text: '${row.stars}', color: K.amber),
+          ]),
+        ),
+      );
 }

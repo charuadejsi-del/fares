@@ -12,10 +12,12 @@ import '../../core/controller.dart';
 import '../../core/game.dart';
 import '../../core/services.dart';
 import '../../core/stages.dart';
+import '../../core/team.dart';
 import '../../core/voice.dart';
 import '../../widgets/spy_ui.dart';
+import '../../widgets/stage_map.dart';
+import '../../widgets/ui_kit.dart';
 import '../briefing/briefing_screen.dart';
-import '../campaign/campaign_screen.dart';
 import 'locks/locks.dart';
 
 String fmtTime(double sec) {
@@ -42,7 +44,7 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
   Timer? _flashTimer;
 
   VoiceService? _voice;
-  int _lastCoins = 0;
+  int? _unlocked; // المرحلة التي فُتحت بهذا الفوز
 
   GameController get c => widget.controller;
 
@@ -85,18 +87,18 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
       final won = s.phase == 'won';
       final stars = starsFor(won: won, finishedIn: s.finishedIn, penalty: s.penalty);
       final stage = s.stage;
-      final coins = !won ? 0 : (stage > 0 ? stageDef(stage).coinsFor(stars) : stars * 3);
-      _lastCoins = coins;
-      final progress = ref.read(progressProvider.notifier);
-      progress.record(won: won, finishedIn: s.finishedIn, stars: stars, mission: stage, coins: coins);
-      final p = ref.read(progressProvider);
-      final name = ref.read(settingsProvider).name;
-      ref.read(leaderboardProvider).submit(
-            id: progress.playerId,
-            name: name.isEmpty ? 'عميل' : name,
-            bestStage: p.bestStage,
-            coins: p.coins,
-          );
+      _unlocked = null;
+      ref.read(progressProvider.notifier).record(won: won, finishedIn: s.finishedIn, stars: stars, mission: stage, coins: 0);
+      if (won && stage > 0) {
+        final partner = c.online ? c.partnerUid : null;
+        if (!c.online || partner != null) {
+          final before = ref.read(teamProgressProvider(partner)).valueOrNull;
+          if (stage > (before?.top ?? 0)) _unlocked = stage + 1;
+          TeamService.recordWin(partner: partner, stage: stage, stars: stars, seconds: s.finishedIn)
+              .then((_) => ref.invalidate(teamProgressProvider(partner)))
+              .catchError((_) {});
+        }
+      }
       final audio = ref.read(audioProvider);
       if (won) {
         audio.fx(Sfx.vault, HapticKind.heavy);
@@ -187,7 +189,7 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
                         ? _TableGame(c: c, shake: _shake, onExit: _leave)
                         : _Game(c: c, shake: _shake, onExit: _leave, voice: _voice);
                   } else {
-                    body = _End(c: c, coins: _lastCoins);
+                    body = _End(c: c, unlocked: _unlocked);
                   }
                   return AnimatedSwitcher(
                     duration: const Duration(milliseconds: 400),
@@ -313,66 +315,22 @@ class _Lobby extends ConsumerWidget {
   final VoiceService? voice;
   const _Lobby({required this.c, this.voice});
 
-  void _pickStage(BuildContext context, WidgetRef ref) {
-    final progress = ref.read(progressProvider);
-    final maxStage = currentStage(progress);
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(12, 60, 12, 12),
-        child: HudPanel(
-          label: 'SELECT STAGE // اختر المرحلة',
-          child: SizedBox(
-            height: MediaQuery.of(ctx).size.height * 0.6,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              NeonButton(
-                label: 'المهمّة الكلاسيكية (5 أقفال)',
-                filled: false,
-                height: 46,
-                onTap: () {
-                  c.chooseStage(0);
-                  Navigator.of(ctx).pop();
-                },
-              ),
-              const SizedBox(height: 10),
-              Text('المراحل المفتوحة عندك: 1 إلى $maxStage', style: const TextStyle(color: K.muted, fontSize: 12.5)),
-              const SizedBox(height: 8),
-              Expanded(
-                child: GridView.count(
-                  crossAxisCount: 5,
-                  mainAxisSpacing: 6,
-                  crossAxisSpacing: 6,
-                  children: [
-                    for (int n = maxStage; n >= 1; n--)
-                      GestureDetector(
-                        onTap: () {
-                          c.chooseStage(n);
-                          Navigator.of(ctx).pop();
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: K.cell,
-                            border: Border.all(color: stageDef(n).region.color.withAlpha(c.stage == n ? 255 : 90), width: c.stage == n ? 2 : 1),
-                          ),
-                          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                            Text('$n', style: TextStyle(fontFamily: K.mono, fontSize: 18, color: stageDef(n).region.color)),
-                            Row(mainAxisSize: MainAxisSize.min, children: [
-                              for (int i = 0; i < 3; i++)
-                                Icon(Icons.star_rounded, size: 9, color: i < progress.starsOf(n) ? K.amber : K.line),
-                            ]),
-                          ]),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ]),
-          ),
-        ),
-      ),
-    );
+  Future<void> _pickStage(BuildContext context, WidgetRef ref) async {
+    final partner = c.partnerUid;
+    if (partner == null) {
+      showToast(context, 'انتظر انضمام شريكك لتظهر خريطة الفريق', error: true);
+      return;
+    }
+    TeamProgress p;
+    try {
+      p = await ref.read(teamProgressProvider(partner).future);
+    } catch (_) {
+      if (context.mounted) showToast(context, 'تعذّر تحميل تقدّم الفريق — تحقّق من الإنترنت', error: true);
+      return;
+    }
+    if (!context.mounted) return;
+    final n = await showStageMap(context, progress: p, selected: c.stage, canPick: c.isHost);
+    if (n != null) c.chooseStage(n);
   }
 
   @override
@@ -386,7 +344,7 @@ class _Lobby extends ConsumerWidget {
         const Spacer(),
         if (voice != null) VoiceButton(voice: voice!),
         const SizedBox(width: 8),
-        const MonoLabel('SAFE HOUSE'),
+        const BalanceChip(),
       ]),
       HudPanel(
         label: 'ROOM CODE',
@@ -458,16 +416,19 @@ class _Lobby extends ConsumerWidget {
           const SizedBox(height: 6),
           Text('الصعوبة: ${s.difficulty.name} · ${s.difficulty.duration ~/ 60} دقائق',
               style: const TextStyle(color: K.muted, fontSize: 12.5)),
-          if (c.isHost) ...[
-            const SizedBox(height: 10),
-            NeonButton(
-                label: 'اختر المرحلة من الخريطة',
-                icon: Icons.map_outlined,
-                filled: false,
-                height: 46,
-                color: K.amber,
-                onTap: () => _pickStage(context, ref)),
-          ],
+          const SizedBox(height: 10),
+          NeonButton(
+              label: c.isHost ? 'اختر المرحلة من خريطة الفريق' : 'خريطة الفريق',
+              icon: Icons.map_outlined,
+              filled: false,
+              height: 46,
+              color: K.amber,
+              onTap: c.teamReady ? () => _pickStage(context, ref) : null),
+          if (!c.teamReady)
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text('تظهر الخريطة عند انضمام شريكك', textAlign: TextAlign.center, style: TextStyle(color: K.muted, fontSize: 12)),
+            ),
         ]),
       ),
       const SizedBox(height: 18),
@@ -740,8 +701,8 @@ class _RingPainter extends CustomPainter {
 // ───────── النهاية ─────────
 class _End extends ConsumerWidget {
   final GameController c;
-  final int coins;
-  const _End({required this.c, this.coins = 0});
+  final int? unlocked;
+  const _End({required this.c, this.unlocked});
 
   void _next(BuildContext context, WidgetRef ref, int n) {
     if (c.online) {
@@ -818,13 +779,9 @@ class _End extends ConsumerWidget {
                   ),
                 ),
             ]),
-          if (won && coins > 0) ...[
-            const SizedBox(height: 8),
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const Icon(Icons.monetization_on, color: K.amber, size: 26),
-              const SizedBox(width: 6),
-              Text('+$coins', style: const TextStyle(fontFamily: K.mono, color: K.amber, fontSize: 26)),
-            ]),
+          if (won && unlocked != null) ...[
+            const SizedBox(height: 14),
+            UnlockBanner(stage: unlocked!),
           ],
           const SizedBox(height: 12),
           HudPanel(

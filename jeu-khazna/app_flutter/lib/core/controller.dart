@@ -5,14 +5,17 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../net/transport.dart';
+import 'auth.dart';
 import 'game.dart';
 import 'stages.dart';
 
 class Player {
   final String name;
   String role; // op | ex
-  Player(this.name, this.role);
-  Map<String, dynamic> toJson() => {'name': name, 'role': role};
+  /// معرّف الحساب (Supabase) — لربط تقدّم الفريق في الخادم.
+  final String? uid;
+  Player(this.name, this.role, [this.uid]);
+  Map<String, dynamic> toJson() => {'name': name, 'role': role, if (uid != null) 'uid': uid};
 }
 
 class GameController extends ChangeNotifier {
@@ -90,7 +93,7 @@ class GameController extends ChangeNotifier {
     if (isHost) {
       state = newState(_newSeed());
       puzzles = generatePuzzles(state!.seed);
-      players = {meId: Player(meName, 'op')};
+      players = {meId: Player(meName, 'op', authService.uid)};
       _loop = Timer.periodic(const Duration(seconds: 1), (_) => _tickLoop());
       _broadcast();
     } else {
@@ -101,6 +104,17 @@ class GameController extends ChangeNotifier {
   }
 
   // ───── قراءة الحالة ─────
+  /// حساب الشريك (أونلاين) أو null للعب الفردي على هاتف واحد.
+  String? get partnerUid {
+    if (!online) return null;
+    for (final e in players.entries) {
+      if (e.key != meId) return e.value.uid;
+    }
+    return null;
+  }
+
+  bool get teamReady => !online || (players.length >= 2 && partnerUid != null);
+
   String? get myRole => online ? players[meId]?.role : localRole;
   bool get joined => !online || players.containsKey(meId);
   bool get canStart => isHost && players.length >= 2 && state?.phase == 'lobby';
@@ -205,7 +219,7 @@ class GameController extends ChangeNotifier {
     if (online && _now() - _lastBroadcast > 2000) _broadcast(); // للمتأخرين ومزامنة المؤقّت
   }
 
-  void _sendHello() => _net?.send({'kind': 'hello', 'id': meId, 'name': meName});
+  void _sendHello() => _net?.send({'kind': 'hello', 'id': meId, 'name': meName, 'uid': authService.uid});
 
   void _broadcast() {
     if (!online || !isHost || _net == null || state == null) return;
@@ -228,7 +242,9 @@ class GameController extends ChangeNotifier {
           if (players.length >= 2) return; // الغرفة ممتلئة
           final hostRole = players[meId]!.role;
           final name = '${m['name'] ?? 'لاعب'}';
-          players[id] = Player(name.length > 20 ? name.substring(0, 20) : name, hostRole == 'op' ? 'ex' : 'op');
+          final uid = m['uid'];
+          players[id] = Player(name.length > 20 ? name.substring(0, 20) : name, hostRole == 'op' ? 'ex' : 'op',
+              uid is String && uid.length == 36 ? uid : null);
           _notify();
         }
         _broadcast();
@@ -253,7 +269,8 @@ class GameController extends ChangeNotifier {
     state = ns;
     players = {
       for (final e in ps.entries)
-        if (e.value is Map) e.key: Player('${(e.value as Map)['name']}', '${(e.value as Map)['role']}'),
+        if (e.value is Map)
+          e.key: Player('${(e.value as Map)['name']}', '${(e.value as Map)['role']}', (e.value as Map)['uid'] as String?),
     };
     final rem = m['rem'];
     _recvRem = rem is num ? rem.toDouble() : kDuration.toDouble();

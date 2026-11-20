@@ -1,7 +1,7 @@
 name: khazna
 description: "الخزنة — مهمّة تجسّس جماعية: العميل يرى الأقفال والمحلّل معه الدليل."
 publish_to: 'none'
-version: 0.2.0+2
+version: 0.3.0+3
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -18,6 +18,8 @@ dependencies:
   # الكلام الصوتي أثناء اللعب أونلاين
   agora_rtc_engine: ^6.5.0
   permission_handler: ^11.3.1
+  # صورة وصل الدفع (معرض الصور / الكاميرا)
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

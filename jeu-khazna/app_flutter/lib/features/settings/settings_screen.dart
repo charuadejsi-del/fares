@@ -53,24 +53,8 @@ class SettingsScreen extends ConsumerWidget {
                 toggle('الاهتزاز', 'اهتزاز عند الضغط والأخطاء', Icons.vibration, s.haptics, n.setHaptics),
               ]),
             ),
-            const SizedBox(height: 14),
-            HudPanel(
-              label: 'DATA',
-              color: K.danger,
-              child: NeonButton(
-                label: 'مسح الإحصائيات',
-                icon: Icons.delete_outline,
-                filled: false,
-                color: K.danger,
-                onTap: () async {
-                  final ok = await confirmDialog(context,
-                      title: 'مسح كل الإحصائيات؟', body: 'ستُحذف النجوم والرتبة وأفضل وقت. لا يمكن التراجع.', confirm: 'مسح');
-                  if (ok) ref.read(progressProvider.notifier).reset();
-                },
-              ),
-            ),
             const SizedBox(height: 24),
-            const Center(child: MonoLabel('KHAZNA v0.2 // OPERATION BUILD', color: K.muted, size: 11)),
+            const Center(child: MonoLabel('KHAZNA v0.3 // OPERATION BUILD', color: K.muted, size: 11)),
           ]),
         ),
       ),

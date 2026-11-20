@@ -6,10 +6,16 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/auth.dart';
 import '../../core/controller.dart';
+import '../../core/shop.dart';
+import '../../core/stages.dart';
+import '../../core/team.dart';
 import '../../core/services.dart';
 import '../../net/transport.dart';
 import '../../widgets/spy_ui.dart';
+import '../../widgets/ui_kit.dart';
+import '../shop/shop_screen.dart';
 
+/// تبويب «المقرّ»: البطاقة الرئيسية للّعب مع صديق، المكافأة اليومية، والتقدّم.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -23,7 +29,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(audioProvider).startMusic());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(audioProvider).startMusic();
+      _checkReviews();
+    });
     authService.refreshProfile().catchError((_) {});
   }
 
@@ -32,11 +41,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return n.isEmpty ? 'عميل' : n;
   }
 
-  void _toast(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(m, style: const TextStyle(fontFamily: K.font)),
-        backgroundColor: K.panelSolid,
-        behavior: SnackBarBehavior.floating,
-      ));
+  void _toast(String m) => showToast(context, m, error: true);
+
+  /// يُعلم اللاعب بطلبات الشراء التي قُبلت أو رُفضت منذ آخر مرّة.
+  Future<void> _checkReviews() async {
+    try {
+      final fresh = await ShopService.newlyReviewed(ref.read(prefsProvider));
+      if (!mounted || fresh.isEmpty) return;
+      final ok = fresh.where((r) => r.status == 'approved').toList();
+      if (ok.isNotEmpty) {
+        await authService.refreshProfile();
+        ref.read(audioProvider).fx(Sfx.vault, HapticKind.heavy);
+        if (mounted) showToast(context, '🎉 قُبل طلبك: +${ok.fold<int>(0, (a, r) => a + r.minutes)} دقيقة في رصيدك');
+      } else {
+        showToast(context, 'رُفض طلب شراء — راجع «طلباتي» في المتجر', error: true);
+      }
+      ref.invalidate(myRequestsProvider);
+    } catch (_) {}
+  }
 
   Future<void> _online({required bool host, String code = ''}) async {
     if (!onlineAvailable) {
@@ -102,163 +124,162 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final progress = ref.watch(progressProvider);
-    final settings = ref.watch(settingsProvider);
-    return Scaffold(
-      body: SpyBackground(
-        image: 'assets/images/home_bg.jpg',
-        dim: 0.55,
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  Row(children: [
-                    _IconBtn(icon: Icons.person_outline, onTap: () => context.push('/profile')),
-                    const Spacer(),
-                    const MonoLabel('HQ-07 // ONLINE'),
-                    const Spacer(),
-                    _IconBtn(icon: Icons.tune, onTap: () => context.push('/settings')),
-                  ]),
-                  const SizedBox(height: 36),
-                  const Center(child: GlitchTitle('الخزنة', size: 64)),
-                  const SizedBox(height: 4),
-                  const Text('مهمّة تجسّس جماعية',
-                      textAlign: TextAlign.center, style: TextStyle(color: K.text, fontSize: 18, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  const Text('عميل في الميدان + محلّل في القاعدة = خزنة مفتوحة',
-                      textAlign: TextAlign.center, style: TextStyle(color: K.muted, fontSize: 13.5)),
-                  const SizedBox(height: 28),
-                  ListenableBuilder(
-                    listenable: authService,
-                    builder: (context, _) => HudPanel(
-                    label: 'AGENT FILE',
-                    padding: const EdgeInsets.all(14),
-                    child: Row(children: [
-                      Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(border: Border.all(color: K.neon), color: K.neon.withAlpha(20)),
-                        child: const Icon(Icons.badge_outlined, color: K.neon),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(authService.profile?.nickname ?? (settings.name.isEmpty ? 'عميل بلا اسم' : settings.name),
-                              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-                          Text(progress.rank, style: const TextStyle(color: K.amber, fontSize: 13)),
-                        ]),
-                      ),
-                      _Stat(icon: Icons.timer_outlined, value: '${authService.profile?.balanceMinutes ?? '—'}د', color: K.agent),
-                      const SizedBox(width: 12),
-                      _Stat(icon: Icons.monetization_on, value: '${progress.coins}', color: K.amber),
-                      const SizedBox(width: 12),
-                      _Stat(icon: Icons.flag, value: '${progress.bestStage}', color: K.neon),
-                    ]),
-                  ),
-                  ),
-                  const SizedBox(height: 20),
-                  NeonButton(
-                    label: 'الحملة: 60 مرحلة + الخريطة الاحترافية',
-                    icon: Icons.map_outlined,
-                    onTap: _busy ? null : () => context.push('/campaign'),
-                  ),
-                  const SizedBox(height: 12),
-                  NeonButton(
-                    label: 'مهمّة حرّة',
-                    icon: Icons.play_arrow_rounded,
-                    filled: false,
-                    onTap: _busy ? null : () => context.push('/briefing'),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    Expanded(
-                      child: NeonButton(
-                        label: 'إنشاء غرفة',
-                        icon: Icons.wifi_tethering,
-                        filled: false,
-                        color: K.agent,
-                        onTap: _busy ? null : () => _online(host: true),
-                      ),
+    final team = ref.watch(teamProgressProvider(null)).valueOrNull ?? TeamProgress.empty;
+    final next = team.current;
+    final def = stageDef(next);
+    return RefreshIndicator(
+      color: K.neon,
+      backgroundColor: K.surface,
+      onRefresh: () async {
+        ref.invalidate(teamProgressProvider(null));
+        await authService.refreshProfile();
+        await _checkReviews();
+      },
+      child: ListView(padding: const EdgeInsets.fromLTRB(16, 10, 16, 24), children: [
+        // ── الرأس: الهوية + الرصيد + الإعدادات
+        ListenableBuilder(
+          listenable: authService,
+          builder: (context, _) {
+            final name = authService.profile?.nickname ?? _name;
+            return Row(children: [
+              Avatar(name, size: 46),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                  Text(progress.rank, style: const TextStyle(color: K.amber, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                ]),
+              ),
+              const BalanceChip(),
+              const SizedBox(width: 6),
+              IconButton(onPressed: () => context.push('/settings'), icon: const Icon(Icons.tune_rounded, color: K.muted)),
+            ]);
+          },
+        ),
+        const SizedBox(height: 16),
+        // ── البطاقة البطلة: العب مع صديق
+        GlassCard(
+          accent: K.neon,
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+          gradient: const LinearGradient(
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+            colors: [Color(0xFF0E2420), Color(0xFF0B1516), Color(0xFF081011)],
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const MonoLabel('CO-OP MISSION // مهمّة جماعية', size: 10),
+                  const SizedBox(height: 8),
+                  const Text('افتح الخزنة\nمع صديقك', style: TextStyle(fontSize: 28, height: 1.15, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  Text('عميل يرى الأقفال · محلّل يملك الدليل · صوت مباشر',
+                      style: TextStyle(color: K.text2.withAlpha(220), fontSize: 12.5)),
+                ]),
+              ),
+              const VaultHero(size: 118),
+            ]),
+            const SizedBox(height: 18),
+            GlowButton(label: 'أنشئ غرفة وادعُ صديقك', icon: Icons.wifi_tethering, busy: _busy, onTap: () => _online(host: true)),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(child: GlowButton(label: 'انضمّ برمز', icon: Icons.login_rounded, outline: true, color: K.agent, height: 48, onTap: _busy ? null : _joinDialog)),
+              const SizedBox(width: 10),
+              Expanded(child: GlowButton(label: 'هاتف واحد', icon: Icons.smartphone, outline: true, color: K.agent, height: 48, onTap: _busy ? null : () => ref.read(tabProvider.notifier).state = 1)),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        const DailyRewardCard(),
+        const SizedBox(height: 22),
+        const SectionTitle('حملتك', tag: 'SOLO CAMPAIGN'),
+        Pressable(
+          onTap: () => ref.read(tabProvider.notifier).state = 1,
+          child: GlassCard(
+            accent: def.region.color,
+            padding: const EdgeInsets.all(16),
+            child: Row(children: [
+              Container(
+                width: 58,
+                height: 58,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: def.region.color.withAlpha(26),
+                  border: Border.all(color: def.region.color.withAlpha(140)),
+                ),
+                child: Text('$next', style: TextStyle(fontFamily: K.mono, fontSize: 24, color: def.region.color)),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('المرحلة التالية: ${def.name}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 2),
+                  Text('${def.region.name}${def.boss ? ' · مرحلة الزعيم 🔥' : ''}', style: const TextStyle(color: K.muted, fontSize: 12.5)),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: (team.top / kCampaignStages).clamp(0.0, 1.0).toDouble(),
+                      minHeight: 6,
+                      color: def.region.color,
+                      backgroundColor: K.border,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: NeonButton(
-                        label: 'دخول برمز',
-                        icon: Icons.login,
-                        filled: false,
-                        color: K.agent,
-                        onTap: _busy ? null : _joinDialog,
-                      ),
-                    ),
-                  ]),
-                  if (_busy) ...[
-                    const SizedBox(height: 18),
-                    const Center(child: CircularProgressIndicator(color: K.neon)),
-                  ],
-                  if (!onlineAvailable) ...[
-                    const SizedBox(height: 8),
-                    const Text('اللعب أونلاين يُفعَّل قريباً — جرّب الآن على هاتف واحد مع صديقك.',
-                        textAlign: TextAlign.center, style: TextStyle(color: K.muted, fontSize: 12)),
-                  ],
-                  const SizedBox(height: 12),
-                  NeonButton(
-                    label: 'الترتيب العالمي',
-                    icon: Icons.leaderboard_outlined,
-                    filled: false,
-                    color: K.amber,
-                    height: 50,
-                    onTap: () => context.push('/leaderboard'),
-                  ),
-                  const SizedBox(height: 10),
-                  NeonButton(
-                    label: 'التدريب: كيف تُلعب؟',
-                    icon: Icons.school_outlined,
-                    filled: false,
-                    color: K.amber,
-                    height: 50,
-                    onTap: () => context.push('/tutorial'),
                   ),
                 ]),
               ),
-            ),
+              const SizedBox(width: 10),
+              Text('${team.top.clamp(0, kCampaignStages)}/$kCampaignStages', style: const TextStyle(fontFamily: K.mono, color: K.muted)),
+            ]),
           ),
         ),
-      ),
+        const SizedBox(height: 22),
+        const SectionTitle('المزيد', tag: 'OPERATIONS'),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.55,
+          children: [
+            _Tile(icon: Icons.leaderboard_rounded, title: 'الترتيب العالمي', sub: 'أقوى الفرق', color: K.amber, onTap: () => context.push('/leaderboard')),
+            _Tile(icon: Icons.school_outlined, title: 'التدريب', sub: 'كيف تُلعب؟', color: K.agent, onTap: () => context.push('/tutorial')),
+            _Tile(icon: Icons.bolt_rounded, title: 'مهمّة حرّة', sub: 'اختر الأقفال والصعوبة', color: K.violet, onTap: () => context.push('/briefing')),
+            _Tile(icon: Icons.storefront_outlined, title: 'المتجر', sub: 'اشحن دقائقك', color: K.neon, onTap: () => ref.read(tabProvider.notifier).state = 2),
+          ],
+        ),
+      ]),
     );
   }
 }
 
-class _IconBtn extends ConsumerWidget {
+class _Tile extends StatelessWidget {
   final IconData icon;
+  final String title;
+  final String sub;
+  final Color color;
   final VoidCallback onTap;
-  const _IconBtn({required this.icon, required this.onTap});
+  const _Tile({required this.icon, required this.title, required this.sub, required this.color, required this.onTap});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => InkWell(
-        onTap: () {
-          ref.read(audioProvider).fx(Sfx.click, HapticKind.tap, volume: 0.5);
-          onTap();
-        },
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(border: Border.all(color: K.line), color: K.panel),
-          child: Icon(icon, color: K.neon),
+  Widget build(BuildContext context) => Pressable(
+        onTap: onTap,
+        child: GlassCard(
+          accent: color,
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: color.withAlpha(30)),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const Spacer(),
+            Text(title, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
+            Text(sub, style: const TextStyle(color: K.muted, fontSize: 12)),
+          ]),
         ),
       );
-}
-
-class _Stat extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final Color color;
-  const _Stat({required this.icon, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) => Column(children: [
-        Icon(icon, color: color, size: 20),
-        Text(value, style: TextStyle(fontFamily: K.mono, color: color, fontSize: 16)),
-      ]);
 }

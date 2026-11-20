@@ -252,22 +252,3 @@ class AudioService {
 enum HapticKind { tap, light, medium, heavy }
 
 final audioProvider = Provider<AudioService>((ref) => AudioService(ref));
-
-
-// ───────── الترتيب العالمي ─────────
-class LeaderEntry {
-  final String id;
-  final String name;
-  final int bestStage;
-  final int coins;
-  const LeaderEntry(this.id, this.name, this.bestStage, this.coins);
-}
-
-class LeaderboardService {
-  /// الترتيب القديم حُذف مع الحسابات الجديدة؛ يعود مبنيّاً على تقدّم الفرق في المرحلة القادمة.
-  Future<void> submit({required String id, required String name, required int bestStage, required int coins}) async {}
-
-  Future<List<LeaderEntry>> top({int limit = 50}) async => const [];
-}
-
-final leaderboardProvider = Provider<LeaderboardService>((ref) => LeaderboardService());

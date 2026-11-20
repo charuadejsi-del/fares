@@ -17,6 +17,15 @@ class K {
   static const agent = Color(0xFF00E5FF); // العميل الميداني
   static const analyst = Color(0xFFFFB020); // المحلّل
 
+  // أسطح الواجهة الجديدة (نفس هوية لوحة المدير)
+  static const surface = Color(0xFF0D1617);
+  static const surface2 = Color(0xFF121D1E);
+  static const border = Color(0xFF1B2A2B);
+  static const borderStrong = Color(0xFF26393A);
+  static const text2 = Color(0xFFA4B8B3);
+  static const violet = Color(0xFF9D8CFF);
+  static const ink = Color(0xFF00170D);
+
   // الخطوط
   static const font = 'Tajawal';
   static const mono = 'Mono';
