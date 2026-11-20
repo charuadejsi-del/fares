@@ -1,8 +1,11 @@
 // شاشة المهمّة: غرفة الانتظار (أونلاين)، اللعب، والنهاية.
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +15,7 @@ import '../../core/controller.dart';
 import '../../core/game.dart';
 import '../../core/services.dart';
 import '../../core/shop.dart' show gameRulesProvider;
+import '../../core/social.dart';
 import '../../core/stages.dart';
 import '../../core/team.dart';
 import '../../core/voice.dart';
@@ -129,6 +133,9 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
               .catchError((_) {});
         }
       }
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted) ref.invalidate(statsProvider);
+      });
       final audio = ref.read(audioProvider);
       if (won) {
         audio.fx(Sfx.vault, HapticKind.heavy);
@@ -424,11 +431,12 @@ class _Lobby extends ConsumerWidget {
               Clipboard.setData(ClipboardData(text: c.code));
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نُسخ الرمز')));
             },
-            child: Text(c.code,
+            child: Text(streamerMode.value ? '••••' : c.code,
                 textDirection: TextDirection.ltr,
                 style: const TextStyle(fontFamily: K.mono, fontSize: 52, color: K.text, letterSpacing: 14)),
           ),
-          const Text('أرسل الرمز لشريكك (اضغط لنسخه)', style: TextStyle(color: K.muted, fontSize: 13)),
+          Text(streamerMode.value ? 'وضع البثّ: الرمز مخفي — اضغط لنسخه وأرسله لشريكك سرّاً' : 'أرسل الرمز لشريكك (اضغط لنسخه)',
+              textAlign: TextAlign.center, style: const TextStyle(color: K.muted, fontSize: 13)),
         ]),
       ),
       const SizedBox(height: 14),
@@ -627,6 +635,7 @@ class _Game extends StatelessWidget {
                     _SquareBtn(icon: Icons.question_mark, label: 'شرح القفل', onTap: () => showLockHelp(context, s)),
                   ]),
                   const SizedBox(height: 10),
+                  if (streamerMode.value) ...[const _LiveBanner(), const SizedBox(height: 8)],
                   CoachCard(lockId: s.roomId, role: role, guided: s.stage == 1),
                   if (s.hint.isNotEmpty) ...[const SizedBox(height: 8), HintBanner(text: s.hint)],
                   const SizedBox(height: 10),
@@ -648,6 +657,29 @@ class _Game extends StatelessWidget {
         ),
     ]);
   }
+}
+
+/// لافتة وضع البثّ: تدعو المشاهدين للمشاركة في التعليقات.
+class _LiveBanner extends StatelessWidget {
+  const _LiveBanner();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A0E0F),
+          borderRadius: BorderRadius.circular(K.radius),
+          border: Border.all(color: K.danger.withAlpha(150)),
+        ),
+        child: const Row(children: [
+          Icon(Icons.fiber_manual_record, color: K.danger, size: 14),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text('مباشر · ساعدونا في التعليقات: ما الحلّ؟ أسرع جواب صحيح يُذكر اسمه!',
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800)),
+          ),
+        ]),
+      );
 }
 
 /// زرّ مربّع صغير بحدّ رفيع (انسحاب، شرح…).
@@ -860,6 +892,27 @@ class _RingPainter extends CustomPainter {
 }
 
 // ───────── النهاية ─────────
+final GlobalKey _endShareKey = GlobalKey();
+
+/// يحفظ بطاقة الفوز كصورة PNG ويفتح المشاركة (تيك توك، إنستغرام، واتساب…).
+Future<void> _shareWin(BuildContext context, GameState s, int stars) async {
+  try {
+    final box = _endShareKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (box == null) return;
+    final image = await box.toImage(pixelRatio: 3);
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (data == null) return;
+    final bytes = data.buffer.asUint8List();
+    final name = s.stage > 0 ? 'المرحلة ${s.stage} «${stageDef(s.stage).name}»' : 'مهمّة';
+    await Share.shareXFiles(
+      [XFile.fromData(bytes, mimeType: 'image/png', name: 'khazna-win.png')],
+      text: 'فتحنا الخزنة! $name في ${fmtTime(s.finishedIn.toDouble())} ${'★' * stars} — هل تستطيعون أسرع؟ #الخزنة',
+    );
+  } catch (_) {
+    if (context.mounted) showToast(context, 'تعذّرت المشاركة', error: true);
+  }
+}
+
 class _End extends ConsumerWidget {
   final GameController c;
   final int? unlocked;
@@ -888,10 +941,13 @@ class _End extends ConsumerWidget {
         padding: const EdgeInsets.all(22),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           // صورة الخزنة الحقيقية: دافئة ذهبية عند النجاح، حمراء باهتة عند الفشل.
-          ClipRRect(
+          // محاطة بـ RepaintBoundary لتُحفظ كصورة للمشاركة.
+          RepaintBoundary(
+            key: _endShareKey,
+            child: ClipRRect(
             borderRadius: BorderRadius.circular(K.radius),
             child: SizedBox(
-              height: 250,
+              height: 270,
               width: double.infinity,
               child: Stack(fit: StackFit.expand, children: [
                 ColorFiltered(
@@ -942,11 +998,26 @@ class _End extends ConsumerWidget {
                         style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800)),
                     if (s.stage > 0)
                       Text(stageDef(s.stage).name, style: const TextStyle(color: K.text2, fontSize: 13.5)),
+                    if (won) ...[
+                      const SizedBox(height: 6),
+                      Row(children: [
+                        Text('★' * stars + '☆' * (3 - stars), style: const TextStyle(color: K.neon, fontSize: 16, letterSpacing: 2)),
+                        const SizedBox(width: 10),
+                        MonoLabel('${fmtTime(s.finishedIn.toDouble())} · ERR ${s.errors}', color: K.steel, size: 11),
+                        const Spacer(),
+                        const MonoLabel('KHAZNA · الخزنة', color: K.muted, size: 10),
+                      ]),
+                    ],
                   ]),
                 ),
               ]),
             ),
           ),
+          ),
+          if (won) ...[
+            const SizedBox(height: 10),
+            NeonButton(label: 'شارك الفوز', icon: Icons.ios_share, filled: false, onTap: () => _shareWin(context, s, stars)),
+          ],
           const SizedBox(height: 18),
           if (won)
             Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -974,6 +1045,8 @@ class _End extends ConsumerWidget {
               _Row('الوقت', won ? fmtTime(s.finishedIn.toDouble()) : '—'),
               _Row('العقوبات', '${s.penalty} ث'),
               _Row('الأقفال', '${s.room.clamp(0, s.rooms.length)}/${s.rooms.length}'),
+              if (c.online || c.bot || s.stage > 0)
+                _Row('الخبرة', '+${xpForSession(won: won, errors: s.errors, hints: s.hints, stage: s.stage)} XP'),
               _Row('الصعوبة', s.difficulty.name),
               _Row('العملية', codenameFor(s.seed)),
             ]),

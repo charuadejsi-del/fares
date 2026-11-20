@@ -2,6 +2,7 @@
 import 'dart:math';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,26 +16,44 @@ class Settings {
   final bool music;
   final bool haptics;
   final String name;
-  const Settings({this.sound = true, this.music = true, this.haptics = true, this.name = ''});
 
-  Settings copyWith({bool? sound, bool? music, bool? haptics, String? name}) => Settings(
+  /// وضع البثّ المباشر (تيك توك): يخفي رمز الغرفة والأسماء ويعرض لافتة للمشاهدين.
+  final bool streamer;
+  const Settings({this.sound = true, this.music = true, this.haptics = true, this.name = '', this.streamer = false});
+
+  Settings copyWith({bool? sound, bool? music, bool? haptics, String? name, bool? streamer}) => Settings(
         sound: sound ?? this.sound,
         music: music ?? this.music,
         haptics: haptics ?? this.haptics,
         name: name ?? this.name,
+        streamer: streamer ?? this.streamer,
       );
 }
+
+/// نسخة سريعة القراءة من وضع البثّ لأيّ ودجت (بلا Riverpod).
+final ValueNotifier<bool> streamerMode = ValueNotifier(false);
 
 class SettingsNotifier extends Notifier<Settings> {
   SharedPreferences get _p => ref.read(prefsProvider);
 
   @override
-  Settings build() => Settings(
-        sound: _p.getBool('sound') ?? true,
-        music: _p.getBool('music') ?? true,
-        haptics: _p.getBool('haptics') ?? true,
-        name: _p.getString('name') ?? '',
-      );
+  Settings build() {
+    final st = Settings(
+      sound: _p.getBool('sound') ?? true,
+      music: _p.getBool('music') ?? true,
+      haptics: _p.getBool('haptics') ?? true,
+      name: _p.getString('name') ?? '',
+      streamer: _p.getBool('streamer') ?? false,
+    );
+    streamerMode.value = st.streamer;
+    return st;
+  }
+
+  void setStreamer(bool v) {
+    _p.setBool('streamer', v);
+    streamerMode.value = v;
+    state = state.copyWith(streamer: v);
+  }
 
   void setSound(bool v) {
     _p.setBool('sound', v);

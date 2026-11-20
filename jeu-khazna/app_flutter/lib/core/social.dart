@@ -234,3 +234,39 @@ const Map<String, (String, int)> kTitles = {
   'elite': ('💎 نخبة العشرة', 0xFF9D8CFF),
   'top100': ('🎖 أفضل 100', 0xFF22C7FF),
 };
+
+// ───── المستوى ونقاط الخبرة + المتّصلون الآن ─────
+/// العتبة التراكمية لبلوغ المستوى n: 0، 100، 300، 600، 1000…
+int xpForLevel(int n) => 50 * n * (n - 1);
+
+/// نفس صيغة الخادم (_xp_of): لعرض «+XP» فوراً في نهاية المهمّة.
+int xpForSession({required bool won, required int errors, required int hints, required int stage}) =>
+    won ? 50 + (errors == 0 ? 20 : 0) + (hints == 0 ? 10 : 0) + stage.clamp(0, 60).toInt() : 10;
+
+class PlayerStats {
+  final int xp;
+  final int online;
+  const PlayerStats(this.xp, this.online);
+
+  int get level {
+    var n = 1;
+    while (xpForLevel(n + 1) <= xp) {
+      n++;
+    }
+    return n;
+  }
+
+  /// التقدّم داخل المستوى الحالي (0..1).
+  double get levelFrac {
+    final a = xpForLevel(level), b = xpForLevel(level + 1);
+    return ((xp - a) / (b - a)).clamp(0.0, 1.0).toDouble();
+  }
+
+  int get toNext => xpForLevel(level + 1) - xp;
+}
+
+final statsProvider = FutureProvider.autoDispose<PlayerStats>((ref) async {
+  final r = await supa.rpc('player_stats');
+  final m = Map<String, dynamic>.from(r as Map);
+  return PlayerStats((m['xp'] as num? ?? 0).toInt(), (m['online'] as num? ?? 0).toInt());
+});

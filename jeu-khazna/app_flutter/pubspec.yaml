@@ -1,7 +1,7 @@
 name: khazna
 description: "الخزنة — مهمّة تجسّس جماعية: العميل يرى الأقفال والمحلّل معه الدليل."
 publish_to: 'none'
-version: 0.6.0+6
+version: 0.7.0+7
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -20,6 +20,8 @@ dependencies:
   permission_handler: ^11.3.1
   # صورة وصل الدفع (معرض الصور / الكاميرا)
   image_picker: ^1.1.2
+  # مشاركة صورة الفوز
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:

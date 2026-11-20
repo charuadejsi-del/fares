@@ -56,7 +56,7 @@ class Brief extends StatelessWidget {
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icon, size: 18, color: K.neonDim)),
           const SizedBox(width: 8),
-          Expanded(child: Text(text, style: const TextStyle(color: Color(0xFFBFDCD0), fontSize: 15, height: 1.55))),
+          Expanded(child: Text(text, style: const TextStyle(color: Color(0xFFC9CED3), fontSize: 15, height: 1.55))),
         ]),
       );
 }
@@ -164,7 +164,7 @@ class _DeviceKeyState extends ConsumerState<DeviceKey> {
             end: Alignment.bottomCenter,
             colors: [Color.lerp(widget.color, Colors.white, 0.12)!, widget.color, Color.lerp(widget.color, Colors.black, 0.35)!],
           ),
-          border: Border.all(color: _down ? K.neon : const Color(0xFF2A3A34)),
+          border: Border.all(color: _down ? K.neon : const Color(0xFF2C3238)),
           boxShadow: _down
               ? K.glow(K.neon, 12, 90)
               : const [BoxShadow(color: Colors.black, offset: Offset(0, 3), blurRadius: 2)],
@@ -225,7 +225,7 @@ class _KeypadOpState extends State<KeypadOp> {
                     child: Center(
                         child: Text(kSymbols[i].s,
                             style: TextStyle(
-                                fontSize: 34, color: K.neon, shadows: [Shadow(color: K.neon.withAlpha(150), blurRadius: 12)])))),
+                                fontSize: 34, color: K.neon)))),
               ),
             ),
         ]),
@@ -235,8 +235,8 @@ class _KeypadOpState extends State<KeypadOp> {
       Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFF020805),
-          border: Border.all(color: const Color(0xFF1C2C26), width: 3),
+          color: const Color(0xFF07090B),
+          border: Border.all(color: const Color(0xFF22272C), width: 3),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -255,8 +255,7 @@ class _KeypadOpState extends State<KeypadOp> {
                   fontFamily: K.mono,
                   fontSize: 44,
                   letterSpacing: 18,
-                  color: K.neon,
-                  shadows: [Shadow(color: K.neon.withAlpha(200), blurRadius: 16)])),
+                  color: K.neon)),
         ]),
       ),
       const SizedBox(height: 14),
@@ -313,8 +312,8 @@ class WiresOp extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: const Color(0xFF0B0F0E),
-            border: Border.all(color: const Color(0xFF26332E), width: 3),
+            color: const Color(0xFF0E1012),
+            border: Border.all(color: const Color(0xFF2C3238), width: 3),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Column(children: [
@@ -411,7 +410,7 @@ class _WirePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size s) {
     // مسامير الأطراف
-    final term = Paint()..color = const Color(0xFF8A9A94);
+    final term = Paint()..color = const Color(0xFF8E949A);
     canvas.drawCircle(Offset(6, s.height / 2), 6, term);
     canvas.drawCircle(Offset(s.width - 6, s.height / 2), 6, term);
     final wire = Paint()
@@ -528,12 +527,12 @@ class _CipherOpState extends State<CipherOp> {
           icon: Icons.record_voice_over_outlined),
       Container(
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: const Color(0xFF020805), border: Border.all(color: K.neonDim)),
+        decoration: BoxDecoration(color: const Color(0xFF07090B), border: Border.all(color: K.neonDim)),
         child: Column(children: [
           const MonoLabel('>> INTERCEPTED TRANSMISSION', size: 11),
           const SizedBox(height: 12),
           Text(kSymbols[c.sym].s,
-              style: TextStyle(fontSize: 56, color: K.neon, shadows: [Shadow(color: K.neon.withAlpha(180), blurRadius: 20)])),
+              style: TextStyle(fontSize: 56, color: K.neon)),
           const SizedBox(height: 12),
           Wrap(alignment: WrapAlignment.center, spacing: 10, runSpacing: 10, children: [
             for (final ch in c.cipher.split(''))
@@ -932,9 +931,9 @@ class _Bulb extends StatelessWidget {
             center: const Alignment(-0.3, -0.4),
             colors: on
                 ? [Colors.white, color, Color.lerp(color, Colors.black, 0.3)!]
-                : [const Color(0xFF2A2F2D), Color.lerp(color, Colors.black, 0.82)!, Colors.black],
+                : [const Color(0xFF2A2D30), Color.lerp(color, Colors.black, 0.82)!, Colors.black],
           ),
-          border: Border.all(color: const Color(0xFF3A4440), width: 3),
+          border: Border.all(color: const Color(0xFF3A4048), width: 3),
           boxShadow: on ? [BoxShadow(color: color.withAlpha(200), blurRadius: 34, spreadRadius: 6)] : null,
         ),
       );
@@ -1116,9 +1115,9 @@ class _DialPainter extends CustomPainter {
         c,
         r,
         Paint()
-          ..shader = const RadialGradient(colors: [Color(0xFF26302C), Color(0xFF0B0F0E)]).createShader(Rect.fromCircle(center: c, radius: r)));
+          ..shader = const RadialGradient(colors: [Color(0xFF2A2E32), Color(0xFF0E1012)]).createShader(Rect.fromCircle(center: c, radius: r)));
     canvas.drawCircle(c, r - 2, Paint()
-      ..color = const Color(0xFF3A4842)
+      ..color = const Color(0xFF3A4048)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3);
     // المؤشّر الثابت في الأعلى
@@ -1137,7 +1136,7 @@ class _DialPainter extends CustomPainter {
         Offset.zero,
         inner,
         Paint()
-          ..shader = const SweepGradient(colors: [Color(0xFF4A5A54), Color(0xFF1C2421), Color(0xFF4A5A54), Color(0xFF1C2421), Color(0xFF4A5A54)])
+          ..shader = const SweepGradient(colors: [Color(0xFF4A5058), Color(0xFF1C2024), Color(0xFF4A5058), Color(0xFF1C2024), Color(0xFF4A5058)])
               .createShader(Rect.fromCircle(center: Offset.zero, radius: inner)));
     final tick = Paint()..color = K.text;
     for (int i = 0; i < 40; i++) {
@@ -1160,7 +1159,7 @@ class _DialPainter extends CustomPainter {
       }
     }
     // المقبض في الوسط
-    canvas.drawCircle(Offset.zero, inner * 0.38, Paint()..color = const Color(0xFF0E1412));
+    canvas.drawCircle(Offset.zero, inner * 0.38, Paint()..color = const Color(0xFF0E1012));
     canvas.drawCircle(Offset.zero, inner * 0.38, Paint()
       ..color = K.neonDim
       ..style = PaintingStyle.stroke
@@ -1171,7 +1170,7 @@ class _DialPainter extends CustomPainter {
       text: TextSpan(
           text: value.toString().padLeft(2, '0'),
           style: TextStyle(
-              fontFamily: K.mono, color: K.neon, fontSize: 40, shadows: [Shadow(color: K.neon.withAlpha(200), blurRadius: 14)])),
+              fontFamily: K.mono, color: K.neon, fontSize: 40)),
       textDirection: TextDirection.ltr,
     )..layout();
     tp.paint(canvas, c - Offset(tp.width / 2, tp.height / 2));
@@ -1260,7 +1259,7 @@ class _RadioOpState extends ConsumerState<RadioOp> with SingleTickerProviderStat
           icon: Icons.record_voice_over_outlined),
       Container(
         height: 150,
-        decoration: BoxDecoration(color: const Color(0xFF020805), border: Border.all(color: K.neonDim)),
+        decoration: BoxDecoration(color: const Color(0xFF07090B), border: Border.all(color: K.neonDim)),
         child: Stack(children: [
           Positioned.fill(
             child: AnimatedBuilder(
@@ -1288,7 +1287,7 @@ class _RadioOpState extends ConsumerState<RadioOp> with SingleTickerProviderStat
         child: Text('$freq MHz',
             textDirection: TextDirection.ltr,
             style: TextStyle(
-                fontFamily: K.mono, fontSize: 44, color: K.neon, shadows: [Shadow(color: K.neon.withAlpha(180), blurRadius: 16)])),
+                fontFamily: K.mono, fontSize: 44, color: K.neon)),
       ),
       Directionality(
         textDirection: TextDirection.ltr,

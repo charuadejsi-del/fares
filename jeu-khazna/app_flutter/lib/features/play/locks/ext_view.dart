@@ -185,7 +185,7 @@ class ManualView extends StatelessWidget {
       ];
     }
     return Container(
-      decoration: BoxDecoration(color: const Color(0xFF0C1310), border: Border.all(color: K.line)),
+      decoration: BoxDecoration(color: const Color(0xFF0E1012), border: Border.all(color: K.line)),
       padding: const EdgeInsets.all(10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (serial != null)
@@ -196,7 +196,7 @@ class ManualView extends StatelessWidget {
         for (final rule in page.rules)
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
-            child: Text(rule, style: const TextStyle(color: Color(0xFFCFE9DD), fontSize: 14, height: 1.5)),
+            child: Text(rule, style: const TextStyle(color: Color(0xFFD5D9DD), fontSize: 14, height: 1.5)),
           ),
         if (page.rows.isNotEmpty) ...[
           const SizedBox(height: 4),
@@ -225,7 +225,7 @@ class OpItemView extends StatelessWidget {
   const OpItemView({super.key, required this.item});
 
   Widget _glowGlyph(String g, {double size = 34, Color color = K.neon}) => Text(g,
-      style: TextStyle(fontSize: size, color: color, shadows: [Shadow(color: color.withAlpha(150), blurRadius: 12)]));
+      style: TextStyle(fontSize: size, color: color));
 
   @override
   Widget build(BuildContext context) {
@@ -347,7 +347,7 @@ class OpItemView extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF151A18),
+              color: const Color(0xFF16191D),
               border: Border.all(color: K.amber, width: 3),
               boxShadow: K.glow(K.amber, 20, 90),
             ),
@@ -399,7 +399,7 @@ class OpItemView extends StatelessWidget {
         return Center(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-            decoration: BoxDecoration(color: const Color(0xFF020805), border: Border.all(color: K.amber, width: 2)),
+            decoration: BoxDecoration(color: const Color(0xFF07090B), border: Border.all(color: K.amber, width: 2)),
             child: Text('⚡ ${item.text} V', textDirection: TextDirection.ltr, style: const TextStyle(fontFamily: K.mono, fontSize: 30, color: K.amber)),
           ),
         );
@@ -420,7 +420,7 @@ class OpItemView extends StatelessWidget {
                     Container(
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: n[i] == 1 ? const Color(0xFFFFE082) : const Color(0xFF1A1F1C),
+                        color: n[i] == 1 ? const Color(0xFFFFE082) : const Color(0xFF1A1D20),
                         boxShadow: n[i] == 1 ? K.glow(const Color(0xFFFFD54F), 18, 160) : null,
                         border: Border.all(color: K.line),
                       ),
@@ -515,7 +515,7 @@ class _MorseFlasherState extends ConsumerState<MorseFlasher> {
         height: 110,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: _on ? const Color(0xFFFFF59D) : const Color(0xFF1B1F1D),
+          color: _on ? const Color(0xFFFFF59D) : const Color(0xFF1B1E21),
           boxShadow: _on ? K.glow(const Color(0xFFFFEB3B), 40, 220) : null,
           border: Border.all(color: K.line, width: 3),
         ),
@@ -649,11 +649,11 @@ class _ExtInputState extends ConsumerState<ExtInput> {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
-                color: const Color(0xFF020805), border: Border.all(color: const Color(0xFF1C2C26), width: 3), borderRadius: BorderRadius.circular(6)),
+                color: const Color(0xFF07090B), border: Border.all(color: const Color(0xFF22272C), width: 3), borderRadius: BorderRadius.circular(6)),
             child: Text(len == 0 ? (_digits.isEmpty ? '_' : _digits) : _digits.padRight(len, '_'),
                 textAlign: TextAlign.center,
                 textDirection: TextDirection.ltr,
-                style: TextStyle(fontFamily: K.mono, fontSize: 38, letterSpacing: 14, color: K.neon, shadows: [Shadow(color: K.neon.withAlpha(200), blurRadius: 14)])),
+                style: TextStyle(fontFamily: K.mono, fontSize: 38, letterSpacing: 14, color: K.neon)),
           ),
           const SizedBox(height: 10),
           Directionality(
@@ -895,7 +895,7 @@ class _ExtInputState extends ConsumerState<ExtInput> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: const RadialGradient(colors: [Color(0xFF2B302D), Color(0xFF0E1110)]),
+                        gradient: const RadialGradient(colors: [Color(0xFF2B2E31), Color(0xFF0E1012)]),
                         border: Border.all(color: isOp ? Color(spec.colors[i]) : K.amber, width: 4),
                       ),
                       child: isOp ? const Text('🗝', style: TextStyle(fontSize: 30)) : Text(spec.labels[i], style: const TextStyle(fontSize: 30, color: K.amber)),

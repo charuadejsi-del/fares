@@ -100,24 +100,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       Flexible(child: Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900))),
                       IconButton(onPressed: _rename, icon: const Icon(Icons.edit_outlined, size: 18, color: K.muted), visualDensity: VisualDensity.compact),
                     ]),
-                    Row(children: [
-                      const Icon(Icons.military_tech, color: K.amber, size: 20),
-                      const SizedBox(width: 4),
-                      Text(p.rank, style: const TextStyle(color: K.amber, fontWeight: FontWeight.w800)),
-                    ]),
+                    Text(p.rank, style: const TextStyle(color: K.text2, fontWeight: FontWeight.w700)),
                     TitleBadge(ref.watch(seasonProvider).valueOrNull?.myTitle),
                     const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: LinearProgressIndicator(
-                        value: p.nextRankAt == 0 ? 1 : (p.stars / p.nextRankAt).clamp(0.0, 1.0).toDouble(),
-                        minHeight: 6,
-                        color: K.amber,
-                        backgroundColor: K.border,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(toNext > 0 ? 'باقي $toNext نجمة للرتبة التالية' : 'أعلى رتبة!', style: const TextStyle(color: K.muted, fontSize: 11.5)),
+                    Builder(builder: (context) {
+                      final st = ref.watch(statsProvider).valueOrNull;
+                      if (st == null) {
+                        return Text(toNext > 0 ? 'باقي $toNext نجمة للرتبة التالية' : 'أعلى رتبة!',
+                            style: const TextStyle(color: K.muted, fontSize: 11.5));
+                      }
+                      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('المستوى ${st.level}', style: const TextStyle(fontFamily: K.mono, color: K.neon, fontSize: 15, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 4),
+                        LinearProgressIndicator(value: st.levelFrac, minHeight: 4, color: K.neon, backgroundColor: K.border),
+                        const SizedBox(height: 4),
+                        Text('${st.xp} XP · باقي ${st.toNext} للمستوى ${st.level + 1}', style: const TextStyle(color: K.muted, fontSize: 11.5)),
+                      ]);
+                    }),
                   ]),
                 ),
               ]),

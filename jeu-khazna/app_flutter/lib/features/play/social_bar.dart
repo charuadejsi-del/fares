@@ -144,7 +144,7 @@ class PartnerChip extends StatelessWidget {
           const SizedBox(width: 6),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 90),
-            child: Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+            child: Text(streamerMode.value ? 'الشريك' : name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
           ),
           const SizedBox(width: 4),
           ConnBars(q: c.connQuality),

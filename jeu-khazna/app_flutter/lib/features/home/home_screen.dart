@@ -202,6 +202,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ref.invalidate(teamProgressProvider(null));
         ref.invalidate(challengesProvider);
         ref.invalidate(seasonProvider);
+        ref.invalidate(statsProvider);
         await authService.refreshProfile();
         await _checkReviews();
       },
@@ -217,7 +218,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                  Text(progress.rank, style: const TextStyle(color: K.muted, fontSize: 12, fontWeight: FontWeight.w600)),
+                  _LevelLine(stats: ref.watch(statsProvider).valueOrNull, rank: progress.rank),
                 ]),
               ),
               const BalanceChip(),
@@ -272,7 +273,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
               ),
-              const Positioned(top: 12, right: 14, left: 14, child: _LiveRow()),
+              Positioned(top: 12, right: 14, left: 14, child: _LiveRow(online: ref.watch(statsProvider).valueOrNull?.online)),
               Positioned(
                 right: 16,
                 left: 16,
@@ -371,9 +372,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
+/// المستوى + شريط الخبرة تحت الاسم.
+class _LevelLine extends StatelessWidget {
+  final PlayerStats? stats;
+  final String rank;
+  const _LevelLine({required this.stats, required this.rank});
+
+  @override
+  Widget build(BuildContext context) {
+    final st = stats;
+    if (st == null) return Text(rank, style: const TextStyle(color: K.muted, fontSize: 12));
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('المستوى ${st.level} · ${st.xp} XP', style: const TextStyle(color: K.text2, fontSize: 12, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      SizedBox(
+        width: 120,
+        child: LinearProgressIndicator(value: st.levelFrac, minHeight: 3, color: K.neon, backgroundColor: K.border),
+      ),
+    ]);
+  }
+}
+
 /// «LIVE · عدد العملاء» + ساعة بطابع كاميرا مراقبة.
 class _LiveRow extends StatefulWidget {
-  const _LiveRow();
+  final int? online;
+  const _LiveRow({this.online});
 
   @override
   State<_LiveRow> createState() => _LiveRowState();
@@ -399,7 +422,7 @@ class _LiveRowState extends State<_LiveRow> with SingleTickerProviderStateMixin 
         child: Container(width: 7, height: 7, decoration: const BoxDecoration(color: K.danger, shape: BoxShape.circle)),
       ),
       const SizedBox(width: 6),
-      const Text('LIVE · غرفة العمليات', style: st),
+      Text(widget.online == null ? 'LIVE · غرفة العمليات' : 'LIVE · ${widget.online} عميل متّصل', style: st),
       const Spacer(),
       Text('CAM 01 · $t', style: st),
     ]);
