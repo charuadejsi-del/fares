@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../core/auth.dart';
 import '../../core/services.dart';
 import '../../widgets/spy_ui.dart';
 import '../play/play_screen.dart' show fmtTime;
@@ -15,7 +16,23 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  late final TextEditingController _name = TextEditingController(text: ref.read(settingsProvider).name);
+  late final TextEditingController _name = TextEditingController(text: authService.profile?.nickname ?? ref.read(settingsProvider).name);
+  String? _nickMsg;
+
+  Future<void> _saveNick() async {
+    final v = _name.text.trim();
+    if (v == authService.profile?.nickname) return;
+    try {
+      await authService.setNickname(v);
+      ref.read(settingsProvider.notifier).setName(v);
+      setState(() => _nickMsg = 'تم الحفظ ✓');
+    } catch (e) {
+      setState(() => _nickMsg = authErrorText(e));
+    }
+  }
+
+  String _date(DateTime d) =>
+      '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
   @override
   void dispose() {
@@ -46,8 +63,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   maxLength: 20,
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                   decoration: fieldDecoration('الاسم الحركي', icon: Icons.badge_outlined),
-                  onChanged: (v) => ref.read(settingsProvider.notifier).setName(v),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _saveNick(),
+                  onEditingComplete: _saveNick,
                 ),
+                if (_nickMsg != null) Text(_nickMsg!, style: const TextStyle(color: K.muted, fontSize: 12.5)),
                 const SizedBox(height: 14),
                 Row(children: [
                   const Icon(Icons.military_tech, color: K.amber, size: 34),
@@ -83,9 +103,53 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 _Line(Icons.star_rounded, 'النجوم', '${p.stars}'),
                 _Line(Icons.flag, 'أعلى مرحلة', '${p.bestStage}'),
                 _Line(Icons.monetization_on, 'العملات', '${p.coins}'),
-                _Line(Icons.fingerprint, 'معرّف اللاعب', ref.read(progressProvider.notifier).playerId.substring(0, 6)),
                 _Line(Icons.timer_outlined, 'أفضل وقت', p.bestTime == 0 ? '—' : fmtTime(p.bestTime.toDouble())),
               ]),
+            ),
+            const SizedBox(height: 14),
+            ListenableBuilder(
+              listenable: authService,
+              builder: (context, _) {
+                final pr = authService.profile;
+                return HudPanel(
+                  label: 'ACCOUNT',
+                  color: K.amber,
+                  child: Column(children: [
+                    _Line(Icons.alternate_email, 'البريد', authService.email ?? '—'),
+                    _Line(Icons.timer_outlined, 'رصيد الوقت', pr == null ? '—' : '${pr.balanceMinutes} دقيقة'),
+                    _Line(Icons.event, 'تاريخ التسجيل', pr == null ? '—' : _date(pr.createdAt)),
+                    _Line(Icons.login, 'آخر دخول', pr == null ? '—' : _date(pr.lastSeen)),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(
+                        child: NeonButton(
+                          label: 'الخصوصية',
+                          icon: Icons.privacy_tip_outlined,
+                          filled: false,
+                          height: 46,
+                          color: K.agent,
+                          onTap: () => context.push('/privacy'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: NeonButton(
+                          label: 'خروج',
+                          icon: Icons.logout,
+                          filled: false,
+                          height: 46,
+                          color: K.danger,
+                          onTap: () async {
+                            final ok = await confirmDialog(context,
+                                title: 'تسجيل الخروج', body: 'ستعود لشاشة الدخول.', confirm: 'خروج');
+                            if (ok) await authService.signOut();
+                          },
+                        ),
+                      ),
+                    ]),
+                  ]),
+                );
+              },
             ),
           ]),
         ),

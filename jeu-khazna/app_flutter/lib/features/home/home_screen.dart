@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../core/auth.dart';
 import '../../core/controller.dart';
 import '../../core/services.dart';
 import '../../net/transport.dart';
@@ -23,10 +24,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(audioProvider).startMusic());
+    authService.refreshProfile().catchError((_) {});
   }
 
   String get _name {
-    final n = ref.read(settingsProvider).name;
+    final n = authService.profile?.nickname ?? ref.read(settingsProvider).name;
     return n.isEmpty ? 'عميل' : n;
   }
 
@@ -128,7 +130,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   const Text('عميل في الميدان + محلّل في القاعدة = خزنة مفتوحة',
                       textAlign: TextAlign.center, style: TextStyle(color: K.muted, fontSize: 13.5)),
                   const SizedBox(height: 28),
-                  HudPanel(
+                  ListenableBuilder(
+                    listenable: authService,
+                    builder: (context, _) => HudPanel(
                     label: 'AGENT FILE',
                     padding: const EdgeInsets.all(14),
                     child: Row(children: [
@@ -141,15 +145,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(settings.name.isEmpty ? 'عميل بلا اسم' : settings.name,
+                          Text(authService.profile?.nickname ?? (settings.name.isEmpty ? 'عميل بلا اسم' : settings.name),
                               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
                           Text(progress.rank, style: const TextStyle(color: K.amber, fontSize: 13)),
                         ]),
                       ),
+                      _Stat(icon: Icons.timer_outlined, value: '${authService.profile?.balanceMinutes ?? '—'}د', color: K.agent),
+                      const SizedBox(width: 12),
                       _Stat(icon: Icons.monetization_on, value: '${progress.coins}', color: K.amber),
                       const SizedBox(width: 12),
                       _Stat(icon: Icons.flag, value: '${progress.bestStage}', color: K.neon),
                     ]),
+                  ),
                   ),
                   const SizedBox(height: 20),
                   NeonButton(

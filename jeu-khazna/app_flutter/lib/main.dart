@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/router.dart';
 import 'app/theme.dart';
+import 'core/auth.dart';
 import 'core/services.dart';
 
 Future<void> main() async {
@@ -15,6 +16,7 @@ Future<void> main() async {
     systemNavigationBarColor: K.bg,
   ));
   final prefs = await SharedPreferences.getInstance();
+  await authService.init(prefs);
   runApp(ProviderScope(
     overrides: [prefsProvider.overrideWithValue(prefs)],
     child: const KhaznaApp(),

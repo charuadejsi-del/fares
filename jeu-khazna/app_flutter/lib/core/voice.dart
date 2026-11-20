@@ -4,9 +4,8 @@ import 'dart:math';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:supabase/supabase.dart';
 
-import '../net/transport.dart';
+import 'auth.dart';
 
 /// رقم تطبيق Agora (وضع الاختبار بلا رموز). يمكن تغييره عند البناء بـ --dart-define=AGORA_APP_ID=...
 const String kAgoraAppId = String.fromEnvironment('AGORA_APP_ID', defaultValue: '9fd63619ac984e71b3c3eba6215b5a32');
@@ -30,8 +29,7 @@ class VoiceService extends ChangeNotifier {
   /// يطلب رمز Agora من دالة Supabase «agora-token». فارغ = مشروع بوضع الاختبار.
   Future<String> _token(String channel) async {
     try {
-      final res = await SupabaseClient(kSupabaseUrl, kSupabaseAnonKey)
-          .functions
+      final res = await supa.functions
           .invoke('agora-token', body: {'channel': channel, 'appId': kAgoraAppId})
           .timeout(const Duration(seconds: 8));
       final data = res.data;

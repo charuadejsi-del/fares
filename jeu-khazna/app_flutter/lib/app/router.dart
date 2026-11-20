@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/auth.dart';
 import '../core/controller.dart';
+import '../features/auth/auth_screen.dart';
+import '../features/auth/privacy_screen.dart';
 import '../features/briefing/briefing_screen.dart';
 import '../features/campaign/campaign_screen.dart';
 import '../features/home/home_screen.dart';
@@ -29,7 +32,18 @@ CustomTransitionPage<void> _fade(GoRouterState state, Widget child) => CustomTra
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
+  refreshListenable: authService,
+  // الحساب إجباري: كل الشاشات (عدا المقدّمة والدخول والخصوصية) تتطلّب تسجيل الدخول.
+  redirect: (context, state) {
+    const open = {'/', '/login', '/privacy'};
+    final loc = state.matchedLocation;
+    if (!authService.signedIn && !open.contains(loc)) return '/login';
+    if (authService.signedIn && loc == '/login') return '/home';
+    return null;
+  },
   routes: [
+    GoRoute(path: '/login', pageBuilder: (c, s) => _fade(s, const AuthScreen())),
+    GoRoute(path: '/privacy', pageBuilder: (c, s) => _fade(s, const PrivacyScreen())),
     GoRoute(path: '/', pageBuilder: (c, s) => _fade(s, const IntroScreen())),
     GoRoute(path: '/home', pageBuilder: (c, s) => _fade(s, const HomeScreen())),
     GoRoute(path: '/tutorial', pageBuilder: (c, s) => _fade(s, const TutorialScreen())),

@@ -5,9 +5,6 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase/supabase.dart';
-
-import '../net/transport.dart';
 
 /// يُملأ في main() قبل تشغيل التطبيق.
 final prefsProvider = Provider<SharedPreferences>((ref) => throw UnimplementedError('prefs not ready'));
@@ -267,31 +264,10 @@ class LeaderEntry {
 }
 
 class LeaderboardService {
-  SupabaseClient? _client;
-  SupabaseClient get _c => _client ??= SupabaseClient(kSupabaseUrl, kSupabaseAnonKey);
+  /// الترتيب القديم حُذف مع الحسابات الجديدة؛ يعود مبنيّاً على تقدّم الفرق في المرحلة القادمة.
+  Future<void> submit({required String id, required String name, required int bestStage, required int coins}) async {}
 
-  /// يرسل تقدّم اللاعب (لا يفشل اللعب إذا لم يوجد إنترنت).
-  Future<void> submit({required String id, required String name, required int bestStage, required int coins}) async {
-    if (!onlineAvailable) return;
-    try {
-      await _c.rpc('submit_progress', params: {'p_id': id, 'p_name': name, 'p_stage': bestStage, 'p_coins': coins});
-    } catch (_) {
-      // بلا إنترنت: سيُرسل التقدّم في المرّة القادمة
-    }
-  }
-
-  Future<List<LeaderEntry>> top({int limit = 50}) async {
-    final rows = await _c
-        .from('khazna_players')
-        .select('id, name, best_stage, coins')
-        .order('best_stage', ascending: false)
-        .order('coins', ascending: false)
-        .limit(limit);
-    return [
-      for (final r in rows)
-        LeaderEntry('${r['id']}', '${r['name']}', (r['best_stage'] as num?)?.toInt() ?? 0, (r['coins'] as num?)?.toInt() ?? 0),
-    ];
-  }
+  Future<List<LeaderEntry>> top({int limit = 50}) async => const [];
 }
 
 final leaderboardProvider = Provider<LeaderboardService>((ref) => LeaderboardService());
