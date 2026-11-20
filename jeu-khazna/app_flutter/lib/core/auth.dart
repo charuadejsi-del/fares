@@ -152,6 +152,7 @@ class AuthService extends ChangeNotifier {
       createdAt: p.createdAt,
       lastSeen: p.lastSeen,
       dailyClaimedOn: p.dailyClaimedOn,
+      streakDays: p.streakDays,
     );
     notifyListeners();
   }

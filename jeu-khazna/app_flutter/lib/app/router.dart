@@ -37,9 +37,25 @@ CustomTransitionPage<void> _fade(GoRouterState state, Widget child) => CustomTra
       ),
     );
 
+/// يُنبّه الموجّه فقط عند تغيّر حالة الدخول/الخروج.
+/// كان الموجّه يستمع لكل تحديث في الملف (الرصيد كل 15 ث أثناء اللعب)، فيُعاد بناء
+/// مسار /play ويضيع المتحكّم (extra) فيُرمى اللاعب إلى المقرّ وسط المهمّة.
+class _SignInGate extends ChangeNotifier {
+  bool _last = authService.signedIn;
+  _SignInGate() {
+    authService.addListener(() {
+      final now = authService.signedIn;
+      if (now != _last) {
+        _last = now;
+        notifyListeners();
+      }
+    });
+  }
+}
+
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
-  refreshListenable: authService,
+  refreshListenable: _SignInGate(),
   // الحساب إجباري: كل الشاشات (عدا المقدّمة والدخول والخصوصية) تتطلّب تسجيل الدخول.
   redirect: (context, state) {
     const open = {'/', '/login', '/privacy'};
