@@ -118,7 +118,14 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with TickerProviderStat
   void _onChange() {
     _maybeAutoStage();
     final s = c.state;
-    if (s == null || _recorded) return;
+    if (s == null) return;
+    // مهمّة جديدة في نفس الغرفة: نسمح بتسجيل نتيجتها.
+    // (كان هذا السطر بعد «if (_recorded) return» فلا يُنفَّذ أبداً، فتُسجَّل نتيجة أوّل مهمّة فقط في كل غرفة.)
+    if (s.phase == 'lobby' || s.phase == 'playing') {
+      _recorded = false;
+      return;
+    }
+    if (_recorded) return;
     if (s.phase == 'won' || s.phase == 'lost') {
       _recorded = true;
       final won = s.phase == 'won';
@@ -146,7 +153,6 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with TickerProviderStat
         audio.fx(Sfx.alarm, HapticKind.heavy, volume: 0.6);
       }
     }
-    if (s.phase == 'lobby' || s.phase == 'playing') _recorded = false;
   }
 
   void _onEvent(GameEvent e) {
