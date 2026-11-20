@@ -9,7 +9,7 @@ import 'package:supabase/supabase.dart';
 import '../net/transport.dart';
 
 /// رقم تطبيق Agora (وضع الاختبار بلا رموز). يمكن تغييره عند البناء بـ --dart-define=AGORA_APP_ID=...
-const String kAgoraAppId = String.fromEnvironment('AGORA_APP_ID', defaultValue: 'a8a28df251784e9595dbb4c8ce4b0042');
+const String kAgoraAppId = String.fromEnvironment('AGORA_APP_ID', defaultValue: '9fd63619ac984e71b3c3eba6215b5a32');
 
 class VoiceService extends ChangeNotifier {
   RtcEngine? _engine;
@@ -32,7 +32,7 @@ class VoiceService extends ChangeNotifier {
     try {
       final res = await SupabaseClient(kSupabaseUrl, kSupabaseAnonKey)
           .functions
-          .invoke('agora-token', body: {'channel': channel})
+          .invoke('agora-token', body: {'channel': channel, 'appId': kAgoraAppId})
           .timeout(const Duration(seconds: 8));
       final data = res.data;
       if (data is Map && data['token'] is String) return data['token'] as String;
