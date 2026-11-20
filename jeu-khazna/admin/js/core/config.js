@@ -23,4 +23,6 @@ export const REASONS = {
   gift_out: ['هدية مُرسلة', 'violet'],
   hint: ['تلميح', 'info'],
   admin: ['تعديل المدير', 'warn'],
+  referral: ['مكافأة دعوة', 'ok'],
+  challenge: ['تحدٍّ يومي', 'violet'],
 };

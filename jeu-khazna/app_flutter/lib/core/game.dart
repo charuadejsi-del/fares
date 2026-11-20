@@ -612,7 +612,7 @@ String hintFor(GameState s, Puzzles p) {
       final a = p.cipher.answer;
       return 'الكلمة من ${a.length} حروف وتبدأ بـ «${a.substring(0, 1)}»';
     case 'maze':
-      final dir = _nextMazeStep(p.maze, s.mazePos ?? p.maze.start);
+      final dir = nextMazeStep(p.maze, s.mazePos ?? p.maze.start);
       const names = {'up': 'للأعلى ⬆', 'down': 'للأسفل ⬇', 'left': 'لليسار ⬅', 'right': 'لليمين ➡'};
       return dir == null ? 'أنت عند المخرج' : 'الخطوة الصحيحة التالية: ${names[dir]}';
     case 'lights':
@@ -631,7 +631,7 @@ String hintFor(GameState s, Puzzles p) {
   return '';
 }
 
-String? _nextMazeStep(Maze m, int from) {
+String? nextMazeStep(Maze m, int from) {
   if (from == m.exit) return null;
   final prev = <int, (int, String)>{};
   final q = <int>[from];

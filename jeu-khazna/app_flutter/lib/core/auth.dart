@@ -139,8 +139,11 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> signUp({required String email, required String password, required String nickname}) async {
-    final res = await supa.auth.signUp(email: email.trim(), password: password, data: {'nickname': nickname.trim()});
+  Future<void> signUp({required String email, required String password, required String nickname, String referral = ''}) async {
+    final res = await supa.auth.signUp(email: email.trim(), password: password, data: {
+      'nickname': nickname.trim(),
+      if (referral.trim().isNotEmpty) 'ref': referral.trim().toUpperCase(),
+    });
     if (res.session == null) {
       throw const AuthException('confirm_email');
     }
@@ -207,6 +210,16 @@ String authErrorText(Object e) {
   if (m.contains('self gift')) return 'لا يمكنك إهداء نفسك';
   if (m.contains('gift range')) return 'الإهداء من 5 إلى 500 دقيقة';
   if (m.contains('gift limit')) return 'وصلت لحدّ 5 إهداءات في اليوم';
+  if (m.contains('self friend')) return 'لا يمكنك إضافة نفسك';
+  if (m.contains('friend limit')) return 'وصلت للحدّ الأقصى من الأصدقاء';
+  if (m.contains('not friends')) return 'هذا اللاعب ليس في أصدقائك بعد';
+  if (m.contains('invite limit')) return 'دعوات كثيرة، انتظر قليلاً';
+  if (m.contains('invite expired')) return 'انتهت صلاحية الدعوة';
+  if (m.contains('report limit')) return 'وصلت لحدّ البلاغات اليومي';
+  if (m.contains('referral used')) return 'استعملت كود دعوة من قبل';
+  if (m.contains('referral late')) return 'كود الدعوة يُستعمل خلال 3 أيام من التسجيل فقط';
+  if (m.contains('invalid referral')) return 'كود الدعوة غير صحيح';
+  if (m.contains('challenge not ready')) return 'التحدّي لم يكتمل بعد';
   if (m.contains('rate limit')) return 'محاولات كثيرة، انتظر قليلاً';
   if (m.contains('socket') || m.contains('failed host') || m.contains('timeout')) return 'لا يوجد اتصال بالإنترنت';
   final raw = (e is AuthException ? e.message : '$e');

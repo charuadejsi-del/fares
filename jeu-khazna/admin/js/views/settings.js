@@ -14,6 +14,9 @@ const RULES = [
   ['error_penalty_seconds', 'عقوبة كل خطأ', 'sec', 'alert', 'danger', 'تُخصم من اللاعبَين معاً'],
   ['max_penalty_per_stage_seconds', 'سقف العقوبة في المرحلة', 'sec', 'ban', 'danger', 'لا تتجاوزه العقوبات في مرحلة واحدة'],
   ['hint_cost_seconds', 'ثمن التلميح', 'min', 'zap', 'warn', 'يُدفع من الرصيد'],
+  ['referral_bonus_seconds', 'هدية الدعوة', 'min', 'gift', 'ok', 'لكلّ من الداعي والمدعوّ عند أول فوز للمدعوّ'],
+  ['challenge_reward_seconds', 'مكافأة التحدي اليومي', 'min', 'flag', 'violet', 'لكل تحدٍّ مكتمل (3 تحديات يومياً)'],
+  ['bot_after_seconds', 'ظهور العميل الآلي بعد', 'sec', 'clock', 'info', 'مدّة البحث على الرادار قبل اقتراح العميل الآلي'],
 ];
 
 export async function renderSettings(page) {

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
 import '../../widgets/spy_ui.dart';
+import '../../widgets/online_launch.dart';
 import '../../widgets/ui_kit.dart';
 import '../campaign/campaign_screen.dart';
 import '../home/home_screen.dart';
@@ -28,7 +29,8 @@ class MainShell extends ConsumerWidget {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) ref.read(tabProvider.notifier).state = 0;
       },
-      child: Scaffold(
+      child: InviteListener(
+        child: Scaffold(
         backgroundColor: K.bg,
         extendBody: true,
         bottomNavigationBar: const AppNavBar(),
@@ -51,6 +53,7 @@ class MainShell extends ConsumerWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

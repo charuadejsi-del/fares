@@ -138,6 +138,8 @@ class VoiceService extends ChangeNotifier {
         ),
       );
       _engine = e;
+      // مع الغرباء يبدأ الميكروفون مكتوماً
+      if (muted) await e.muteLocalAudioStream(true).catchError((_) {});
       if (_disposed) await leave();
     } catch (e) {
       error = 'تعذّر تشغيل الصوت';

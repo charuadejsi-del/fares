@@ -11,10 +11,13 @@ import '../../core/shop.dart';
 import '../../core/stages.dart';
 import '../../core/team.dart';
 import '../../core/services.dart';
+import '../../core/social.dart';
 import '../../net/transport.dart';
 import '../../widgets/spy_ui.dart';
 import '../../widgets/ui_kit.dart';
+import '../../widgets/online_launch.dart';
 import '../shop/shop_screen.dart';
+import 'challenges_card.dart';
 
 /// تبويب «المقرّ»: البطاقة الرئيسية للّعب مع صديق، المكافأة اليومية، والتقدّم.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -26,6 +29,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _busy = false;
+  RejoinData? _rejoin;
 
   @override
   void initState() {
@@ -33,6 +37,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(audioProvider).startMusic();
       _checkReviews();
+      _checkRejoin();
     });
     authService.refreshProfile().catchError((_) {});
   }
@@ -43,6 +48,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _toast(String m) => showToast(context, m, error: true);
+
+  /// مهمّة جارية لم تكتمل (إغلاق التطبيق أو انقطاع الإنترنت)؟
+  Future<void> _checkRejoin() async {
+    final d = await RejoinData.load();
+    if (d == null) return;
+    if (d.sessionId != null) {
+      try {
+        final r = await SocialService.resume(d.sessionId!);
+        if (r == null) {
+          await RejoinData.clear();
+          return;
+        }
+      } catch (_) {}
+    }
+    if (mounted) setState(() => _rejoin = d);
+  }
+
+  Future<void> _doRejoin() async {
+    final d = _rejoin;
+    if (d == null) return;
+    setState(() => _busy = true);
+    final ok = await launchOnline(context, code: d.code, channel: d.channel, host: d.host, matched: d.matched, resume: d);
+    if (mounted) setState(() {
+      _busy = false;
+      if (ok) _rejoin = null;
+    });
+  }
+
+  Future<void> _radar() async {
+    if ((authService.profile?.balanceSeconds ?? 0) <= 0) {
+      _toast('رصيدك غير كافٍ — اشحن من المتجر أو خذ مكافأتك اليومية');
+      return;
+    }
+    context.push('/radar');
+  }
 
   /// يُعلم اللاعب بطلبات الشراء التي قُبلت أو رُفضت منذ آخر مرّة.
   Future<void> _checkReviews() async {
@@ -105,6 +145,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     context.push('/play', extra: c);
   }
 
+  void _bot() {
+    final team = ref.read(teamProgressProvider(null)).valueOrNull ?? TeamProgress.empty;
+    final d = stageDef(team.current);
+    final c = GameController.local(meName: _name, rooms: d.rooms, diff: d.diff, missionId: d.n, bot: true);
+    context.push('/play', extra: c);
+  }
+
   Future<void> _joinDialog() async {
     final ctl = TextEditingController();
     final code = await showDialog<String>(
@@ -152,6 +199,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       backgroundColor: K.surface,
       onRefresh: () async {
         ref.invalidate(teamProgressProvider(null));
+        ref.invalidate(challengesProvider);
         await authService.refreshProfile();
         await _checkReviews();
       },
@@ -177,6 +225,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           },
         ),
         const SizedBox(height: 16),
+        if (_rejoin != null) ...[
+          GlassCard(
+            accent: K.amber,
+            padding: const EdgeInsets.all(14),
+            child: Row(children: [
+              const Icon(Icons.restore_rounded, color: K.amber, size: 30),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('لديك مهمّة جارية', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                  Text('انقطعت المهمّة — عُد إليها من حيث توقّفت', style: TextStyle(color: K.text2, fontSize: 12.5)),
+                ]),
+              ),
+              SizedBox(width: 92, child: GlowButton(label: 'عُد', icon: Icons.play_arrow_rounded, height: 42, color: K.amber, busy: _busy, onTap: _doRejoin)),
+              IconButton(
+                onPressed: () {
+                  RejoinData.clear();
+                  setState(() => _rejoin = null);
+                },
+                icon: const Icon(Icons.close, color: K.muted, size: 20),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 14),
+        ],
         // ── البطاقة البطلة: العب مع صديق
         GlassCard(
           accent: K.neon,
@@ -201,7 +274,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const VaultHero(size: 118),
             ]),
             const SizedBox(height: 18),
-            GlowButton(label: 'أنشئ غرفة وادعُ صديقك', icon: Icons.wifi_tethering, busy: _busy, onTap: () => _online(host: true)),
+            GlowButton(label: 'العب الآن — ابحث عن شريك', icon: Icons.radar, busy: _busy, onTap: _busy ? null : _radar),
+            const SizedBox(height: 10),
+            GlowButton(label: 'أنشئ غرفة وادعُ صديقك', icon: Icons.wifi_tethering, outline: true, height: 50, onTap: _busy ? null : () => _online(host: true)),
             const SizedBox(height: 10),
             Row(children: [
               Expanded(child: GlowButton(label: 'انضمّ برمز', icon: Icons.login_rounded, outline: true, color: K.agent, height: 48, onTap: _busy ? null : _joinDialog)),
@@ -212,6 +287,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         const SizedBox(height: 14),
         const DailyRewardCard(),
+        const SizedBox(height: 14),
+        const ChallengesCard(),
         const SizedBox(height: 22),
         const SectionTitle('حملتك', tag: 'SOLO CAMPAIGN'),
         Pressable(
@@ -264,10 +341,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           crossAxisSpacing: 12,
           childAspectRatio: 1.55,
           children: [
+            _Tile(icon: Icons.group_rounded, title: 'الأصدقاء', sub: 'ادعُ واربح دقائق', color: K.neon, onTap: () => context.push('/friends')),
+            _Tile(icon: Icons.smart_toy_outlined, title: 'العميل الآلي', sub: 'تدرّب مع نَسْر 🤖', color: K.violet, onTap: _bot),
             _Tile(icon: Icons.leaderboard_rounded, title: 'الترتيب العالمي', sub: 'أقوى الفرق', color: K.amber, onTap: () => context.push('/leaderboard')),
             _Tile(icon: Icons.school_outlined, title: 'التدريب', sub: 'كيف تُلعب؟', color: K.agent, onTap: () => context.push('/tutorial')),
             _Tile(icon: Icons.bolt_rounded, title: 'مهمّة حرّة', sub: 'اختر الأقفال والصعوبة', color: K.violet, onTap: () => context.push('/briefing')),
-            _Tile(icon: Icons.storefront_outlined, title: 'المتجر', sub: 'اشحن دقائقك', color: K.neon, onTap: () => ref.read(tabProvider.notifier).state = 2),
+            _Tile(icon: Icons.storefront_outlined, title: 'المتجر', sub: 'اشحن دقائقك', color: K.amber, onTap: () => ref.read(tabProvider.notifier).state = 2),
           ],
         ),
       ]),

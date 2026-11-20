@@ -24,12 +24,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _email = TextEditingController();
   final _pass = TextEditingController();
   final _nick = TextEditingController();
+  final _ref = TextEditingController();
 
   @override
   void dispose() {
     _email.dispose();
     _pass.dispose();
     _nick.dispose();
+    _ref.dispose();
     super.dispose();
   }
 
@@ -53,7 +55,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     });
     try {
       if (_signup) {
-        await authService.signUp(email: email, password: pass, nickname: nick);
+        await authService.signUp(email: email, password: pass, nickname: nick, referral: _ref.text);
       } else {
         await authService.signIn(email: email, password: pass);
       }
@@ -114,7 +116,15 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     ),
                   ),
                   if (_signup) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _ref,
+                      maxLength: 6,
+                      textDirection: TextDirection.ltr,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: fieldDecoration('كود دعوة صديق (اختياري) 🎁', icon: Icons.card_giftcard),
+                    ),
+                    const SizedBox(height: 4),
                     Row(children: [
                       Checkbox(
                         value: _accept,

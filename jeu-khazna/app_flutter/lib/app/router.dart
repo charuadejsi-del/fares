@@ -7,6 +7,8 @@ import '../features/auth/auth_screen.dart';
 import '../features/auth/privacy_screen.dart';
 import '../features/briefing/briefing_screen.dart';
 import '../features/campaign/campaign_screen.dart';
+import '../features/friends/friends_screen.dart';
+import '../features/radar/radar_screen.dart';
 import '../features/leaderboard/leaderboard_screen.dart';
 import '../features/intro/intro_screen.dart';
 import '../features/play/play_screen.dart';
@@ -52,6 +54,8 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/leaderboard', pageBuilder: (c, s) => _fade(s, const LeaderboardScreen())),
     GoRoute(path: '/settings', pageBuilder: (c, s) => _fade(s, const SettingsScreen())),
     GoRoute(path: '/profile', pageBuilder: (c, s) => _fade(s, const ProfileScreen())),
+    GoRoute(path: '/radar', pageBuilder: (c, s) => _fade(s, const RadarScreen())),
+    GoRoute(path: '/friends', pageBuilder: (c, s) => _fade(s, const FriendsScreen())),
     GoRoute(
       path: '/play',
       pageBuilder: (c, s) {

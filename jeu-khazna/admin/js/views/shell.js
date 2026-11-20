@@ -11,7 +11,8 @@ export const NAV = [
   { id: 'payments', label: 'المدفوعات', short: 'الدفع', icon: 'card', key: '3', badge: true },
   { id: 'activity', label: 'سجلّ الحركات', short: 'السجلّ', icon: 'activity', key: '4' },
   { id: 'rooms', label: 'الغرف الحيّة', short: 'الغرف', icon: 'rooms', key: '5', desktopOnly: true },
-  { id: 'settings', label: 'الإعدادات', short: 'الإعدادات', icon: 'settings', key: '6' },
+  { id: 'community', label: 'المجتمع والبلاغات', short: 'المجتمع', icon: 'flag', key: '6', desktopOnly: true },
+  { id: 'settings', label: 'الإعدادات', short: 'الإعدادات', icon: 'settings', key: '7' },
 ];
 
 export function renderShell(root, { onLogout }) {
@@ -54,7 +55,7 @@ export function renderShell(root, { onLogout }) {
   $$('[data-palette]').forEach((b) => (b.onclick = openPalette));
   addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); }
-    if (e.altKey && /^[1-6]$/.test(e.key)) go(NAV[+e.key - 1].id);
+    if (e.altKey && /^[1-7]$/.test(e.key)) go(NAV[+e.key - 1].id);
   });
   store.subscribe(paintBadges);
 }

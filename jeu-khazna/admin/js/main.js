@@ -14,10 +14,11 @@ import { renderPayments } from './views/payments.js';
 import { renderActivity } from './views/activity.js';
 import { renderSettings, settingsDirty } from './views/settings.js';
 import { renderRooms } from './views/rooms.js';
+import { renderCommunity } from './views/community.js';
 
 const VIEWS = {
   dashboard: renderDashboard, players: renderPlayers, payments: renderPayments,
-  activity: renderActivity, settings: renderSettings, rooms: renderRooms,
+  activity: renderActivity, settings: renderSettings, rooms: renderRooms, community: renderCommunity,
 };
 const app = $('#app');
 let pollTimer = 0;

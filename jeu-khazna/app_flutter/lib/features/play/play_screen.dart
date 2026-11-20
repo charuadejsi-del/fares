@@ -21,6 +21,7 @@ import '../../widgets/stage_map.dart';
 import '../../widgets/ui_kit.dart';
 import '../briefing/briefing_screen.dart';
 import 'locks/locks.dart';
+import 'social_bar.dart';
 
 String fmtTime(double sec) {
   final s = sec.ceil().clamp(0, 99999).toInt();
@@ -55,7 +56,8 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
     super.initState();
     _sub = c.events.listen(_onEvent);
     c.addListener(_onChange);
-    if (c.online) _voice = VoiceService()..join(c.channel);
+    // مع شريك من الرادار يبدأ الميكروفون مكتوماً (الرسائل السريعة متاحة دائماً)
+    if (c.online) _voice = (VoiceService()..muted = c.matched)..join(c.channel);
   }
 
   @override
@@ -360,10 +362,24 @@ class _Lobby extends ConsumerWidget {
       Row(children: [
         IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_forward, color: K.neon)),
         const Spacer(),
+        PartnerChip(c: c),
+        const SizedBox(width: 8),
         if (voice != null) VoiceButton(voice: voice!),
         const SizedBox(width: 8),
         const BalanceChip(),
       ]),
+      if (c.matched)
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: K.agent.withAlpha(18),
+            border: Border.all(color: K.agent.withAlpha(110)),
+          ),
+          child: const Text('📡 شريك من الرادار: الميكروفون مكتوم افتراضياً — فعّله إن أردت، أو استعمل الرسائل السريعة. احترم شريكك 🤝',
+              style: TextStyle(fontSize: 12.5, color: K.text2)),
+        ),
       HudPanel(
         label: 'ROOM CODE',
         child: Column(children: [
@@ -449,6 +465,11 @@ class _Lobby extends ConsumerWidget {
             ),
         ]),
       ),
+      if (list.length >= 2) ...[
+        const SizedBox(height: 12),
+        ChatStrip(c: c),
+        QuickBar(c: c),
+      ],
       const SizedBox(height: 18),
       if (c.isHost) ...[
         NeonButton(label: 'تبديل الأدوار', icon: Icons.swap_horiz, filled: false, color: K.agent, onTap: c.swapRoles),
@@ -496,7 +517,7 @@ class _Game extends StatelessWidget {
         child: Row(children: [
           InkWell(onTap: onExit, child: const Padding(padding: EdgeInsets.all(6), child: Icon(Icons.close, color: K.muted))),
           const SizedBox(width: 4),
-          if (c.online) RoleBadge(role) else _RoleSwitch(c: c),
+          if (c.online || c.bot) RoleBadge(role) else _RoleSwitch(c: c),
           if (voice != null) ...[const SizedBox(width: 8), VoiceButton(voice: voice!)],
           const SizedBox(width: 8),
           HintButton(c: c),
@@ -504,6 +525,11 @@ class _Game extends StatelessWidget {
           _RadarTimer(c: c),
         ]),
       ),
+      if (c.online || c.bot)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+          child: Row(children: [PartnerChip(c: c), const Spacer()]),
+        ),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
         child: _Progress(room: s.room, total: s.rooms.length, codename: codenameFor(s.seed)),
@@ -539,6 +565,11 @@ class _Game extends StatelessWidget {
           ),
         ),
       ),
+      if (c.online || c.bot) ...[
+        ChatStrip(c: c),
+        QuickBar(c: c),
+        const SizedBox(height: 6),
+      ],
     ]);
   }
 }
@@ -750,7 +781,7 @@ class _End extends ConsumerWidget {
     final d = stageDef(n);
     final name = ref.read(settingsProvider).name;
     final next = GameController.local(
-        meName: name.isEmpty ? 'عميل' : name, rooms: d.rooms, diff: d.diff, table: c.table, missionId: n);
+        meName: name.isEmpty ? 'عميل' : name, rooms: d.rooms, diff: d.diff, table: c.table, missionId: n, bot: c.bot);
     context.pushReplacement('/play', extra: next);
   }
 
@@ -843,6 +874,15 @@ class _End extends ConsumerWidget {
             NeonButton(label: won ? 'إعادة المرحلة' : 'حاول مرّة أخرى', icon: Icons.refresh, filled: !(won && s.stage > 0), onTap: c.newGame)
           else
             const Text('قائد الفريق يستطيع بدء مهمّة جديدة.', style: TextStyle(color: K.muted)),
+          if (c.matched && c.partnerAccount != null) ...[
+            const SizedBox(height: 10),
+            NeonButton(
+                label: 'أضف ${c.partnerName ?? 'شريكك'} أو أبلغ عنه',
+                icon: Icons.person_add_alt_1,
+                filled: false,
+                color: K.agent,
+                onTap: () => showPartnerMenu(context, c)),
+          ],
           const SizedBox(height: 10),
           NeonButton(label: 'العودة إلى القاعدة', icon: Icons.home_outlined, filled: false, onTap: () => context.pop()),
         ]),

@@ -1,11 +1,14 @@
 // يدير جلسة لعب: وضع الهاتف الواحد، أو أونلاين (المضيف هو المرجع، والضيف يرسل أفعاله فقط).
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../net/transport.dart';
 import 'auth.dart';
+import 'bot.dart';
 import 'game.dart';
 import 'session.dart';
 import 'stages.dart';
@@ -17,6 +20,82 @@ class Player {
   final String? uid;
   Player(this.name, this.role, [this.uid]);
   Map<String, dynamic> toJson() => {'name': name, 'role': role, if (uid != null) 'uid': uid};
+}
+
+/// سطر في محادثة المهمّة (رسالة سريعة أو كلام العميل الآلي).
+class ChatLine {
+  final bool mine;
+  final String text;
+  final int at;
+  final bool bot;
+  const ChatLine(this.mine, this.text, this.at, {this.bot = false});
+}
+
+/// الرسائل السريعة: بديل آمن للميكروفون مع الغرباء.
+const Map<String, String> kQuickMessages = {
+  'hello': '👋 مرحباً',
+  'repeat': '🔁 أعد من فضلك',
+  'wait': '✋ انتظر',
+  'ok': '✅ صحيح',
+  'no': '❌ خطأ',
+  'code': '🔢 ما هو الرمز؟',
+  'color': '🎨 أي لون؟',
+  'thanks': '🙏 شكراً',
+};
+
+/// لقطة المهمّة الجارية لاستئنافها بعد إغلاق التطبيق أو انقطاع الإنترنت.
+class RejoinData {
+  final String code;
+  final String channel;
+  final bool host;
+  final String meId;
+  final String? sessionId;
+  final bool matched;
+  final int at;
+  final Map<String, dynamic>? state;
+  final Map<String, dynamic>? players;
+  const RejoinData(this.code, this.channel, this.host, this.meId, this.sessionId, this.matched, this.at, this.state, this.players);
+
+  static const _k = 'khazna.rejoin';
+
+  Map<String, dynamic> toJson() => {
+        'code': code, 'channel': channel, 'host': host, 'me': meId, 'session': sessionId,
+        'matched': matched, 'at': at, 'state': state, 'players': players,
+      };
+
+  static Future<RejoinData?> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_k);
+      if (raw == null) return null;
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      final d = RejoinData('${m['code']}', '${m['channel']}', m['host'] == true, '${m['me']}', m['session'] as String?,
+          m['matched'] == true, (m['at'] as num?)?.toInt() ?? 0,
+          m['state'] == null ? null : Map<String, dynamic>.from(m['state'] as Map),
+          m['players'] == null ? null : Map<String, dynamic>.from(m['players'] as Map));
+      if (DateTime.now().millisecondsSinceEpoch - d.at > 10 * 60 * 1000) {
+        await clear();
+        return null;
+      }
+      return d;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> save() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_k, jsonEncode(toJson()));
+    } catch (_) {}
+  }
+
+  static Future<void> clear() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.remove(_k);
+    } catch (_) {}
+  }
 }
 
 class GameController extends ChangeNotifier {
@@ -31,6 +110,18 @@ class GameController extends ChangeNotifier {
 
   /// وضع الطاولة: الهاتف بين اللاعبَين، والشاشة مقسومة نصفين.
   final bool table;
+
+  /// اللعب مع العميل الآلي (المحلّل آلي، واللاعب هو العميل الميداني).
+  final bool bot;
+
+  /// الشريك جاء من الرادار (غريب): الميكروفون مكتوم افتراضياً.
+  final bool matched;
+
+  /// لقطة للاستئناف (أونلاين).
+  final RejoinData? resume;
+
+  /// محادثة المهمّة.
+  final List<ChatLine> chat = [];
 
   /// أقفال المهمّة ومستوى الصعوبة (وضع الهاتف الواحد).
   final List<String> rooms;
@@ -93,34 +184,49 @@ class GameController extends ChangeNotifier {
     this.rooms = kRooms,
     this.diff = 'agent',
     this.missionId = 0,
+    this.bot = false,
   })  : online = false,
         isHost = true,
         code = '',
         channel = '',
+        matched = false,
+        resume = null,
         meId = _rid() {
-    players = {meId: Player(meName, 'op', authService.uid)};
+    players = {meId: Player(meName, 'op', authService.uid), if (bot) 'bot': Player(kBotName, 'ex')};
     authService.addListener(_onAuth);
     _startLocal();
     _loop = Timer.periodic(const Duration(seconds: 1), (_) => _tickLoop());
   }
 
-  GameController.online({required this.meName, required this.code, required this.isHost, String? channel})
-      : channel = channel ?? code,
+  GameController.online({
+    required this.meName,
+    required this.code,
+    required this.isHost,
+    String? channel,
+    this.matched = false,
+    this.resume,
+  })  : channel = channel ?? code,
         online = true,
         table = false,
+        bot = false,
         rooms = kRooms,
         diff = 'agent',
         missionId = 0,
-        meId = _rid() {
+        meId = resume?.host == true ? resume!.meId : _rid() {
     authService.addListener(_onAuth);
   }
 
   Future<void> connect() async {
     _net = await SupabaseTransport.connect(channel, _onMessage);
     if (isHost) {
-      state = newState(_newSeed());
-      puzzles = generatePuzzles(state!.seed);
-      players = {meId: Player(meName, 'op', authService.uid)};
+      final r = resume;
+      if (r != null && r.state != null && r.players != null) {
+        _restore(r);
+      } else {
+        state = newState(_newSeed());
+        puzzles = generatePuzzles(state!.seed);
+        players = {meId: Player(meName, 'op', authService.uid)};
+      }
       _loop = Timer.periodic(const Duration(seconds: 1), (_) => _tickLoop());
       _broadcast();
     } else {
@@ -133,6 +239,26 @@ class GameController extends ChangeNotifier {
     _notify();
   }
 
+  /// القائد يستعيد المهمّة كما كانت، والوقت الضائع أثناء الغياب لا يُحسب.
+  void _restore(RejoinData r) {
+    var s = GameState.fromJson(r.state!);
+    final now = _now();
+    if (s.phase == 'playing' && !s.paused) s = resumeGame(pauseGame(s, r.at, 'peer'), now);
+    state = s;
+    puzzles = generatePuzzles(s.seed, s.diff);
+    players = {
+      for (final e in r.players!.entries)
+        if (e.value is Map)
+          e.key: Player('${(e.value as Map)['name']}', '${(e.value as Map)['role']}', (e.value as Map)['uid'] as String?),
+    };
+    players.putIfAbsent(meId, () => Player(meName, 'op', authService.uid));
+    _lastPeerSeen = now;
+    if (r.sessionId != null && s.phase == 'playing') {
+      sessionId = r.sessionId;
+      _startBeat();
+    }
+  }
+
   // ───── قراءة الحالة ─────
   /// حساب الشريك (أونلاين) أو null للعب الفردي على هاتف واحد.
   String? get partnerUid {
@@ -142,6 +268,16 @@ class GameController extends ChangeNotifier {
     }
     return null;
   }
+
+  String? get partnerName {
+    for (final e in players.entries) {
+      if (e.key != meId) return e.value.name;
+    }
+    return null;
+  }
+
+  /// معرّف الشريك للإبلاغ والحظر والصداقة (أونلاين فقط).
+  String? get partnerAccount => online ? partnerUid : null;
 
   bool get teamReady => !online || (players.length >= 2 && partnerUid != null);
 
@@ -168,7 +304,56 @@ class GameController extends ChangeNotifier {
     }
   }
 
+  /// رسالة سريعة للشريك (أو للعميل الآلي).
+  void sendQuick(String q) {
+    final text = kQuickMessages[q];
+    if (text == null) return;
+    _addChat(ChatLine(true, text, _now()));
+    if (bot) {
+      final reply = botReply(q, _botScript, _botShown);
+      if (reply != null) {
+        Timer(Duration(milliseconds: 900 + _rand.nextInt(900)), () {
+          if (!_disposed) _addChat(ChatLine(false, reply, _now(), bot: true));
+        });
+      }
+      return;
+    }
+    if (online) _net?.send({'kind': 'quick', 'id': meId, 'q': q});
+  }
+
+  void _addChat(ChatLine l) {
+    chat.add(l);
+    if (chat.length > 40) chat.removeAt(0);
+    _notify();
+  }
+
+  // ───── العميل الآلي ─────
+  String _botKey = '';
+  List<String> _botScript = const [];
+  int _botShown = 0;
+  int _botNextAt = 0;
+
+  void _botTick() {
+    final s = state, p = puzzles;
+    if (!bot || s == null || p == null || s.phase != 'playing' || s.paused) return;
+    final now = _now();
+    final key = botKey(s);
+    if (key != _botKey) {
+      final first = _botKey.isEmpty;
+      _botKey = key;
+      _botScript = botScript(s, p);
+      _botShown = 0;
+      _botNextAt = now + (first ? 2500 : 1600 + _rand.nextInt(1200));
+    }
+    if (_botShown < _botScript.length && now >= _botNextAt) {
+      _addChat(ChatLine(false, _botScript[_botShown], now, bot: true));
+      _botShown++;
+      _botNextAt = now + 4200 + _rand.nextInt(2600);
+    }
+  }
+
   void toggleLocalRole() {
+    if (bot) return; // مع الآلي أنت العميل الميداني دائماً
     localRole = localRole == 'op' ? 'ex' : 'op';
     _notify();
   }
@@ -373,9 +558,23 @@ class GameController extends ChangeNotifier {
     _changed();
   }
 
+  int _lastSnap = 0;
+
+  void _snapshot() {
+    final s = state;
+    if (!online || s == null) return;
+    if (s.phase != 'playing') return;
+    _lastSnap = _now();
+    RejoinData(code, channel, isHost, meId, sessionId, matched, _lastSnap, isHost ? s.toJson() : null,
+            isHost ? {for (final e in players.entries) e.key: e.value.toJson()} : null)
+        .save();
+  }
+
   void _tickLoop() {
     final s = state;
     if (s == null) return;
+    _botTick();
+    if (online && s.phase == 'playing' && _now() - _lastSnap > 3000) _snapshot();
     _evalPause();
     if (!isHost && s.phase == 'playing') _notify(); // تحديث شريط «انقطع الاتصال»
     final t = tick(state!, _now());
@@ -409,6 +608,13 @@ class GameController extends ChangeNotifier {
   void _onMessage(Map<String, dynamic> m) {
     if (_disposed) return;
     final kind = m['kind'];
+    if (kind == 'quick') {
+      final id = m['id'], q = m['q'];
+      final t = q is String ? kQuickMessages[q] : null;
+      if (id is String && id != meId && players.containsKey(id) && t != null) _addChat(ChatLine(false, t, _now()));
+      if (isHost && id is String && players.containsKey(id)) _lastPeerSeen = _now();
+      return;
+    }
     if (isHost) {
       final id = m['id'];
       if (id is String && id != meId && players.containsKey(id)) _lastPeerSeen = _now();
@@ -421,6 +627,18 @@ class GameController extends ChangeNotifier {
         return;
       }
       if (kind == 'hello' && id is String) {
+        final huid = m['uid'];
+        if (!players.containsKey(id) && huid is String) {
+          // الشريك نفسه عاد بعد انقطاع: نُبقي دوره ومكانه
+          final old = players.entries.where((e) => e.key != meId && e.value.uid == huid).map((e) => e.key).toList();
+          if (old.isNotEmpty) {
+            final p = players.remove(old.first)!;
+            players[id] = p;
+            _lastPeerSeen = _now();
+            _evalPause();
+            _notify();
+          }
+        }
         if (!players.containsKey(id)) {
           if (players.length >= 2) return; // الغرفة ممتلئة
           final hostRole = players[meId]!.role;
@@ -464,6 +682,7 @@ class GameController extends ChangeNotifier {
     final rem = m['rem'];
     _recvRem = rem is num ? rem.toDouble() : kDuration.toDouble();
     _recvAt = _now();
+    if (ns.phase == 'playing' && _now() - _lastSnap > 5000) _snapshot();
     _changed();
   }
 
@@ -481,7 +700,10 @@ class GameController extends ChangeNotifier {
         }
       }
     }
-    if (s != null && (s.phase == 'won' || s.phase == 'lost')) _finishSession(s.phase);
+    if (s != null && (s.phase == 'won' || s.phase == 'lost')) {
+      _finishSession(s.phase);
+      if (online) RejoinData.clear();
+    }
     _notify();
   }
 
@@ -489,8 +711,12 @@ class GameController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  /// خروج إرادي: لا استئناف بعده.
+  bool leftOnPurpose = true;
+
   @override
   void dispose() {
+    if (online && leftOnPurpose) RejoinData.clear();
     _finishSession('abandoned');
     if (online && isHost) SessionService.roomClose(code).catchError((_) {});
     authService.removeListener(_onAuth);
