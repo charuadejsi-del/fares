@@ -180,3 +180,57 @@ class SocialService {
 final friendsProvider = FutureProvider.autoDispose<List<Friend>>((ref) => SocialService.friends());
 final challengesProvider = FutureProvider.autoDispose<List<Challenge>>((ref) => SocialService.challenges());
 final referralProvider = FutureProvider.autoDispose<Referral>((ref) => SocialService.referral());
+
+// ───── الموسم الأسبوعي ─────
+class SeasonRow {
+  final int rank;
+  final String nickname;
+  final int points;
+  final int wins;
+  final String? title;
+  final bool me;
+  const SeasonRow(this.rank, this.nickname, this.points, this.wins, this.title, this.me);
+}
+
+class SeasonBoard {
+  final DateTime endsAt;
+  final List<SeasonRow> rows;
+  final int? myRank;
+  final int myPoints;
+  final int myWins;
+  final String? myTitle;
+  const SeasonBoard(this.endsAt, this.rows, this.myRank, this.myPoints, this.myWins, this.myTitle);
+
+  factory SeasonBoard.fromJson(Map m) {
+    final me = m['me'] is Map ? m['me'] as Map : null;
+    return SeasonBoard(
+      DateTime.tryParse('${m['ends_at']}')?.toLocal() ?? DateTime.now().add(const Duration(days: 7)),
+      [
+        for (final r in (m['rows'] as List? ?? const []))
+          SeasonRow((r['rank'] as num).toInt(), '${r['nickname']}', (r['points'] as num).toInt(), (r['wins'] as num).toInt(),
+              r['title'] as String?, r['me'] == true),
+      ],
+      (me?['rank'] as num?)?.toInt(),
+      (me?['points'] as num?)?.toInt() ?? 0,
+      (me?['wins'] as num?)?.toInt() ?? 0,
+      m['title'] as String?,
+    );
+  }
+}
+
+class SeasonService {
+  static Future<SeasonBoard> board([int offset = 0]) async =>
+      SeasonBoard.fromJson(Map<String, dynamic>.from(await supa.rpc('season_board', params: {'p_offset': offset}) as Map));
+
+  static Future<void> rate(String user, String session, bool good) =>
+      supa.rpc('rate_partner', params: {'p_user': user, 'p_session': session, 'p_good': good});
+}
+
+final seasonProvider = FutureProvider.autoDispose<SeasonBoard>((ref) => SeasonService.board());
+
+/// الألقاب: [الاسم، اللون].
+const Map<String, (String, int)> kTitles = {
+  'legend': ('🏆 أسطورة الأسبوع', 0xFFFFC94D),
+  'elite': ('💎 نخبة العشرة', 0xFF9D8CFF),
+  'top100': ('🎖 أفضل 100', 0xFF22C7FF),
+};

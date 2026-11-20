@@ -267,30 +267,39 @@ class _DailyRewardCardState extends ConsumerState<DailyRewardCard> {
   }
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
-        listenable: authService,
-        builder: (context, _) {
-          final ok = authService.profile?.dailyAvailable ?? false;
-          final left = untilAlgiersMidnight();
-          return GlassCard(
-            accent: K.amber,
-            padding: const EdgeInsets.all(16),
-            child: Row(children: [
+  Widget build(BuildContext context) {
+    final rules = ref.watch(gameRulesProvider).valueOrNull ?? const GameRules(2, 30, 10);
+    return ListenableBuilder(
+      listenable: authService,
+      builder: (context, _) {
+        final p = authService.profile;
+        final ok = p?.dailyAvailable ?? false;
+        final left = untilAlgiersMidnight();
+        final day = (p?.nextStreakDay ?? 1).clamp(1, 999);
+        final streak = p?.streakNow ?? 0;
+        final reward = rules.rewardMinutes(day);
+        return GlassCard(
+          accent: K.amber,
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
               Container(
                 width: 52,
                 height: 52,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   gradient: LinearGradient(colors: ok ? [K.amber, const Color(0xFFFF7A3D)] : [K.surface2, K.surface2]),
                   boxShadow: ok ? [BoxShadow(color: K.amber.withAlpha(90), blurRadius: 18)] : null,
                 ),
-                child: Icon(Icons.card_giftcard, color: ok ? K.ink : K.muted, size: 28),
+                child: Text(streak > 0 ? '🔥' : '🎁', style: const TextStyle(fontSize: 26)),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('المكافأة اليومية', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-                  Text(ok ? 'دقائق مجانية تنتظرك اليوم' : 'تعود بعد ${left.inHours} سا ${left.inMinutes % 60} د',
+                  Text(streak > 0 ? 'سلسلة $streak ${streak == 1 ? 'يوم' : 'أيام'} 🔥' : 'المكافأة اليومية',
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                  Text(ok ? 'اليوم: +$reward دقيقة (اليوم $day)' : 'غداً: +${rules.rewardMinutes(day + 1)} د — بعد ${left.inHours} سا ${left.inMinutes % 60} د',
                       style: TextStyle(color: ok ? K.amber : K.muted, fontSize: 13)),
                 ]),
               ),
@@ -299,9 +308,33 @@ class _DailyRewardCardState extends ConsumerState<DailyRewardCard> {
                 child: GlowButton(label: ok ? 'خذها' : 'غداً', height: 44, color: K.amber, outline: !ok, busy: _busy, onTap: ok ? _claim : null),
               ),
             ]),
-          );
-        },
-      );
+            const SizedBox(height: 12),
+            Row(children: [
+              for (int d = 1; d <= 7; d++)
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: d <= (ok ? streak : streak) ? K.amber.withAlpha(50) : (d == day && ok ? K.amber.withAlpha(20) : K.surface2),
+                      border: Border.all(color: d == day && ok ? K.amber : (d <= streak ? K.amber.withAlpha(140) : K.border)),
+                    ),
+                    child: Column(children: [
+                      Text(d <= streak ? '🔥' : (d == 7 ? '👑' : '·'), style: const TextStyle(fontSize: 12)),
+                      Text('${rules.rewardMinutes(d)}د', style: TextStyle(fontSize: 10.5, color: d <= streak ? K.amber : K.muted, fontFamily: K.mono)),
+                    ]),
+                  ),
+                ),
+            ]),
+            const SizedBox(height: 6),
+            const Text('العب كل يوم لتكبر المكافأة. يوم واحد بلا مكافأة يعيد السلسلة إلى البداية.',
+                style: TextStyle(color: K.muted, fontSize: 11.5)),
+          ]),
+        );
+      },
+    );
+  }
 }
 
 class _PackageTile extends StatelessWidget {

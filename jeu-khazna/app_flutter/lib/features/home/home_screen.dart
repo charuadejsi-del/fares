@@ -16,6 +16,7 @@ import '../../net/transport.dart';
 import '../../widgets/spy_ui.dart';
 import '../../widgets/ui_kit.dart';
 import '../../widgets/online_launch.dart';
+import '../../widgets/title_frame.dart';
 import '../shop/shop_screen.dart';
 import 'challenges_card.dart';
 
@@ -200,6 +201,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onRefresh: () async {
         ref.invalidate(teamProgressProvider(null));
         ref.invalidate(challengesProvider);
+        ref.invalidate(seasonProvider);
         await authService.refreshProfile();
         await _checkReviews();
       },
@@ -210,7 +212,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           builder: (context, _) {
             final name = authService.profile?.nickname ?? _name;
             return Row(children: [
-              Avatar(name, size: 46),
+              TitleAvatar(name, title: ref.watch(seasonProvider).valueOrNull?.myTitle, size: 46),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

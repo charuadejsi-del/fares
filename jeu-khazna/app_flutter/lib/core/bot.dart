@@ -1,5 +1,6 @@
 // العميل الآلي «نَسْر»: يلعب دور المحلّل عندما لا يوجد لاعب على الرادار.
 // يقرأ الدليل ويعطي التوجيهات نصّاً خطوة بخطوة، بإيقاع بشري (تردّد، تفكير، ثم الجواب).
+import 'ext_locks.dart';
 import 'game.dart';
 
 const String kBotName = 'نَسْر 🤖';
@@ -24,6 +25,7 @@ const Map<String, String> _dirAr = {'up': 'للأعلى ⬆', 'down': 'للأس�
 
 /// أسطر الآلي للموقف الحالي. آخر سطر هو الجواب الكامل.
 List<String> botScript(GameState s, Puzzles p) {
+  if (isExtRoom(s.roomId)) return extFor(s).bot;
   switch (s.roomId) {
     case 'keypad':
       final k = p.keypad;

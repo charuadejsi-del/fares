@@ -24,7 +24,7 @@ const kpi = (id, label, ic, tone, color, foot) => `
 let filter = 'open';
 
 export async function renderCommunity(page) {
-  const [s, reports] = await Promise.all([api.matchStats(), api.reports(filter)]);
+  const [s, reports, se] = await Promise.all([api.matchStats(), api.reports(filter), api.season().catch(() => null)]);
   const hours = Array.from({ length: 24 }, (_, h) => s.by_hour.find((x) => x.h === h)?.n || 0);
   page.innerHTML = `
   <div class="page-head">
@@ -43,6 +43,23 @@ export async function renderCommunity(page) {
       <div class="card-head"><span class="chip-icon info">${icon('clock')}</span><div><h3>ساعات الذروة على الرادار</h3><p>المطابقات حسب الساعة (توقيت الجزائر) · آخر 7 أيام</p></div></div>
       <div class="card-body"><div class="chart-box" style="height:220px"><canvas id="c-hours"></canvas></div></div>
     </div>
+    ${se ? `<div class="grid-2">
+      <div class="card">
+        <div class="card-head"><span class="chip-icon warn">${icon('trend')}</span><div><h3>الموسم الأسبوعي</h3><p>${se.players} لاعب هذا الأسبوع · ${se.streak_7plus} بسلسلة 7 أيام فأكثر</p></div></div>
+        <div class="card-body">${se.top.length ? se.top.map((t, i) => `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+            <b class="mono" style="width:26px;color:${i < 3 ? 'var(--warn)' : 'var(--text-3)'}">${i + 1}</b>${avatar(t.nickname, 28)}<b style="flex:1">${esc(t.nickname)}</b>
+            <span class="tag warn">${num(t.points)} نقطة</span><span class="faint">${t.wins} فوز</span></div>`).join('')
+          : emptyState('trend', 'لا نقاط بعد هذا الأسبوع')}
+          ${se.last_week.length ? `<p class="faint" style="margin-top:10px">أبطال الأسبوع الماضي: ${se.last_week.map((t) => esc(t.nickname)).join(' · ')}</p>` : ''}</div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="chip-icon danger">${icon('alert')}</span><div><h3>تقييمات الشركاء</h3><p>${se.ratings_week} تقييم هذا الأسبوع · الأسوأ يُطابَقون أخيراً</p></div></div>
+        <div class="card-body">${se.worst.length ? se.worst.map((w) => `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+            ${avatar(w.nickname, 28)}<b style="flex:1">${esc(w.nickname)}${w.banned ? ' <span class="tag danger">موقوف</span>' : ''}</b>
+            <span class="tag danger">👎 ${w.bad}</span><span class="tag ok">👍 ${w.good}</span></div>`).join('')
+          : emptyState('check', 'لا تقييمات سيئة', 'مجتمع محترم 👌')}</div>
+      </div>
+    </div>` : ''}
     <div class="card">
       <div class="card-head"><span class="chip-icon danger">${icon('flag')}</span><div><h3>البلاغات</h3><p>قرارك يُطبَّق فوراً · الحظر يمنع الدخول نهائياً</p></div>
         <div class="end seg">${['open', 'resolved', 'dismissed', ''].map((f) => `<button class="btn btn-sm ${f === filter ? '' : 'btn-ghost'}" data-f="${f}">${f ? STATUS[f][0] : 'الكل'}</button>`).join('')}</div></div>

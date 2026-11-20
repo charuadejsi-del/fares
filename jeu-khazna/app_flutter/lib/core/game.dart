@@ -1,9 +1,17 @@
 // منطق لعبة «الخزنة» — نسخة Dart مطابقة لـ core.js
 // نفس البذرة تعطي نفس الألغاز في نسخة الويب والنسخة الأصلية، فيمكن اللعب بينهما.
+import 'ext_locks.dart';
+import 'stages.dart' show stageMods;
 
 const int kDuration = 600; // ثانية
 const int kPenalty = 30;
 const int kBump = 10;
+
+/// المؤثّر «محاولات محدودة»: عدد الأخطاء المسموح بها في المهمّة.
+const int kLimitedTries = 3;
+
+/// قفل المفتاحين: أقصى فرق بين اللاعبَين.
+const int kSyncWindowMs = 1500;
 
 /// الأقفال الخمسة الأساسية (المتوافقة مع نسخة الويب).
 const List<String> kRooms = ['keypad', 'wires', 'cipher', 'maze', 'lights'];
@@ -419,6 +427,13 @@ class GameState {
   final int hints;
   final String hint;
 
+  /// عدد الأخطاء في المهمّة (للإنذار والمحاولات المحدودة).
+  final int errors;
+
+  /// قفل المفتاحين: لحظة إدارة كل لاعب لمفتاحه (0 = لم يُدِر).
+  final int syncOp;
+  final int syncEx;
+
   const GameState({
     required this.seed,
     this.rooms = kRooms,
@@ -441,6 +456,9 @@ class GameState {
     this.pauseReason = '',
     this.hints = 0,
     this.hint = '',
+    this.errors = 0,
+    this.syncOp = 0,
+    this.syncEx = 0,
   });
 
   bool get paused => pausedAt > 0;
@@ -466,6 +484,9 @@ class GameState {
     String? pauseReason,
     int? hints,
     String? hint,
+    int? errors,
+    int? syncOp,
+    int? syncEx,
   }) =>
       GameState(
         seed: seed,
@@ -489,6 +510,9 @@ class GameState {
         pauseReason: pauseReason ?? this.pauseReason,
         hints: hints ?? this.hints,
         hint: hint ?? this.hint,
+        errors: errors ?? this.errors,
+        syncOp: syncOp ?? this.syncOp,
+        syncEx: syncEx ?? this.syncEx,
       );
 
   /// نسخة بمدّة مختلفة (تأتي من الخادم عند بداية الجلسة).
@@ -497,6 +521,7 @@ class GameState {
         startedAt: startedAt, penalty: penalty, mazePos: mazePos, lightStage: lightStage, lightInput: lightInput,
         cut: cut, lastEvent: lastEvent, eventId: eventId, finishedIn: finishedIn, duration: seconds,
         pausedAt: pausedAt, pauseReason: pauseReason, hints: hints, hint: hint,
+        errors: errors, syncOp: syncOp, syncEx: syncEx,
       );
 
   Map<String, dynamic> toJson() => {
@@ -521,6 +546,9 @@ class GameState {
         if (pauseReason.isNotEmpty) 'pauseReason': pauseReason,
         if (hints > 0) 'hints': hints,
         if (hint.isNotEmpty) 'hint': hint,
+        if (errors > 0) 'errors': errors,
+        if (syncOp > 0) 'syncOp': syncOp,
+        if (syncEx > 0) 'syncEx': syncEx,
       };
 
   static int _i(dynamic v, [int d = 0]) => v is num ? v.toInt() : d;
@@ -550,6 +578,9 @@ class GameState {
         pauseReason: '${j['pauseReason'] ?? ''}',
         hints: _i(j['hints']),
         hint: '${j['hint'] ?? ''}',
+        errors: _i(j['errors']),
+        syncOp: _i(j['syncOp']),
+        syncEx: _i(j['syncEx']),
       );
 }
 
@@ -602,6 +633,7 @@ GameState resumeGame(GameState s, int now) {
 
 /// تلميح مدفوع للقفل الحالي: يكشف جزءاً من الحلّ.
 String hintFor(GameState s, Puzzles p) {
+  if (isExtRoom(s.roomId)) return extFor(s).hint;
   switch (s.roomId) {
     case 'keypad':
       final a = p.keypad.answer;
@@ -681,9 +713,16 @@ GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
     return ev(x.copyWith(room: next, hint: ''), 'solved');
   }
 
+  final mods = stageMods(s.stage);
   GameState wrong(GameState x, [int? pen, String t = 'wrong']) {
-    final p0 = pen ?? s.difficulty.penalty;
-    return ev(x.copyWith(penalty: s.penalty + p0), t, p0);
+    var p0 = pen ?? s.difficulty.penalty;
+    // الإنذار: كل خطأ أغلى من الذي قبله
+    if (mods.contains('alarm') && t == 'wrong') p0 = (p0 * (1 + s.errors * 0.5)).round();
+    final errs = s.errors + 1;
+    var y = x.copyWith(penalty: s.penalty + p0, errors: errs);
+    // محاولات محدودة: الخطأ الرابع يُفشل المهمّة
+    if (mods.contains('limited') && t == 'wrong' && errs > kLimitedTries) y = y.copyWith(phase: 'lost');
+    return ev(y, t, p0);
   }
 
   GameState out = s;
@@ -754,6 +793,31 @@ GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
       if (type != 'tune' || v is! int) return s;
       out = v == p.radio.answer ? advance(s) : wrong(s);
       break;
+    }
+    default: {
+      if (!isExtRoom(room)) return s;
+      final x = extFor(s);
+      if (type == 'ext') {
+        final v = '${a['value'] ?? ''}';
+        if (v.isEmpty) return s;
+        out = x.check(v) ? advance(s) : wrong(s);
+      } else if (type == 'sync' && room == 'sync') {
+        final role = a['role'], idx = a['idx'];
+        if (idx is! int || (role != 'op' && role != 'ex')) return s;
+        final ok = role == 'op' ? idx == int.parse(x.answer) : idx == x.exAnswer;
+        if (!ok) {
+          out = wrong(s.copyWith(syncOp: 0, syncEx: 0));
+          break;
+        }
+        final other = role == 'op' ? s.syncEx : s.syncOp;
+        if (other > 0 && (now - other).abs() <= kSyncWindowMs) {
+          out = advance(s.copyWith(syncOp: 0, syncEx: 0));
+        } else {
+          out = ev(role == 'op' ? s.copyWith(syncOp: now, syncEx: 0) : s.copyWith(syncEx: now, syncOp: 0), 'press');
+        }
+      } else {
+        return s;
+      }
     }
   }
   return tick(out, now);

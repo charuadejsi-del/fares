@@ -27,6 +27,9 @@ class Profile {
   final DateTime createdAt;
   final DateTime lastSeen;
   final DateTime? dailyClaimedOn;
+
+  /// سلسلة الأيام المتتالية (آخر قيمة مسجّلة في الخادم).
+  final int streakDays;
   const Profile({
     required this.id,
     required this.nickname,
@@ -36,7 +39,20 @@ class Profile {
     required this.createdAt,
     required this.lastSeen,
     this.dailyClaimedOn,
+    this.streakDays = 0,
   });
+
+  /// السلسلة الحالية: تنكسر إذا فات يوم دون أخذ المكافأة.
+  int get streakNow {
+    final d = dailyClaimedOn;
+    if (d == null) return 0;
+    final day = DateTime(d.year, d.month, d.day);
+    final t = algiersToday();
+    return t.difference(day).inDays <= 1 ? streakDays : 0;
+  }
+
+  /// يوم السلسلة الذي ستُحتسب له المكافأة القادمة (1..7+).
+  int get nextStreakDay => dailyAvailable ? streakNow + 1 : streakNow;
 
   bool get isAdmin => role == 'admin';
   int get balanceMinutes => balanceSeconds ~/ 60;
@@ -58,6 +74,7 @@ class Profile {
         createdAt: DateTime.tryParse('${j['created_at']}')?.toLocal() ?? DateTime.now(),
         lastSeen: DateTime.tryParse('${j['last_seen']}')?.toLocal() ?? DateTime.now(),
         dailyClaimedOn: DateTime.tryParse('${j['daily_claimed_on'] ?? ''}'),
+        streakDays: (j['streak_days'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -219,6 +236,7 @@ String authErrorText(Object e) {
   if (m.contains('referral used')) return 'استعملت كود دعوة من قبل';
   if (m.contains('referral late')) return 'كود الدعوة يُستعمل خلال 3 أيام من التسجيل فقط';
   if (m.contains('invalid referral')) return 'كود الدعوة غير صحيح';
+  if (m.contains('self rate') || m.contains('no session')) return 'لا يمكن تقييم هذا اللاعب';
   if (m.contains('challenge not ready')) return 'التحدّي لم يكتمل بعد';
   if (m.contains('rate limit')) return 'محاولات كثيرة، انتظر قليلاً';
   if (m.contains('socket') || m.contains('failed host') || m.contains('timeout')) return 'لا يوجد اتصال بالإنترنت';

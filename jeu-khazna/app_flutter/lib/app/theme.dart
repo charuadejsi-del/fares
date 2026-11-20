@@ -1,6 +1,8 @@
 // نظام التصميم: أجواء غرفة عمليات استخباراتية (أسود، أخضر نيون، كهرماني للتحذير).
 import 'package:flutter/material.dart';
 
+import '../core/ext_locks.dart';
+
 class K {
   // الألوان
   static const bg = Color(0xFF030605);
@@ -56,6 +58,12 @@ class K {
     'dial': Icons.settings_backup_restore,
     'radio': Icons.cell_tower,
   };
+
+  /// اسم أي قفل (الكلاسيكية والموسّعة).
+  static String room(String id) => roomNames[id] ?? kExtInfo[id]?.title ?? id;
+
+  /// رمز تعبيري للأقفال الموسّعة (null للكلاسيكية التي لها أيقونة).
+  static String? roomEmoji(String id) => kExtInfo[id]?.icon;
 
   static List<BoxShadow> glow(Color c, [double r = 18, int a = 110]) =>
       [BoxShadow(color: c.withAlpha(a), blurRadius: r)];

@@ -146,6 +146,8 @@ class PartnerChip extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 90),
             child: Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
           ),
+          const SizedBox(width: 4),
+          ConnBars(q: c.connQuality),
           const Icon(Icons.expand_more, size: 16, color: K.muted),
         ]),
       ),
@@ -190,5 +192,84 @@ Future<void> showPartnerMenu(BuildContext context, GameController c) async {
     }
   } catch (e) {
     if (context.mounted) showToast(context, authErrorText(e), error: true);
+  }
+}
+
+
+/// مؤشّر جودة اتصال الشريك (أعمدة).
+class ConnBars extends StatelessWidget {
+  final String q;
+  const ConnBars({super.key, required this.q});
+
+  @override
+  Widget build(BuildContext context) {
+    final (n, color, tip) = switch (q) {
+      'good' => (3, K.neon, 'اتصال ممتاز'),
+      'ok' => (2, K.amber, 'اتصال متوسّط'),
+      'bad' => (1, K.danger, 'اتصال ضعيف'),
+      'lost' => (0, K.danger, 'انقطع اتصال الشريك'),
+      _ => (0, K.muted, 'يقيس الاتصال…'),
+    };
+    return Tooltip(
+      message: tip,
+      child: SizedBox(
+        width: 16,
+        height: 14,
+        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          for (int i = 0; i < 3; i++)
+            Container(
+              margin: const EdgeInsets.only(right: 1.5),
+              width: 3.5,
+              height: 5.0 + i * 4,
+              color: i < n ? color : K.line,
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// تقييم الشريك بعد المهمّة 👍👎.
+class RatePartner extends StatefulWidget {
+  final GameController c;
+  const RatePartner({super.key, required this.c});
+
+  @override
+  State<RatePartner> createState() => _RatePartnerState();
+}
+
+class _RatePartnerState extends State<RatePartner> {
+  bool? _done;
+
+  Future<void> _rate(bool good) async {
+    final uid = widget.c.partnerAccount, sid = widget.c.sessionId;
+    if (uid == null || sid == null) return;
+    setState(() => _done = good);
+    try {
+      await SeasonService.rate(uid, sid, good);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _done = null);
+        showToast(context, authErrorText(e), error: true);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = widget.c.partnerName ?? 'شريكك';
+    if (_done != null) {
+      return Text(_done! ? '👍 شكراً! تقييمك يساعد على مطابقة أفضل.' : '👎 سُجّل تقييمك. يمكنك أيضاً الإبلاغ أو الحظر.',
+          textAlign: TextAlign.center, style: const TextStyle(color: K.muted));
+    }
+    return Column(children: [
+      Text('كيف كان $name كشريك؟', style: const TextStyle(fontWeight: FontWeight.w800)),
+      const SizedBox(height: 8),
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        OutlinedButton(onPressed: () => _rate(true), child: const Text('👍 رائع', style: TextStyle(fontSize: 16))),
+        const SizedBox(width: 12),
+        OutlinedButton(onPressed: () => _rate(false), child: const Text('👎 سيّئ', style: TextStyle(fontSize: 16))),
+      ]),
+    ]);
   }
 }

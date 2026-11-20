@@ -6,8 +6,10 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/auth.dart';
 import '../../core/services.dart';
+import '../../core/social.dart';
 import '../../core/team.dart';
 import '../../widgets/spy_ui.dart';
+import '../../widgets/title_frame.dart';
 import '../../widgets/ui_kit.dart';
 import '../play/play_screen.dart' show fmtTime;
 
@@ -90,7 +92,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ]),
               const SizedBox(height: 14),
               Row(children: [
-                Avatar(name, size: 72),
+                TitleAvatar(name, title: ref.watch(seasonProvider).valueOrNull?.myTitle, size: 72),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -103,6 +105,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       const SizedBox(width: 4),
                       Text(p.rank, style: const TextStyle(color: K.amber, fontWeight: FontWeight.w800)),
                     ]),
+                    TitleBadge(ref.watch(seasonProvider).valueOrNull?.myTitle),
                     const SizedBox(height: 8),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(6),

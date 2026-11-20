@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../net/transport.dart';
 import 'auth.dart';
 import 'bot.dart';
+import 'ext_locks.dart';
 import 'game.dart';
 import 'session.dart';
 import 'stages.dart';
@@ -216,8 +217,27 @@ class GameController extends ChangeNotifier {
     authService.addListener(_onAuth);
   }
 
+  // ───── جودة الاتصال بالشريك ─────
+  /// زمن الذهاب والإياب بالمللي ثانية (-1 = غير معروف بعد).
+  int partnerRtt = -1;
+  int _lastRttAck = 0;
+  Timer? _rtt;
+
+  /// good | ok | bad | lost | unknown
+  String get connQuality {
+    if (!online || players.length < 2) return 'unknown';
+    if (partnerRtt < 0) return 'unknown';
+    if (_now() - _lastRttAck > 9000) return 'lost';
+    if (partnerRtt < 250) return 'good';
+    if (partnerRtt < 700) return 'ok';
+    return 'bad';
+  }
+
   Future<void> connect() async {
     _net = await SupabaseTransport.connect(channel, _onMessage);
+    _rtt = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (players.length >= 2) _net?.send({'kind': 'rtt', 'id': meId, 't': _now()});
+    });
     if (isHost) {
       final r = resume;
       if (r != null && r.state != null && r.players != null) {
@@ -299,6 +319,11 @@ class GameController extends ChangeNotifier {
   void dispatch(Map<String, dynamic> action) {
     if (isHost) {
       _apply(action);
+      // قفل المفتاحين على هاتف واحد أو مع الآلي: المحلّل يُدير مفتاحه تلقائياً
+      final s = state;
+      if (!online && !table && action['type'] == 'sync' && action['role'] == 'op' && s != null && s.roomId == 'sync' && s.syncOp > 0) {
+        _apply({'type': 'sync', 'role': 'ex', 'idx': extFor(s).exAnswer});
+      }
     } else {
       _net?.send({'kind': 'action', 'id': meId, 'action': action});
     }
@@ -608,6 +633,24 @@ class GameController extends ChangeNotifier {
   void _onMessage(Map<String, dynamic> m) {
     if (_disposed) return;
     final kind = m['kind'];
+    if (kind == 'rtt') {
+      final id = m['id'];
+      if (id is String && id != meId) {
+        _net?.send({'kind': 'rttAck', 'to': id, 't': m['t']});
+        if (isHost && players.containsKey(id)) _lastPeerSeen = _now();
+      }
+      return;
+    }
+    if (kind == 'rttAck') {
+      final t = m['t'];
+      if (m['to'] == meId && t is num) {
+        final q0 = connQuality;
+        partnerRtt = _now() - t.toInt();
+        _lastRttAck = _now();
+        if (connQuality != q0) _notify();
+      }
+      return;
+    }
     if (kind == 'quick') {
       final id = m['id'], q = m['q'];
       final t = q is String ? kQuickMessages[q] : null;
@@ -693,6 +736,18 @@ class GameController extends ChangeNotifier {
       if (key != _seenKey) {
         _seenKey = key;
         _events.add(s.lastEvent!);
+        // المؤثّر «تبادل الأدوار»: في منتصف المهمّة
+        if (isHost && s.lastEvent!.type == 'solved' && s.phase == 'playing' && s.rooms.length >= 4 &&
+            s.room == s.rooms.length ~/ 2 && stageMods(s.stage).contains('swap')) {
+          if (online) {
+            for (final p in players.values) {
+              p.role = p.role == 'op' ? 'ex' : 'op';
+            }
+            _broadcast();
+          } else if (!bot && !table) {
+            localRole = localRole == 'op' ? 'ex' : 'op';
+          }
+        }
         // عقوبة الخطأ من رصيد اللاعبَين (القائد يبلّغ الخادم مرّة واحدة)
         if (isHost && s.lastEvent!.type == 'wrong' && sessionId != null && key != _penaltyKey) {
           _penaltyKey = key;
@@ -724,6 +779,7 @@ class GameController extends ChangeNotifier {
     _loop?.cancel();
     _beat?.cancel();
     _ping?.cancel();
+    _rtt?.cancel();
     _hello?.cancel();
     _net?.close();
     _events.close();

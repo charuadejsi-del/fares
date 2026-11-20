@@ -11,6 +11,7 @@ import '../../core/game.dart';
 import '../../core/services.dart';
 import '../../core/stages.dart';
 import '../../core/team.dart';
+import '../../widgets/stage_brief.dart';
 import '../../widgets/ui_kit.dart';
 import '../../widgets/spy_ui.dart';
 
@@ -335,7 +336,8 @@ class StageSheet extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: SafeArea(
         top: false,
-        child: HudPanel(
+        child: SingleChildScrollView(
+         child: HudPanel(
           color: color,
           label: def.milestone ? 'CONTEST STAGE $n' : (def.boss ? 'BOSS // STAGE $n' : 'STAGE $n'),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -350,18 +352,7 @@ class StageSheet extends ConsumerWidget {
                   style: TextStyle(color: K.amber, fontWeight: FontWeight.w700)),
             ],
             const SizedBox(height: 12),
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              for (final r in def.rooms)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(border: Border.all(color: K.line), color: K.cell),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(K.roomIcons[r], size: 16, color: K.neonDim),
-                    const SizedBox(width: 6),
-                    Text(K.roomNames[r] ?? r, style: const TextStyle(fontSize: 13)),
-                  ]),
-                ),
-            ]),
+            StageBrief(def: def),
             const SizedBox(height: 12),
             Row(children: [
               const Icon(Icons.shield_outlined, color: K.amber, size: 18),
@@ -386,6 +377,7 @@ class StageSheet extends ConsumerWidget {
             const Text('للعب أونلاين: أنشئ غرفة واختر هذه المرحلة من غرفة الانتظار.',
                 textAlign: TextAlign.center, style: TextStyle(color: K.muted, fontSize: 12)),
           ]),
+         ),
         ),
       ),
     );

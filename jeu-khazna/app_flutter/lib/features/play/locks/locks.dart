@@ -6,9 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/ext_locks.dart';
 import '../../../core/game.dart';
 import '../../../core/services.dart';
 import '../../../widgets/spy_ui.dart';
+import 'ext_view.dart';
 
 typedef Dispatch = void Function(Map<String, dynamic> action);
 
@@ -22,6 +24,7 @@ class LockView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final op = role == 'op';
+    if (isExtRoom(state.roomId)) return ExtLockView(state: state, role: role, dispatch: dispatch);
     switch (state.roomId) {
       case 'keypad':
         return op ? KeypadOp(p: puzzles, dispatch: dispatch) : KeypadEx(p: puzzles);

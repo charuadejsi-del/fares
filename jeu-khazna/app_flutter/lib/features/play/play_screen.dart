@@ -17,7 +17,9 @@ import '../../core/team.dart';
 import '../../core/voice.dart';
 import '../shop/shop_screen.dart' show showShopSheet;
 import '../../widgets/spy_ui.dart';
+import '../../widgets/stage_brief.dart';
 import '../../widgets/stage_map.dart';
+import '../../core/ext_locks.dart' show vaultDigit, kVaultCode;
 import '../../widgets/ui_kit.dart';
 import '../briefing/briefing_screen.dart';
 import 'locks/locks.dart';
@@ -51,13 +53,16 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
 
   GameController get c => widget.controller;
 
+  /// المؤثّر «الصمت»: الميكروفون مقفل طوال المرحلة.
+  bool get _silent => stageMods(c.stage).contains('silent');
+
   @override
   void initState() {
     super.initState();
     _sub = c.events.listen(_onEvent);
     c.addListener(_onChange);
     // مع شريك من الرادار يبدأ الميكروفون مكتوماً (الرسائل السريعة متاحة دائماً)
-    if (c.online) _voice = (VoiceService()..muted = c.matched)..join(c.channel);
+    if (c.online) _voice = (VoiceService()..muted = c.matched || _silent)..join(c.channel);
   }
 
   @override
@@ -130,9 +135,18 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
       case 'solved':
         final st = c.state;
         if (st != null && st.phase == 'playing') {
+          // رقم الخزنة الذي كشفه هذا القفل
+          if (st.rooms.last == kVaultCode && st.room < st.rooms.length - 1 && st.room > 0) {
+            _showFlash('🔓 رقم مكشوف: ${vaultDigit(st.seed, st.room - 1)}', K.amber);
+          }
+          if (stageMods(st.stage).contains('swap') && st.rooms.length >= 4 && st.room == st.rooms.length ~/ 2) {
+            Timer(const Duration(milliseconds: 1400), () {
+              if (mounted) _showFlash('🔄 تبادل الأدوار!', K.agent);
+            });
+          }
           audio.fx(Sfx.success, HapticKind.medium);
           _transitionTimer?.cancel();
-          setState(() => _transition = K.roomNames[st.roomId] ?? '');
+          setState(() => _transition = K.room(st.roomId));
           _transitionTimer = Timer(const Duration(milliseconds: 1250), () {
             if (mounted) setState(() => _transition = null);
           });
@@ -439,14 +453,17 @@ class _Lobby extends ConsumerWidget {
           Text(def == null ? 'المهمّة الكلاسيكية' : 'المرحلة ${def.n}: ${def.name}',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: def?.region.color ?? K.neon)),
           const SizedBox(height: 8),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-            for (final r in s.rooms)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(border: Border.all(color: K.line), color: K.cell),
-                child: Text(K.roomNames[r] ?? r, style: const TextStyle(fontSize: 12.5)),
-              ),
-          ]),
+          if (def != null)
+            StageBrief(def: def)
+          else
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final r in s.rooms)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(border: Border.all(color: K.line), color: K.cell),
+                  child: Text(K.room(r), style: const TextStyle(fontSize: 12.5)),
+                ),
+            ]),
           const SizedBox(height: 6),
           Text('الصعوبة: ${s.difficulty.name} · الوقت يُحدَّد من الخادم عند البدء',
               style: const TextStyle(color: K.muted, fontSize: 12.5)),
@@ -518,9 +535,14 @@ class _Game extends StatelessWidget {
           InkWell(onTap: onExit, child: const Padding(padding: EdgeInsets.all(6), child: Icon(Icons.close, color: K.muted))),
           const SizedBox(width: 4),
           if (c.online || c.bot) RoleBadge(role) else _RoleSwitch(c: c),
-          if (voice != null) ...[const SizedBox(width: 8), VoiceButton(voice: voice!)],
+          if (voice != null && !stageMods(c.stage).contains('silent')) ...[const SizedBox(width: 8), VoiceButton(voice: voice!)],
+          if (stageMods(c.stage).contains('silent')) const Padding(padding: EdgeInsets.only(left: 6), child: Text('🔇', style: TextStyle(fontSize: 18))),
           const SizedBox(width: 8),
           HintButton(c: c),
+          InkWell(
+            onTap: () => showLockHelp(context, s),
+            child: const Padding(padding: EdgeInsets.all(6), child: Icon(Icons.help_outline, color: K.muted, size: 22)),
+          ),
           const Spacer(),
           _RadarTimer(c: c),
         ]),
@@ -555,7 +577,7 @@ class _Game extends StatelessWidget {
                 key: ValueKey('${s.seed}-${s.room}-$role'),
                 child: HudPanel(
                   color: K.role(role),
-                  label: '${(s.room + 1).toString().padLeft(2, '0')} // ${K.roomNames[s.roomId]}',
+                  label: '${(s.room + 1).toString().padLeft(2, '0')} // ${K.room(s.roomId)}',
                   child: LockView(state: s, puzzles: p, role: role, dispatch: c.dispatch),
                 ),
               ),
@@ -590,7 +612,7 @@ class _TableGame extends StatelessWidget {
             child: HudPanel(
               color: K.role(role),
               padding: const EdgeInsets.all(12),
-              label: '${K.roleName(role)} // ${K.roomNames[s.roomId]}',
+              label: '${K.roleName(role)} // ${K.room(s.roomId)}',
               child: LockView(state: s, puzzles: p, role: role, dispatch: c.dispatch),
             ),
           ),
@@ -874,6 +896,10 @@ class _End extends ConsumerWidget {
             NeonButton(label: won ? 'إعادة المرحلة' : 'حاول مرّة أخرى', icon: Icons.refresh, filled: !(won && s.stage > 0), onTap: c.newGame)
           else
             const Text('قائد الفريق يستطيع بدء مهمّة جديدة.', style: TextStyle(color: K.muted)),
+          if (c.online && c.partnerAccount != null && c.sessionId != null) ...[
+            const SizedBox(height: 14),
+            RatePartner(c: c),
+          ],
           if (c.matched && c.partnerAccount != null) ...[
             const SizedBox(height: 10),
             NeonButton(

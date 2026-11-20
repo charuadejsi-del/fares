@@ -5,19 +5,43 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../core/auth.dart';
+import '../../core/social.dart';
 import '../../core/team.dart';
 import '../../widgets/spy_ui.dart';
+import '../../widgets/title_frame.dart';
 import '../../widgets/ui_kit.dart';
 
 final leaderboardRowsProvider = FutureProvider.autoDispose<List<LeaderRow>>((ref) => TeamService.leaderboard());
 
-class LeaderboardScreen extends ConsumerWidget {
+class LeaderboardScreen extends ConsumerStatefulWidget {
   const LeaderboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final rows = ref.watch(leaderboardRowsProvider);
-    final me = authService.profile?.nickname;
+  ConsumerState<LeaderboardScreen> createState() => _LeaderboardScreenState();
+}
+
+class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
+  int _tab = 0; // 0 = الموسم الأسبوعي، 1 = كل الأوقات
+
+  Widget _tabBtn(int i, String label) => Expanded(
+        child: GestureDetector(
+          onTap: () => setState(() => _tab = i),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: _tab == i ? K.neon.withAlpha(30) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _tab == i ? K.neon : K.border),
+            ),
+            alignment: Alignment.center,
+            child: Text(label, style: TextStyle(fontWeight: FontWeight.w800, color: _tab == i ? K.neon : K.muted)),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       body: SpyBackground(
         child: SafeArea(
@@ -27,38 +51,132 @@ class LeaderboardScreen extends ConsumerWidget {
               child: Row(children: [
                 IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_forward, color: K.neon)),
                 const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('الترتيب العالمي', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                  MonoLabel('TOP TEAMS // أقوى الفرق', size: 10),
+                  Text('الترتيب', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                  MonoLabel('RANKINGS // الموسم والأبطال', size: 10),
                 ]),
                 const Spacer(),
-                IconButton(onPressed: () => ref.invalidate(leaderboardRowsProvider), icon: const Icon(Icons.refresh, color: K.muted)),
+                IconButton(
+                    onPressed: () {
+                      ref.invalidate(leaderboardRowsProvider);
+                      ref.invalidate(seasonProvider);
+                    },
+                    icon: const Icon(Icons.refresh, color: K.muted)),
               ]),
             ),
-            Expanded(
-              child: rows.when(
-                loading: () => const Center(child: CircularProgressIndicator(color: K.neon)),
-                error: (e, _) => Center(
-                  child: TextButton(
-                    onPressed: () => ref.invalidate(leaderboardRowsProvider),
-                    child: const Text('تعذّر التحميل — إعادة المحاولة', style: TextStyle(color: K.danger)),
-                  ),
-                ),
-                data: (list) => list.isEmpty
-                    ? const Center(child: Text('لا توجد فرق بعد — كن الأوّل!', style: TextStyle(color: K.muted)))
-                    : ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 24), children: [
-                        if (list.isNotEmpty) _Podium(list.take(3).toList()),
-                        const SizedBox(height: 16),
-                        for (int i = 3; i < list.length; i++)
-                          _Row(rank: i + 1, row: list[i], mine: me != null && (list[i].nameA == me || list[i].nameB == me)),
-                        const SizedBox(height: 10),
-                        const Text('الترتيب حسب أعلى مرحلة ثم مجموع النجوم. لا جوائز مالية.',
-                            textAlign: TextAlign.center, style: TextStyle(color: K.muted, fontSize: 12)),
-                      ]),
-              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(children: [_tabBtn(0, '🏆 الموسم الأسبوعي'), const SizedBox(width: 8), _tabBtn(1, 'كل الأوقات')]),
             ),
+            const SizedBox(height: 8),
+            Expanded(child: _tab == 0 ? const _SeasonTab() : const _AllTimeTab()),
           ]),
         ),
       ),
+    );
+  }
+}
+
+class _SeasonTab extends ConsumerWidget {
+  const _SeasonTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final b = ref.watch(seasonProvider);
+    return b.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: K.neon)),
+      error: (e, _) => Center(
+        child: TextButton(onPressed: () => ref.invalidate(seasonProvider), child: const Text('تعذّر التحميل — إعادة المحاولة', style: TextStyle(color: K.danger))),
+      ),
+      data: (s) => ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 24), children: [
+        GlassCard(
+          accent: K.amber,
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              TitleAvatar(authService.profile?.nickname ?? '?', title: s.myTitle, size: 50),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(s.myRank == null ? 'لم تدخل الترتيب بعد' : 'ترتيبك #${s.myRank}',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                  Text('${s.myPoints} نقطة · ${s.myWins} فوز هذا الأسبوع', style: const TextStyle(color: K.text2, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  TitleBadge(s.myTitle),
+                ]),
+              ),
+            ]),
+            const SizedBox(height: 10),
+            Text('⏳ ينتهي الموسم بعد ${leftText(s.endsAt)} — ثم يبدأ موسم جديد من الصفر.', style: const TextStyle(color: K.amber, fontSize: 12.5)),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        if (s.rows.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(30),
+            child: Text('لا أحد في الترتيب بعد — افتح خزنة لتكون الأوّل هذا الأسبوع!', textAlign: TextAlign.center, style: TextStyle(color: K.muted)),
+          ),
+        for (final r in s.rows)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: GlassCard(
+              accent: r.me ? K.neon : (r.rank <= 3 ? K.amber : K.border),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(children: [
+                SizedBox(
+                  width: 34,
+                  child: Text(r.rank <= 3 ? const ['🥇', '🥈', '🥉'][r.rank - 1] : '${r.rank}',
+                      style: const TextStyle(fontFamily: K.mono, color: K.muted, fontSize: 18)),
+                ),
+                TitleAvatar(r.nickname, title: r.title, size: 38),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(r.nickname, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    if (r.title != null) TitleBadge(r.title),
+                  ]),
+                ),
+                Pill(icon: Icons.bolt, text: '${r.points}', color: K.amber),
+              ]),
+            ),
+          ),
+        const SizedBox(height: 10),
+        const Text(
+          'النقاط من كل فوز: 20 + رقم المرحلة + مكافأة قلّة الأخطاء + 10 بلا تلميح + 10 مع شريك من الرادار.\n'
+          'في نهاية الأسبوع: الأول «أسطورة الأسبوع»، ثم «نخبة العشرة» و«أفضل 100» — ألقاب وإطارات فقط، بلا جوائز مالية.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: K.muted, fontSize: 12, height: 1.6),
+        ),
+      ]),
+    );
+  }
+}
+
+class _AllTimeTab extends ConsumerWidget {
+  const _AllTimeTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rows = ref.watch(leaderboardRowsProvider);
+    final me = authService.profile?.nickname;
+    return rows.when(
+      loading: () => const Center(child: CircularProgressIndicator(color: K.neon)),
+      error: (e, _) => Center(
+        child: TextButton(
+          onPressed: () => ref.invalidate(leaderboardRowsProvider),
+          child: const Text('تعذّر التحميل — إعادة المحاولة', style: TextStyle(color: K.danger)),
+        ),
+      ),
+      data: (list) => list.isEmpty
+          ? const Center(child: Text('لا توجد فرق بعد — كن الأوّل!', style: TextStyle(color: K.muted)))
+          : ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 24), children: [
+              _Podium(list.take(3).toList()),
+              const SizedBox(height: 16),
+              for (int i = 3; i < list.length; i++)
+                _Row(rank: i + 1, row: list[i], mine: me != null && (list[i].nameA == me || list[i].nameB == me)),
+              const SizedBox(height: 10),
+              const Text('الترتيب حسب أعلى مرحلة ثم مجموع النجوم. لا جوائز مالية.',
+                  textAlign: TextAlign.center, style: TextStyle(color: K.muted, fontSize: 12)),
+            ]),
     );
   }
 }

@@ -101,14 +101,19 @@ class GameRules {
   final int hintMinutes;
   final int penaltySeconds;
   final int dailyMinutes;
-  const GameRules(this.hintMinutes, this.penaltySeconds, this.dailyMinutes);
+  final int dailySeconds;
+  final int streakStepSeconds;
+  const GameRules(this.hintMinutes, this.penaltySeconds, this.dailyMinutes, [this.dailySeconds = 600, this.streakStepSeconds = 200]);
+
+  /// مكافأة يوم السلسلة n (يصل للحدّ الأقصى في اليوم السابع).
+  int rewardMinutes(int day) => ((dailySeconds + streakStepSeconds * (day.clamp(1, 7) - 1)) / 60).round();
 }
 
 final gameRulesProvider = FutureProvider<GameRules>((ref) async {
   final rows = await supa
       .from('settings')
       .select('key, value')
-      .inFilter('key', ['hint_cost_seconds', 'error_penalty_seconds', 'daily_free_seconds']);
+      .inFilter('key', ['hint_cost_seconds', 'error_penalty_seconds', 'daily_free_seconds', 'streak_step_seconds']);
   int v(String k, int d) {
     for (final r in rows) {
       if (r['key'] == k) return int.tryParse('${r['value']}') ?? d;
@@ -116,5 +121,6 @@ final gameRulesProvider = FutureProvider<GameRules>((ref) async {
     return d;
   }
 
-  return GameRules((v('hint_cost_seconds', 120) / 60).ceil(), v('error_penalty_seconds', 30), v('daily_free_seconds', 600) ~/ 60);
+  return GameRules((v('hint_cost_seconds', 120) / 60).ceil(), v('error_penalty_seconds', 30), v('daily_free_seconds', 600) ~/ 60,
+      v('daily_free_seconds', 600), v('streak_step_seconds', 200));
 });
