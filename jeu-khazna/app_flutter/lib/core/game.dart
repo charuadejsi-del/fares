@@ -408,6 +408,17 @@ class GameState {
   final int eventId;
   final int finishedIn;
 
+  /// مدّة المرحلة بالثواني من لوحة المدير (0 = مدّة مستوى الصعوبة).
+  final int duration;
+
+  /// توقّف مؤقّت: وقت بداية التوقّف (0 = غير متوقّف) وسببه: peer | balance.
+  final int pausedAt;
+  final String pauseReason;
+
+  /// التلميحات المشتراة وآخر تلميح (يظهر للّاعبَين).
+  final int hints;
+  final String hint;
+
   const GameState({
     required this.seed,
     this.rooms = kRooms,
@@ -425,7 +436,15 @@ class GameState {
     this.lastEvent,
     this.eventId = 0,
     this.finishedIn = 0,
+    this.duration = 0,
+    this.pausedAt = 0,
+    this.pauseReason = '',
+    this.hints = 0,
+    this.hint = '',
   });
+
+  bool get paused => pausedAt > 0;
+  int get effectiveDuration => duration > 0 ? duration : difficulty.duration;
 
   String get roomId => rooms[room.clamp(0, rooms.length - 1)];
   Difficulty get difficulty => diffOf(diff);
@@ -443,6 +462,10 @@ class GameState {
     int? eventId,
     int? finishedIn,
     int? dialStep,
+    int? pausedAt,
+    String? pauseReason,
+    int? hints,
+    String? hint,
   }) =>
       GameState(
         seed: seed,
@@ -461,6 +484,19 @@ class GameState {
         lastEvent: lastEvent ?? this.lastEvent,
         eventId: eventId ?? this.eventId,
         finishedIn: finishedIn ?? this.finishedIn,
+        duration: duration,
+        pausedAt: pausedAt ?? this.pausedAt,
+        pauseReason: pauseReason ?? this.pauseReason,
+        hints: hints ?? this.hints,
+        hint: hint ?? this.hint,
+      );
+
+  /// نسخة بمدّة مختلفة (تأتي من الخادم عند بداية الجلسة).
+  GameState withDuration(int seconds) => GameState(
+        seed: seed, rooms: rooms, diff: diff, dialStep: dialStep, stage: stage, phase: phase, room: room,
+        startedAt: startedAt, penalty: penalty, mazePos: mazePos, lightStage: lightStage, lightInput: lightInput,
+        cut: cut, lastEvent: lastEvent, eventId: eventId, finishedIn: finishedIn, duration: seconds,
+        pausedAt: pausedAt, pauseReason: pauseReason, hints: hints, hint: hint,
       );
 
   Map<String, dynamic> toJson() => {
@@ -480,6 +516,11 @@ class GameState {
         'lastEvent': lastEvent?.toJson(),
         'eventId': eventId,
         'finishedIn': finishedIn,
+        if (duration > 0) 'duration': duration,
+        if (pausedAt > 0) 'pausedAt': pausedAt,
+        if (pauseReason.isNotEmpty) 'pauseReason': pauseReason,
+        if (hints > 0) 'hints': hints,
+        if (hint.isNotEmpty) 'hint': hint,
       };
 
   static int _i(dynamic v, [int d = 0]) => v is num ? v.toInt() : d;
@@ -504,17 +545,23 @@ class GameState {
         lastEvent: GameEvent.fromJson(j['lastEvent']),
         eventId: _i(j['eventId']),
         finishedIn: _i(j['finishedIn']),
+        duration: _i(j['duration']),
+        pausedAt: _i(j['pausedAt']),
+        pauseReason: '${j['pauseReason'] ?? ''}',
+        hints: _i(j['hints']),
+        hint: '${j['hint'] ?? ''}',
       );
 }
 
-GameState newState(int seed, {List<String> rooms = kRooms, String diff = 'agent', int stage = 0}) =>
-    GameState(seed: seed, rooms: rooms, diff: diff, stage: stage);
+GameState newState(int seed, {List<String> rooms = kRooms, String diff = 'agent', int stage = 0, int duration = 0}) =>
+    GameState(seed: seed, rooms: rooms, diff: diff, stage: stage, duration: duration);
 
 GameState startGame(GameState s, Puzzles p, int now) => GameState(
       seed: s.seed,
       rooms: s.rooms,
       diff: s.diff,
       stage: s.stage,
+      duration: s.duration,
       phase: 'playing',
       startedAt: now,
       mazePos: p.maze.start,
@@ -523,20 +570,103 @@ GameState startGame(GameState s, Puzzles p, int now) => GameState(
     );
 
 double remainingSeconds(GameState s, int now) {
-  final duration = s.difficulty.duration;
+  final duration = s.effectiveDuration;
   if (s.startedAt == 0) return duration.toDouble();
-  final r = duration - (now - s.startedAt) / 1000 - s.penalty;
+  final t = s.pausedAt > 0 ? s.pausedAt : now;
+  final r = duration - (t - s.startedAt) / 1000 - s.penalty;
   return r < 0 ? 0 : r;
 }
 
 GameState tick(GameState s, int now) {
-  if (s.phase == 'playing' && remainingSeconds(s, now) <= 0) return s.copyWith(phase: 'lost');
+  if (s.phase == 'playing' && !s.paused && remainingSeconds(s, now) <= 0) return s.copyWith(phase: 'lost');
   return s;
+}
+
+/// يوقف المؤقّت (انقطاع شريك أو نفاد الرصيد). يُستأنف من نفس النقطة.
+GameState pauseGame(GameState s, int now, String reason) {
+  if (s.phase != 'playing') return s;
+  if (s.paused) return s.pauseReason == reason ? s : s.copyWith(pauseReason: reason);
+  return s.copyWith(pausedAt: now, pauseReason: reason, eventId: s.eventId + 1, lastEvent: GameEvent('pause', s.roomId));
+}
+
+GameState resumeGame(GameState s, int now) {
+  if (!s.paused) return s;
+  return s.copyWith(
+    startedAt: s.startedAt + (now - s.pausedAt),
+    pausedAt: 0,
+    pauseReason: '',
+    eventId: s.eventId + 1,
+    lastEvent: GameEvent('resume', s.roomId),
+  );
+}
+
+/// تلميح مدفوع للقفل الحالي: يكشف جزءاً من الحلّ.
+String hintFor(GameState s, Puzzles p) {
+  switch (s.roomId) {
+    case 'keypad':
+      final a = p.keypad.answer;
+      return 'أوّل رقمين من الرمز: ${a.substring(0, 2)}';
+    case 'wires':
+      return 'السلك الصحيح لونه ${kColors[p.wires.wires[p.wires.answer]].n}';
+    case 'cipher':
+      final a = p.cipher.answer;
+      return 'الكلمة من ${a.length} حروف وتبدأ بـ «${a.substring(0, 1)}»';
+    case 'maze':
+      final dir = _nextMazeStep(p.maze, s.mazePos ?? p.maze.start);
+      const names = {'up': 'للأعلى ⬆', 'down': 'للأسفل ⬇', 'left': 'لليسار ⬅', 'right': 'لليمين ➡'};
+      return dir == null ? 'أنت عند المخرج' : 'الخطوة الصحيحة التالية: ${names[dir]}';
+    case 'lights':
+      final exp = p.lights.expected(s.lightStage);
+      final i = s.lightInput.length.clamp(0, exp.length - 1);
+      return 'الضغطة التالية: ${kLights[exp[i]].n}';
+    case 'dial':
+      final ans = p.dial.answer;
+      final step = s.dialStep.clamp(0, ans.length - 1);
+      return 'الرقم ${step + 1} في القرص هو ${ans[step]}';
+    case 'radio':
+      final a = p.radio.answer;
+      final lo = (a - 2 - (a % 3)).clamp(kFreqMin, kFreqMax);
+      return 'التردّد بين $lo و ${(lo + 4).clamp(kFreqMin, kFreqMax)}';
+  }
+  return '';
+}
+
+String? _nextMazeStep(Maze m, int from) {
+  if (from == m.exit) return null;
+  final prev = <int, (int, String)>{};
+  final q = <int>[from];
+  final seen = <int>{from};
+  while (q.isNotEmpty) {
+    final c = q.removeAt(0);
+    if (c == m.exit) break;
+    for (final d in kDirNames) {
+      final n = m.neighbor(c, d);
+      if (n != null && seen.add(n)) {
+        prev[n] = (c, d);
+        q.add(n);
+      }
+    }
+  }
+  var cur = m.exit;
+  String? step;
+  while (prev.containsKey(cur)) {
+    final (back, d) = prev[cur]!;
+    step = d;
+    if (back == from) return step;
+    cur = back;
+  }
+  return step;
+}
+
+/// يطبّق تلميحاً مدفوعاً (بعد موافقة الخادم).
+GameState applyHint(GameState s, Puzzles p) {
+  if (s.phase != 'playing') return s;
+  return s.copyWith(hints: s.hints + 1, hint: hintFor(s, p), eventId: s.eventId + 1, lastEvent: GameEvent('hint', s.roomId));
 }
 
 /// يطبّق فعل اللاعب. يعيد نفس الكائن إذا لم يتغيّر شيء.
 GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
-  if (s.phase != 'playing') return s;
+  if (s.phase != 'playing' || s.paused) return s;
   final room = s.roomId;
   final type = a['type'];
 
@@ -546,9 +676,9 @@ GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
     final next = s.room + 1;
     if (next >= s.rooms.length) {
       final y = x.copyWith(room: next, phase: 'won');
-      return ev(y.copyWith(finishedIn: (s.difficulty.duration - remainingSeconds(y, now)).round()), 'solved');
+      return ev(y.copyWith(finishedIn: (s.effectiveDuration - remainingSeconds(y, now)).round(), hint: ''), 'solved');
     }
-    return ev(x.copyWith(room: next), 'solved');
+    return ev(x.copyWith(room: next, hint: ''), 'solved');
   }
 
   GameState wrong(GameState x, [int? pen, String t = 'wrong']) {

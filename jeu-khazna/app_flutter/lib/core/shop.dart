@@ -1,6 +1,7 @@
 // المتجر: الباقات، حساب بريدي موب، رفع الوصل، وطلبات اللاعب.
 import 'dart:typed_data';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase/supabase.dart';
 
@@ -94,3 +95,26 @@ class ShopService {
     return fresh;
   }
 }
+
+/// قواعد اللعبة كما يضبطها المدير (لعرضها للاعب).
+class GameRules {
+  final int hintMinutes;
+  final int penaltySeconds;
+  final int dailyMinutes;
+  const GameRules(this.hintMinutes, this.penaltySeconds, this.dailyMinutes);
+}
+
+final gameRulesProvider = FutureProvider<GameRules>((ref) async {
+  final rows = await supa
+      .from('settings')
+      .select('key, value')
+      .inFilter('key', ['hint_cost_seconds', 'error_penalty_seconds', 'daily_free_seconds']);
+  int v(String k, int d) {
+    for (final r in rows) {
+      if (r['key'] == k) return int.tryParse('${r['value']}') ?? d;
+    }
+    return d;
+  }
+
+  return GameRules((v('hint_cost_seconds', 120) / 60).ceil(), v('error_penalty_seconds', 30), v('daily_free_seconds', 600) ~/ 60);
+});

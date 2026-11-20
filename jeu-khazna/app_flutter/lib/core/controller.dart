@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../net/transport.dart';
 import 'auth.dart';
 import 'game.dart';
+import 'session.dart';
 import 'stages.dart';
 
 class Player {
@@ -43,6 +44,23 @@ class GameController extends ChangeNotifier {
   Map<String, Player> players = {};
   String? error;
 
+  // ───── الجلسة في الخادم (خصم الوقت) ─────
+  String? sessionId;
+  String? _endedSession;
+  bool starting = false;
+
+  /// رسالة للّاعب (رصيد غير كافٍ...).
+  String? notice;
+  bool meBroke = false;
+  bool _peerBroke = false;
+  int _lastPeerSeen = 0;
+  Timer? _beat;
+  Timer? _ping;
+  String _penaltyKey = '';
+
+  /// الضيف: انقطع وصول حالة القائد.
+  bool get hostLost => online && !isHost && state?.phase == 'playing' && _recvAt > 0 && _now() - _recvAt > 9000;
+
   /// الدور المعروض في وضع الهاتف الواحد (يتبدّل بزرّ).
   String localRole = 'op';
 
@@ -75,7 +93,8 @@ class GameController extends ChangeNotifier {
         isHost = true,
         code = '',
         meId = _rid() {
-    players = {meId: Player(meName, 'op')};
+    players = {meId: Player(meName, 'op', authService.uid)};
+    authService.addListener(_onAuth);
     _startLocal();
     _loop = Timer.periodic(const Duration(seconds: 1), (_) => _tickLoop());
   }
@@ -86,11 +105,14 @@ class GameController extends ChangeNotifier {
         rooms = kRooms,
         diff = 'agent',
         missionId = 0,
-        meId = _rid();
+        meId = _rid() {
+    authService.addListener(_onAuth);
+  }
 
   Future<void> connect() async {
     _net = await SupabaseTransport.connect(code, _onMessage);
     if (isHost) {
+      SessionService.roomOpen(code).catchError((_) {});
       state = newState(_newSeed());
       puzzles = generatePuzzles(state!.seed);
       players = {meId: Player(meName, 'op', authService.uid)};
@@ -99,6 +121,9 @@ class GameController extends ChangeNotifier {
     } else {
       _sendHello();
       _hello = Timer.periodic(const Duration(milliseconds: 1500), (_) => _sendHello());
+      _ping = Timer.periodic(const Duration(seconds: 4), (_) {
+        if (joined && players.containsKey(meId)) _net?.send({'kind': 'ping', 'id': meId, 'broke': meBroke});
+      });
     }
     _notify();
   }
@@ -122,8 +147,9 @@ class GameController extends ChangeNotifier {
   double get remaining {
     final s = state;
     if (s == null) return kDuration.toDouble();
-    if (s.phase != 'playing') return s.phase == 'lobby' ? s.difficulty.duration.toDouble() : 0;
+    if (s.phase != 'playing') return s.phase == 'lobby' ? s.effectiveDuration.toDouble() : 0;
     if (isHost) return remainingSeconds(s, _now());
+    if (s.paused || hostLost) return _recvRem;
     final r = _recvRem - (_now() - _recvAt) / 1000;
     return r < 0 ? 0 : r;
   }
@@ -142,11 +168,46 @@ class GameController extends ChangeNotifier {
     _notify();
   }
 
-  void hostStart() {
-    if (!canStart) return;
-    state = startGame(state!, puzzles!, _now());
-    _broadcast();
-    _changed();
+  /// بداية المهمّة: الخادم يتحقّق من رصيد اللاعبَين ويعطي مدّة المرحلة.
+  Future<void> hostStart() async {
+    if (!canStart || starting) return;
+    starting = true;
+    notice = null;
+    _notify();
+    try {
+      final r = await SessionService.start(room: code, partner: partnerUid, stage: state!.stage);
+      if (_disposed) return;
+      sessionId = r.id;
+      var s = state!;
+      if (r.timeLimit != null && s.stage > 0) s = s.withDuration(r.timeLimit!);
+      _lastPeerSeen = _now();
+      state = startGame(s, puzzles!, _now());
+      _broadcast();
+      _changed();
+      _startBeat();
+    } catch (e) {
+      notice = authErrorText(e);
+      _notify();
+    } finally {
+      starting = false;
+      _notify();
+    }
+  }
+
+  /// تلميح مدفوع من رصيد من يطلبه. يُرجع رسالة خطأ أو null.
+  Future<String?> buyHint() async {
+    final sid = sessionId;
+    final s = state;
+    if (sid == null || s == null || s.phase != 'playing') return 'التلميح متاح أثناء المهمّة فقط';
+    if (s.paused) return 'المهمّة متوقّفة';
+    try {
+      final bal = await SessionService.hint(sid);
+      authService.setBalance(bal);
+      dispatch({'type': 'hint'});
+      return null;
+    } catch (e) {
+      return authErrorText(e);
+    }
   }
 
   void swapRoles() {
@@ -161,6 +222,8 @@ class GameController extends ChangeNotifier {
   /// قائد الغرفة يختار مرحلة من الحملة (0 = المهمّة الكلاسيكية).
   void chooseStage(int n) {
     if (!isHost || !online || state?.phase == 'playing') return;
+    _finishSession('abandoned');
+    sessionId = null;
     final seed = _newSeed();
     if (n <= 0) {
       state = newState(seed);
@@ -175,6 +238,9 @@ class GameController extends ChangeNotifier {
 
   void newGame() {
     if (!isHost) return;
+    _finishSession('abandoned');
+    sessionId = null;
+    notice = null;
     if (!online) {
       _startLocal();
       _changed();
@@ -194,11 +260,107 @@ class GameController extends ChangeNotifier {
     puzzles = generatePuzzles(seed, diff);
     state = startGame(newState(seed, rooms: rooms, diff: diff, stage: missionId), puzzles!, _now());
     localRole = 'op';
+    _openLocalSession();
+  }
+
+  /// هاتف واحد: الجلسة تُفتح في الخلفية؛ إن لم يكفِ الرصيد تتوقّف المهمّة حتى الشحن.
+  Future<void> _openLocalSession() async {
+    try {
+      final r = await SessionService.start(stage: missionId);
+      if (_disposed) return;
+      sessionId = r.id;
+      final s = state;
+      if (s != null && r.timeLimit != null && s.stage > 0 && s.duration == 0) state = s.withDuration(r.timeLimit!);
+      _startBeat();
+      _notify();
+    } catch (e) {
+      if (_disposed) return;
+      notice = authErrorText(e);
+      if (notice!.contains('رصيد')) {
+        meBroke = true;
+        _evalPause();
+      }
+      _notify();
+    }
+  }
+
+  void _startBeat() {
+    _beat?.cancel();
+    _beat = Timer.periodic(const Duration(seconds: 15), (_) => _doBeat());
+  }
+
+  Future<void> _doBeat() async {
+    final sid = sessionId, s = state;
+    if (sid == null || s == null || s.phase != 'playing') return;
+    final active = !s.paused && !hostLost;
+    try {
+      final bal = await SessionService.beat(sid, active: active);
+      authService.setBalance(bal);
+      _setBroke(bal <= 0);
+    } catch (_) {}
+  }
+
+  void _setBroke(bool v) {
+    if (meBroke == v) return;
+    meBroke = v;
+    if (isHost) {
+      _evalPause();
+    } else {
+      _net?.send({'kind': 'ping', 'id': meId, 'broke': v});
+    }
+    _notify();
+  }
+
+  void _onAuth() {
+    final b = authService.profile?.balanceSeconds ?? 0;
+    if (meBroke && b > 0) {
+      notice = null;
+      if (sessionId == null && !online && state?.phase == 'playing') {
+        meBroke = false;
+        _openLocalSession().then((_) => _evalPause());
+        return;
+      }
+      _setBroke(false);
+    }
+  }
+
+  /// القائد يقرّر التوقّف: نفاد رصيد أحد اللاعبَين أو انقطاع الشريك.
+  void _evalPause() {
+    if (!isHost) return;
+    final s = state;
+    if (s == null || s.phase != 'playing') return;
+    var reason = '';
+    if (meBroke || _peerBroke) {
+      reason = 'balance';
+    } else if (online && players.length >= 2 && _now() - _lastPeerSeen > 10000) {
+      reason = 'peer';
+    }
+    final ns = reason.isEmpty ? resumeGame(s, _now()) : pauseGame(s, _now(), reason);
+    if (identical(ns, s)) return;
+    state = ns;
+    _broadcast();
+    _changed();
+  }
+
+  void _finishSession(String status) {
+    final sid = sessionId;
+    if (sid == null || _endedSession == sid) return;
+    _endedSession = sid;
+    _beat?.cancel();
+    SessionService.end(sid, status).then(authService.setBalance).catchError((_) {});
   }
 
   void _apply(Map<String, dynamic> action) {
     final s = state, p = puzzles;
     if (s == null || p == null) return;
+    if (action['type'] == 'hint') {
+      final ns = applyHint(s, p);
+      if (identical(ns, s)) return;
+      state = ns;
+      _broadcast();
+      _changed();
+      return;
+    }
     final ns = applyAction(s, p, action, _now());
     if (identical(ns, s)) return;
     state = ns;
@@ -209,8 +371,10 @@ class GameController extends ChangeNotifier {
   void _tickLoop() {
     final s = state;
     if (s == null) return;
-    final t = tick(s, _now());
-    if (!identical(t, s)) {
+    _evalPause();
+    if (!isHost && s.phase == 'playing') _notify(); // تحديث شريط «انقطع الاتصال»
+    final t = tick(state!, _now());
+    if (!identical(t, state)) {
       state = t;
       _broadcast();
       _changed();
@@ -229,6 +393,7 @@ class GameController extends ChangeNotifier {
       'state': state!.toJson(),
       'players': {for (final e in players.entries) e.key: e.value.toJson()},
       'rem': remainingSeconds(state!, _now()),
+      if (sessionId != null) 'session': sessionId,
     });
   }
 
@@ -237,6 +402,15 @@ class GameController extends ChangeNotifier {
     final kind = m['kind'];
     if (isHost) {
       final id = m['id'];
+      if (id is String && id != meId && players.containsKey(id)) _lastPeerSeen = _now();
+      if (kind == 'ping' && id is String && players.containsKey(id)) {
+        final b = m['broke'] == true;
+        if (b != _peerBroke) {
+          _peerBroke = b;
+          _evalPause();
+        }
+        return;
+      }
       if (kind == 'hello' && id is String) {
         if (!players.containsKey(id)) {
           if (players.length >= 2) return; // الغرفة ممتلئة
@@ -245,6 +419,7 @@ class GameController extends ChangeNotifier {
           final uid = m['uid'];
           players[id] = Player(name.length > 20 ? name.substring(0, 20) : name, hostRole == 'op' ? 'ex' : 'op',
               uid is String && uid.length == 36 ? uid : null);
+          _lastPeerSeen = _now();
           _notify();
         }
         _broadcast();
@@ -262,8 +437,14 @@ class GameController extends ChangeNotifier {
       }
       return; // ننتظر أن يضيفنا المضيف
     }
+    if (_hello != null) SessionService.roomJoin(code).catchError((_) {});
     _hello?.cancel();
     _hello = null;
+    final sid = m['session'];
+    if (sid is String && sid != sessionId) {
+      sessionId = sid;
+      _startBeat();
+    }
     final ns = GameState.fromJson(m['state'] as Map);
     if (puzzles == null || state?.seed != ns.seed) puzzles = generatePuzzles(ns.seed, ns.diff);
     state = ns;
@@ -285,8 +466,14 @@ class GameController extends ChangeNotifier {
       if (key != _seenKey) {
         _seenKey = key;
         _events.add(s.lastEvent!);
+        // عقوبة الخطأ من رصيد اللاعبَين (القائد يبلّغ الخادم مرّة واحدة)
+        if (isHost && s.lastEvent!.type == 'wrong' && sessionId != null && key != _penaltyKey) {
+          _penaltyKey = key;
+          SessionService.error(sessionId!).then((_) => _doBeat()).catchError((_) {});
+        }
       }
     }
+    if (s != null && (s.phase == 'won' || s.phase == 'lost')) _finishSession(s.phase);
     _notify();
   }
 
@@ -296,8 +483,13 @@ class GameController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _finishSession('abandoned');
+    if (online && isHost) SessionService.roomClose(code).catchError((_) {});
+    authService.removeListener(_onAuth);
     _disposed = true;
     _loop?.cancel();
+    _beat?.cancel();
+    _ping?.cancel();
     _hello?.cancel();
     _net?.close();
     _events.close();

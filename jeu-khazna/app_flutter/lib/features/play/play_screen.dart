@@ -11,9 +11,11 @@ import '../../app/theme.dart';
 import '../../core/controller.dart';
 import '../../core/game.dart';
 import '../../core/services.dart';
+import '../../core/shop.dart' show gameRulesProvider;
 import '../../core/stages.dart';
 import '../../core/team.dart';
 import '../../core/voice.dart';
+import '../shop/shop_screen.dart' show showShopSheet;
 import '../../widgets/spy_ui.dart';
 import '../../widgets/stage_map.dart';
 import '../../widgets/ui_kit.dart';
@@ -138,6 +140,17 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
         audio.fx(Sfx.success, HapticKind.light, volume: 0.5);
         _showFlash('المرحلة التالية', K.neon);
         break;
+      case 'hint':
+        audio.fx(Sfx.light, HapticKind.medium);
+        _showFlash('💡 تلميح جديد', K.amber);
+        break;
+      case 'pause':
+        audio.fx(Sfx.beep, HapticKind.medium);
+        break;
+      case 'resume':
+        audio.fx(Sfx.success, HapticKind.light, volume: 0.5);
+        _showFlash('▶ استئناف المهمّة', K.neon);
+        break;
       case 'press':
         audio.fx(Sfx.beep, HapticKind.tap, volume: 0.5);
         break;
@@ -185,9 +198,14 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
                   } else if (s.phase == 'lobby') {
                     body = _Lobby(c: c, voice: _voice);
                   } else if (s.phase == 'playing') {
-                    body = c.table
-                        ? _TableGame(c: c, shake: _shake, onExit: _leave)
-                        : _Game(c: c, shake: _shake, onExit: _leave, voice: _voice);
+                    body = Stack(children: [
+                      Positioned.fill(
+                        child: c.table
+                            ? _TableGame(c: c, shake: _shake, onExit: _leave)
+                            : _Game(c: c, shake: _shake, onExit: _leave, voice: _voice),
+                      ),
+                      if (s.paused || c.hostLost) Positioned.fill(child: _PauseOverlay(c: c, onExit: _leave)),
+                    ]);
                   } else {
                     body = _End(c: c, unlocked: _unlocked);
                   }
@@ -414,7 +432,7 @@ class _Lobby extends ConsumerWidget {
               ),
           ]),
           const SizedBox(height: 6),
-          Text('الصعوبة: ${s.difficulty.name} · ${s.difficulty.duration ~/ 60} دقائق',
+          Text('الصعوبة: ${s.difficulty.name} · الوقت يُحدَّد من الخادم عند البدء',
               style: const TextStyle(color: K.muted, fontSize: 12.5)),
           const SizedBox(height: 10),
           NeonButton(
@@ -435,7 +453,24 @@ class _Lobby extends ConsumerWidget {
       if (c.isHost) ...[
         NeonButton(label: 'تبديل الأدوار', icon: Icons.swap_horiz, filled: false, color: K.agent, onTap: c.swapRoles),
         const SizedBox(height: 10),
-        NeonButton(label: 'ابدأ المهمّة', icon: Icons.bolt, onTap: c.canStart ? c.hostStart : null),
+        if (c.notice != null) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: K.danger.withAlpha(20),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: K.danger.withAlpha(120)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.timer_off_outlined, color: K.danger),
+              const SizedBox(width: 10),
+              Expanded(child: Text(c.notice!, style: const TextStyle(color: K.danger, fontWeight: FontWeight.w700))),
+              TextButton(onPressed: () => showShopSheet(context), child: const Text('المتجر', style: TextStyle(color: K.neon))),
+            ]),
+          ),
+          const SizedBox(height: 10),
+        ],
+        GlowButton(label: 'ابدأ المهمّة', icon: Icons.bolt, busy: c.starting, onTap: c.canStart ? c.hostStart : null),
       ] else
         const Text('قائد الفريق هو من يبدأ المهمّة.', textAlign: TextAlign.center, style: TextStyle(color: K.muted)),
     ]);
@@ -463,6 +498,8 @@ class _Game extends StatelessWidget {
           const SizedBox(width: 4),
           if (c.online) RoleBadge(role) else _RoleSwitch(c: c),
           if (voice != null) ...[const SizedBox(width: 8), VoiceButton(voice: voice!)],
+          const SizedBox(width: 8),
+          HintButton(c: c),
           const Spacer(),
           _RadarTimer(c: c),
         ]),
@@ -471,6 +508,7 @@ class _Game extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
         child: _Progress(room: s.room, total: s.rooms.length, codename: codenameFor(s.seed)),
       ),
+      if (s.hint.isNotEmpty) HintBanner(text: s.hint),
       Expanded(
         child: AnimatedBuilder(
           animation: shake,
@@ -652,7 +690,7 @@ class _RadarTimerState extends ConsumerState<_RadarTimer> {
   @override
   Widget build(BuildContext context) {
     final r = widget.c.remaining;
-    final frac = (r / (widget.c.state?.difficulty.duration ?? kDuration)).clamp(0.0, 1.0).toDouble();
+    final frac = (r / (widget.c.state?.effectiveDuration ?? kDuration)).clamp(0.0, 1.0).toDouble();
     final warn = r < 60;
     final color = warn ? K.danger : (r < 180 ? K.amber : K.neon);
     return Row(mainAxisSize: MainAxisSize.min, children: [
@@ -869,6 +907,135 @@ class VoiceButton extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+
+// ───────── التلميحات والتوقّف ─────────
+class HintButton extends ConsumerStatefulWidget {
+  final GameController c;
+  const HintButton({super.key, required this.c});
+
+  @override
+  ConsumerState<HintButton> createState() => _HintButtonState();
+}
+
+class _HintButtonState extends ConsumerState<HintButton> {
+  bool _busy = false;
+
+  Future<void> _buy() async {
+    final cost = ref.read(gameRulesProvider).valueOrNull?.hintMinutes ?? 2;
+    final ok = await confirmDialog(context,
+        title: 'شراء تلميح؟',
+        body: 'يكشف جزءاً من حلّ القفل الحالي لكما معاً، ويُخصم $cost دقيقة من رصيدك.',
+        confirm: 'اشترِ التلميح');
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    final err = await widget.c.buyHint();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (err != null) showToast(context, err, error: true);
+  }
+
+  @override
+  Widget build(BuildContext context) => Pressable(
+        onTap: _busy || widget.c.sessionId == null ? null : _buy,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: K.amber.withAlpha(22),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: K.amber.withAlpha(110)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            _busy
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: K.amber))
+                : const Icon(Icons.lightbulb_outline, color: K.amber, size: 18),
+            const SizedBox(width: 4),
+            const Text('تلميح', style: TextStyle(color: K.amber, fontWeight: FontWeight.w800, fontSize: 13)),
+          ]),
+        ),
+      );
+}
+
+class HintBanner extends StatelessWidget {
+  final String text;
+  const HintBanner({super.key, required this.text});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+        child: TweenAnimationBuilder<double>(
+          key: ValueKey(text),
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 420),
+          curve: Curves.easeOutBack,
+          builder: (context, v, child) => Transform.scale(scale: .9 + .1 * v, child: Opacity(opacity: v.clamp(0.0, 1.0), child: child)),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: K.amber.withAlpha(26),
+              border: Border.all(color: K.amber.withAlpha(140)),
+              boxShadow: [BoxShadow(color: K.amber.withAlpha(50), blurRadius: 16)],
+            ),
+            child: Row(children: [
+              const Icon(Icons.lightbulb, color: K.amber),
+              const SizedBox(width: 10),
+              Expanded(child: Text(text, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15))),
+            ]),
+          ),
+        ),
+      );
+}
+
+/// شاشة التوقّف: نفاد الرصيد (مع زر الشحن) أو انقطاع الشريك. تُستأنف المهمّة من نفس النقطة.
+class _PauseOverlay extends StatelessWidget {
+  final GameController c;
+  final VoidCallback onExit;
+  const _PauseOverlay({required this.c, required this.onExit});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = c.state!;
+    final balance = s.pauseReason == 'balance';
+    final lost = c.hostLost;
+    final (icon, title, body, color) = lost
+        ? (Icons.wifi_off_rounded, 'انقطع الاتصال بالقائد', 'ننتظر عودة الاتصال… الوقت لا يُخصم أثناء الانقطاع.', K.agent)
+        : balance
+            ? (Icons.timer_off_outlined, 'نفد الرصيد', c.meBroke
+                ? 'رصيدك انتهى. اشحن دقائق وستُستأنف المهمّة من نفس النقطة.'
+                : 'رصيد شريكك انتهى. ننتظر أن يشحن ليُستأنف اللعب.', K.danger)
+            : (Icons.person_off_outlined, 'الشريك غير متّصل', 'المؤقّت متوقّف حتى يعود شريكك. لا يُخصم أي وقت.', K.amber);
+    return Container(
+      color: K.bg.withAlpha(225),
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: GlassCard(
+          accent: color,
+          padding: const EdgeInsets.all(22),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, color: color, size: 56),
+            const SizedBox(height: 12),
+            const MonoLabel('MISSION PAUSED // متوقّفة', size: 11),
+            const SizedBox(height: 6),
+            Text(title, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: color)),
+            const SizedBox(height: 8),
+            Text(body, textAlign: TextAlign.center, style: const TextStyle(color: K.text2, height: 1.5)),
+            const SizedBox(height: 8),
+            Text('الوقت المتبقّي محفوظ: ${fmtTime(c.remaining)}', style: const TextStyle(fontFamily: K.mono, color: K.muted)),
+            const SizedBox(height: 18),
+            if (balance && c.meBroke) ...[
+              GlowButton(label: 'اشحن الآن', icon: Icons.bolt, onTap: () => showShopSheet(context)),
+              const SizedBox(height: 10),
+            ],
+            if (!lost && !balance) const LinearProgressIndicator(color: K.amber, backgroundColor: K.border),
+            const SizedBox(height: 10),
+            TextButton(onPressed: onExit, child: const Text('الخروج من المهمّة', style: TextStyle(color: K.muted))),
+          ]),
+        ),
+      ),
     );
   }
 }

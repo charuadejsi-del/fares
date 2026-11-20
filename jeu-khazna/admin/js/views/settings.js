@@ -17,7 +17,10 @@ const RULES = [
 ];
 
 export async function renderSettings(page) {
-  const [settings, stages, packages] = await Promise.all([api.settings(), api.stageConfig(), api.packages()]);
+  const [settings, stages, packages, stats] = await Promise.all([api.settings(), api.stageConfig(), api.packages(), api.stageStats().catch(() => [])]);
+  const st = Object.fromEntries(stats.map((x) => [x.stage, x]));
+  const suggest = (x) => (x && x.wins >= 3 && x.avg_win_seconds ? Math.min(7200, Math.max(60, Math.round((x.avg_win_seconds * 1.5) / 15) * 15)) : null);
+  const tunable = stats.filter((x) => suggest(x) !== null).length;
   const sv = Object.fromEntries(settings.map((r) => [r.key, r.value]));
   dirty = false;
   page.innerHTML = `
@@ -50,7 +53,8 @@ export async function renderSettings(page) {
           <span class="faint" style="font-size:12.5px" data-rate>${(p.price_dzd / p.minutes).toFixed(2)} دج / دقيقة</span>
         </div>`).join('')}</div></div></div>
 
-    <div class="card"><div class="card-head"><span class="chip-icon info">${icon('flag')}</span><div><h3>وقت كل مرحلة</h3><p>بالدقائق · ★ = مرحلة الزعيم</p></div></div>
+    <div class="card"><div class="card-head"><span class="chip-icon info">${icon('flag')}</span><div><h3>وقت كل مرحلة</h3><p>بالدقائق · ★ = مرحلة الزعيم · تحت كل مرحلة: متوسّط وقت الفوز الحقيقي</p></div>
+      <div class="end"><button class="btn btn-sm" id="autotune" ${tunable ? '' : 'disabled'} title="المتوسّط × 1.5 للمراحل التي فاز بها 3 فرق على الأقل">${icon('zap')} ضبط تلقائي (${tunable})</button></div></div>
       <div class="card-body">
         <div class="toolbar" style="padding:0 0 14px;border:0">
           <span class="muted">تعديل جماعي من</span><input class="input num" id="b1" type="number" value="1" style="width:76px">
@@ -60,7 +64,8 @@ export async function renderSettings(page) {
         ${REGIONS.map((r) => `<div class="region"><h4><i style="background:${r.color};box-shadow:0 0 10px ${r.color}"></i>${r.name} <span class="faint">(${r.from}–${r.to})</span></h4>
           <div class="stage-grid">${stages.filter((s) => s.stage >= r.from && s.stage <= r.to).map((s) => `
             <label class="stage ${s.stage === r.to ? 'boss' : ''}"><small>${s.stage === r.to ? '★ ' : ''}${s.stage}</small>
-              <input class="input" type="number" step="0.5" min="1" max="120" data-s="${s.stage}" value="${s.time_limit_seconds / 60}"></label>`).join('')}</div></div>`).join('')}
+              <input class="input" type="number" step="0.5" min="1" max="120" data-s="${s.stage}" value="${s.time_limit_seconds / 60}">
+              <small title="متوسّط الفوز · عدد اللعبات">${st[s.stage]?.avg_win_seconds ? `⌀ ${(st[s.stage].avg_win_seconds / 60).toFixed(1)}د · ${st[s.stage].plays}` : (st[s.stage]?.plays ? `${st[s.stage].plays} لعبة` : '—')}</small></label>`).join('')}</div></div>`).join('')}
       </div></div>
 
     <div class="card savebar"><span id="dirty" class="faint" style="flex:1">لا تغييرات</span><button class="btn btn-primary" id="save">${icon('save')} حفظ التغييرات</button></div>
@@ -90,6 +95,15 @@ export async function renderSettings(page) {
     if (!(v > 0)) return toast('اكتب عدد الدقائق', 'err');
     $$('[data-s]', page).forEach((i) => { const s = +i.dataset.s; if (s >= a && s <= b) i.value = v; });
     mark();
+  };
+  $('#autotune', page).onclick = () => {
+    let n = 0;
+    $$('[data-s]', page).forEach((i) => {
+      const v = suggest(st[+i.dataset.s]);
+      if (v !== null) { i.value = v / 60; n++; }
+    });
+    mark();
+    toast(`اقتُرحت أوقات جديدة لـ ${n} مرحلة — راجعها ثم احفظ`, 'warn');
   };
   $('[data-add]', page).onclick = async () => {
     try { await api.addPackage({ minutes: 60, price_dzd: 100, active: false, sort: packages.length + 1 }); renderSettings(page); }

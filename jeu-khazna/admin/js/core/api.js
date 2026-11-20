@@ -23,6 +23,7 @@ export const api = {
   stats: () => sb.rpc('admin_stats').then(ok),
   players: () => sb.rpc('admin_list_players').then(ok),
   rooms: () => sb.rpc('admin_rooms').then(ok),
+  stageStats: () => sb.rpc('admin_stage_stats').then(ok),
   adjustTime: (user, deltaSeconds, note) =>
     sb.rpc('admin_adjust_time', { p_user: user, p_delta_seconds: deltaSeconds, p_note: note || null }).then(ok),
   setBanned: (user, banned) => sb.rpc('admin_set_banned', { p_user: user, p_banned: banned }).then(ok),

@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../app/theme.dart';
 import '../../core/auth.dart';
 import '../../core/services.dart';
+import '../../core/session.dart';
 import '../../core/shop.dart';
 import '../../widgets/spy_ui.dart';
 import '../../widgets/ui_kit.dart';
@@ -56,6 +57,8 @@ class ShopScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 10),
         const _HowItWorks(),
+        const SizedBox(height: 12),
+        const _GiftCard(),
         const SizedBox(height: 22),
         SectionTitle('طلباتي', tag: 'MY ORDERS', trailing: IconButton(
           onPressed: () => ref.invalidate(myRequestsProvider),
@@ -91,6 +94,107 @@ class ShopScreen extends ConsumerWidget {
       if (context.mounted) showToast(context, 'وصل طلبك ✓ ستُضاف الدقائق بعد التحقّق');
     }
   }
+}
+
+/// المتجر كنافذة سفلية (من داخل المهمّة أو الغرفة) دون مغادرة اللعب.
+Future<void> showShopSheet(BuildContext context) => showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(ctx).size.height * .9,
+        decoration: const BoxDecoration(
+          color: Color(0xFF070D0E),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          border: Border(top: BorderSide(color: K.borderStrong)),
+        ),
+        child: Column(children: [
+          const SizedBox(height: 10),
+          Container(width: 44, height: 4, decoration: BoxDecoration(color: K.borderStrong, borderRadius: BorderRadius.circular(4))),
+          Row(children: [
+            const SizedBox(width: 18),
+            const Text('المتجر', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            const Spacer(),
+            IconButton(onPressed: () => Navigator.of(ctx).pop(), icon: const Icon(Icons.close, color: K.muted)),
+          ]),
+          const Expanded(child: ShopScreen()),
+        ]),
+      ),
+    );
+
+/// إهداء دقائق لصديق باسمه الحركي.
+class _GiftCard extends ConsumerWidget {
+  const _GiftCard();
+
+  Future<void> _open(BuildContext context) async {
+    final name = TextEditingController();
+    final mins = TextEditingController(text: '10');
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: GlassCard(
+          accent: K.violet,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Row(children: [
+              Icon(Icons.redeem, color: K.violet),
+              SizedBox(width: 10),
+              Text('أهدِ دقائق لصديق', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+            ]),
+            const SizedBox(height: 14),
+            TextField(controller: name, decoration: fieldDecoration('الاسم الحركي لصديقك', icon: Icons.person_search_outlined)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: mins,
+              keyboardType: TextInputType.number,
+              decoration: fieldDecoration('عدد الدقائق (5 – 500)', icon: Icons.timer_outlined),
+            ),
+            const SizedBox(height: 14),
+            GlowButton(label: 'إرسال الهديّة', icon: Icons.send_rounded, color: K.violet, height: 50, onTap: () => Navigator.of(ctx).pop(true)),
+          ]),
+        ),
+      ),
+    );
+    final n = name.text.trim();
+    final m = int.tryParse(mins.text.trim()) ?? 0;
+    name.dispose();
+    mins.dispose();
+    if (ok != true || !context.mounted) return;
+    if (n.isEmpty || m < 5) {
+      showToast(context, 'اكتب الاسم وعدد الدقائق (5 على الأقل)', error: true);
+      return;
+    }
+    final sure = await confirmDialog(context, title: 'تأكيد الإهداء', body: 'ستُرسل $m دقيقة من رصيدك إلى «$n». لا يمكن التراجع.', confirm: 'أرسل');
+    if (!sure || !context.mounted) return;
+    try {
+      final bal = await SessionService.gift(n, m);
+      authService.setBalance(bal);
+      if (context.mounted) showToast(context, '🎁 وصلت $m دقيقة إلى $n');
+    } catch (e) {
+      if (context.mounted) showToast(context, authErrorText(e), error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Pressable(
+        onTap: () => _open(context),
+        child: GlassCard(
+          accent: K.violet,
+          padding: const EdgeInsets.all(14),
+          child: const Row(children: [
+            Icon(Icons.redeem, color: K.violet, size: 28),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('أهدِ دقائق لصديق', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                Text('شاركه رصيدك ليلعب معك', style: TextStyle(color: K.muted, fontSize: 12.5)),
+              ]),
+            ),
+            Icon(Icons.chevron_left, color: K.muted),
+          ]),
+        ),
+      );
 }
 
 class _Header extends StatelessWidget {

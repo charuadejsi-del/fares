@@ -122,6 +122,23 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// تحديث الرصيد محلياً بعد ردّ الخادم (نبضة، تلميح، إهداء...).
+  void setBalance(int seconds) {
+    final p = profile;
+    if (p == null || p.balanceSeconds == seconds) return;
+    profile = Profile(
+      id: p.id,
+      nickname: p.nickname,
+      role: p.role,
+      balanceSeconds: seconds,
+      banned: p.banned,
+      createdAt: p.createdAt,
+      lastSeen: p.lastSeen,
+      dailyClaimedOn: p.dailyClaimedOn,
+    );
+    notifyListeners();
+  }
+
   Future<void> signUp({required String email, required String password, required String nickname}) async {
     final res = await supa.auth.signUp(email: email.trim(), password: password, data: {'nickname': nickname.trim()});
     if (res.session == null) {
@@ -184,6 +201,12 @@ String authErrorText(Object e) {
   if (m.contains('package unavailable')) return 'هذه الباقة غير متوفّرة';
   if (m.contains('invalid receipt')) return 'أرفق صورة الوصل';
   if (m.contains('stage locked')) return 'هذه المرحلة مقفلة';
+  if (m.contains('partner no balance')) return 'رصيد شريكك نفد — يجب أن يشحن أولاً';
+  if (m.contains('no balance')) return 'رصيدك غير كافٍ — اشحن من المتجر';
+  if (m.contains('unknown player')) return 'لا يوجد لاعب بهذا الاسم';
+  if (m.contains('self gift')) return 'لا يمكنك إهداء نفسك';
+  if (m.contains('gift range')) return 'الإهداء من 5 إلى 500 دقيقة';
+  if (m.contains('gift limit')) return 'وصلت لحدّ 5 إهداءات في اليوم';
   if (m.contains('rate limit')) return 'محاولات كثيرة، انتظر قليلاً';
   if (m.contains('socket') || m.contains('failed host') || m.contains('timeout')) return 'لا يوجد اتصال بالإنترنت';
   final raw = (e is AuthException ? e.message : '$e');
