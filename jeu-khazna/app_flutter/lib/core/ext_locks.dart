@@ -889,12 +889,9 @@ ExtPuzzle _mix(Rng r, int lv, String serial) {
 // ───── 20. الدائرة الكهربائية ─────
 ExtPuzzle _circuit(Rng r, int lv, String serial) {
   final n = 4;
-  final glyphOf = [for (int c = 0; c < kColors.length; c++) r.nextInt(kSymbols.length)];
-  // نضمن أن ألوان الأطراف الأربعة لها رموز مختلفة
-  late List<int> colors;
-  do {
-    colors = _distinct(r, n, kColors.length);
-  } while ({for (final c in colors) glyphOf[c]}.length < n);
+  // رمز مختلف لكل لون، فلا يتكرّر رمزان بين الأطراف
+  final glyphOf = _distinct(r, kColors.length, kSymbols.length);
+  final colors = _distinct(r, n, kColors.length);
   final right = r.shuffle([for (final c in colors) kSymbols[glyphOf[c]].s]);
   final volt = 1 + r.nextInt(3);
   var ans = [for (final c in colors) right.indexOf(kSymbols[glyphOf[c]].s)];
