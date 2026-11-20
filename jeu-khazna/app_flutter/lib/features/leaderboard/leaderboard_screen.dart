@@ -31,7 +31,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
               color: _tab == i ? K.neon.withAlpha(30) : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(K.radius),
               border: Border.all(color: _tab == i ? K.neon : K.border),
             ),
             alignment: Alignment.center,

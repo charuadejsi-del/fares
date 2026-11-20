@@ -88,7 +88,7 @@ class _InviteListenerState extends State<InviteListener> with WidgetsBindingObse
         barrierColor: Colors.black87,
         builder: (ctx) => AlertDialog(
           backgroundColor: K.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: K.borderStrong)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(K.radius), side: const BorderSide(color: K.borderStrong)),
           title: Row(children: [
             Avatar(inv.nickname, size: 40),
             const SizedBox(width: 10),

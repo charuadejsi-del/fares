@@ -171,7 +171,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               textDirection: TextDirection.ltr,
               maxLength: 4,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: const TextStyle(fontFamily: K.mono, fontSize: 34, color: K.neon, letterSpacing: 12),
+              style: const TextStyle(fontFamily: K.mono, fontSize: 34, color: K.text, letterSpacing: 12),
               decoration: fieldDecoration('0000'),
             ),
             const SizedBox(height: 14),
@@ -216,8 +216,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                  Text(progress.rank, style: const TextStyle(color: K.amber, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                  Text(progress.rank, style: const TextStyle(color: K.muted, fontSize: 12, fontWeight: FontWeight.w600)),
                 ]),
               ),
               const BalanceChip(),
@@ -252,134 +252,229 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           const SizedBox(height: 14),
         ],
-        // ── البطاقة البطلة: العب مع صديق
-        GlassCard(
-          accent: K.neon,
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-          gradient: const LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [Color(0xFF0E2420), Color(0xFF0B1516), Color(0xFF081011)],
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const MonoLabel('CO-OP MISSION // مهمّة جماعية', size: 10),
-                  const SizedBox(height: 8),
-                  const Text('افتح الخزنة\nمع صديقك', style: TextStyle(fontSize: 28, height: 1.15, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 8),
-                  Text('عميل يرى الأقفال · محلّل يملك الدليل · صوت مباشر',
-                      style: TextStyle(color: K.text2.withAlpha(220), fontSize: 12.5)),
+        // ── البطاقة البطلة: صورة باب الخزنة الحقيقية + زرّ واحد واضح
+        ClipRRect(
+          borderRadius: BorderRadius.circular(K.radius),
+          child: SizedBox(
+            height: 330,
+            child: Stack(fit: StackFit.expand, children: [
+              ColorFiltered(
+                colorFilter: const ColorFilter.matrix([.5, .4, .1, 0, -8, .4, .5, .1, 0, -8, .4, .4, .2, 0, -8, 0, 0, 0, 1, 0]),
+                child: Image.asset('assets/images/vault.jpg', fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: K.surface)),
+              ),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x990A0C0E), Color(0x000A0C0E), Color(0x000A0C0E), Color(0xFF0A0C0E)],
+                    stops: [0, .25, .45, 1],
+                  ),
+                ),
+              ),
+              const Positioned(top: 12, right: 14, left: 14, child: _LiveRow()),
+              Positioned(
+                right: 16,
+                left: 16,
+                bottom: 16,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  const MonoLabel('OPERATION // CO-OP', color: K.neon, size: 10.5),
+                  const SizedBox(height: 6),
+                  const Text('اخترق الخزنة.\nمعاً فقط.', style: TextStyle(fontSize: 30, height: 1.2, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  const Text('عميل أمام الأقفال، ومحلّل يملك الملفّات. لا أحد يفتحها وحده.',
+                      style: TextStyle(color: K.text2, fontSize: 13, height: 1.5)),
+                  const SizedBox(height: 14),
+                  _PlayButton(busy: _busy, onTap: _busy ? null : _radar),
                 ]),
               ),
-              const VaultHero(size: 118),
             ]),
-            const SizedBox(height: 18),
-            GlowButton(label: 'العب الآن — ابحث عن شريك', icon: Icons.radar, busy: _busy, onTap: _busy ? null : _radar),
-            const SizedBox(height: 10),
-            GlowButton(label: 'أنشئ غرفة وادعُ صديقك', icon: Icons.wifi_tethering, outline: true, height: 50, onTap: _busy ? null : () => _online(host: true)),
-            const SizedBox(height: 10),
-            Row(children: [
-              Expanded(child: GlowButton(label: 'انضمّ برمز', icon: Icons.login_rounded, outline: true, color: K.agent, height: 48, onTap: _busy ? null : _joinDialog)),
-              const SizedBox(width: 10),
-              Expanded(child: GlowButton(label: 'هاتف واحد', icon: Icons.smartphone, outline: true, color: K.agent, height: 48, onTap: _busy ? null : () => ref.read(tabProvider.notifier).state = 1)),
-            ]),
-          ]),
+          ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
+        // ── ثلاث طرق أخرى للّعب (بلا تكرار)
+        Container(
+          decoration: BoxDecoration(
+            color: K.surface,
+            borderRadius: BorderRadius.circular(K.radius),
+            border: Border.all(color: K.border),
+          ),
+          child: IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(child: _Mode(icon: Icons.group_add_outlined, label: 'غرفة مع صديق', onTap: _busy ? null : () => _online(host: true))),
+              const VerticalDivider(width: 1, color: K.border),
+              Expanded(child: _Mode(icon: Icons.dialpad, label: 'رمز غرفة', onTap: _busy ? null : _joinDialog)),
+              const VerticalDivider(width: 1, color: K.border),
+              Expanded(child: _Mode(icon: Icons.smart_toy_outlined, label: 'تدريب مع نَسْر', onTap: _bot)),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 20),
+        const SectionTitle('مهامّ اليوم', tag: 'DAILY'),
         const DailyRewardCard(),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         const ChallengesCard(),
-        const SizedBox(height: 22),
-        const SectionTitle('حملتك', tag: 'SOLO CAMPAIGN'),
+        const SizedBox(height: 20),
+        const SectionTitle('حملتك', tag: 'CAMPAIGN'),
         Pressable(
           onTap: () => ref.read(tabProvider.notifier).state = 1,
           child: GlassCard(
-            accent: def.region.color,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             child: Row(children: [
               Container(
-                width: 58,
-                height: 58,
+                width: 52,
+                height: 52,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  color: def.region.color.withAlpha(26),
-                  border: Border.all(color: def.region.color.withAlpha(140)),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: K.neon.withAlpha(150)),
                 ),
-                child: Text('$next', style: TextStyle(fontFamily: K.mono, fontSize: 24, color: def.region.color)),
+                child: Text(next.toString().padLeft(2, '0'), style: const TextStyle(fontFamily: K.mono, fontSize: 20, color: K.neon)),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('المرحلة التالية: ${def.name}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                  Text(def.name, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 2),
-                  Text('${def.region.name}${def.boss ? ' · مرحلة الزعيم 🔥' : ''}', style: const TextStyle(color: K.muted, fontSize: 12.5)),
+                  Text('${def.region.name}${def.boss ? ' · مرحلة الزعيم' : ''}', style: const TextStyle(color: K.muted, fontSize: 12.5)),
                   const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: LinearProgressIndicator(
-                      value: (team.top / kCampaignStages).clamp(0.0, 1.0).toDouble(),
-                      minHeight: 6,
-                      color: def.region.color,
-                      backgroundColor: K.border,
-                    ),
+                  LinearProgressIndicator(
+                    value: (team.top / kCampaignStages).clamp(0.0, 1.0).toDouble(),
+                    minHeight: 3,
+                    color: K.steel,
+                    backgroundColor: K.border,
                   ),
                 ]),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Text('${team.top.clamp(0, kCampaignStages)}/$kCampaignStages', style: const TextStyle(fontFamily: K.mono, color: K.muted)),
             ]),
           ),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 20),
         const SectionTitle('المزيد', tag: 'OPERATIONS'),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.55,
-          children: [
-            _Tile(icon: Icons.group_rounded, title: 'الأصدقاء', sub: 'ادعُ واربح دقائق', color: K.neon, onTap: () => context.push('/friends')),
-            _Tile(icon: Icons.smart_toy_outlined, title: 'العميل الآلي', sub: 'تدرّب مع نَسْر 🤖', color: K.violet, onTap: _bot),
-            _Tile(icon: Icons.leaderboard_rounded, title: 'الترتيب العالمي', sub: 'أقوى الفرق', color: K.amber, onTap: () => context.push('/leaderboard')),
-            _Tile(icon: Icons.school_outlined, title: 'التدريب', sub: 'كيف تُلعب؟', color: K.agent, onTap: () => context.push('/tutorial')),
-            _Tile(icon: Icons.bolt_rounded, title: 'مهمّة حرّة', sub: 'اختر الأقفال والصعوبة', color: K.violet, onTap: () => context.push('/briefing')),
-            _Tile(icon: Icons.storefront_outlined, title: 'المتجر', sub: 'اشحن دقائقك', color: K.amber, onTap: () => ref.read(tabProvider.notifier).state = 2),
-          ],
+        Container(
+          decoration: BoxDecoration(
+            color: K.surface,
+            borderRadius: BorderRadius.circular(K.radius),
+            border: Border.all(color: K.border),
+          ),
+          child: Column(children: [
+            _Row(icon: Icons.group_outlined, title: 'الأصدقاء', sub: 'ادعُ واربح دقائق', onTap: () => context.push('/friends')),
+            _Row(icon: Icons.leaderboard_outlined, title: 'الترتيب والموسم', sub: 'أقوى الفرق هذا الأسبوع', onTap: () => context.push('/leaderboard')),
+            _Row(icon: Icons.tune, title: 'مهمّة حرّة', sub: 'اختر الأقفال والصعوبة', onTap: () => context.push('/briefing')),
+            _Row(icon: Icons.school_outlined, title: 'كيف تُلعب؟', sub: 'شرح قصير للدورين', last: true, onTap: () => context.push('/tutorial')),
+          ]),
         ),
       ]),
     );
   }
 }
 
-class _Tile extends StatelessWidget {
+/// «LIVE · عدد العملاء» + ساعة بطابع كاميرا مراقبة.
+class _LiveRow extends StatefulWidget {
+  const _LiveRow();
+
+  @override
+  State<_LiveRow> createState() => _LiveRowState();
+}
+
+class _LiveRowState extends State<_LiveRow> with SingleTickerProviderStateMixin {
+  late final AnimationController _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _a.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = TimeOfDay.now();
+    final t = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    const st = TextStyle(fontFamily: K.mono, fontSize: 10.5, color: K.steel, letterSpacing: 1);
+    return Row(children: [
+      FadeTransition(
+        opacity: Tween(begin: .25, end: 1.0).animate(_a),
+        child: Container(width: 7, height: 7, decoration: const BoxDecoration(color: K.danger, shape: BoxShape.circle)),
+      ),
+      const SizedBox(width: 6),
+      const Text('LIVE · غرفة العمليات', style: st),
+      const Spacer(),
+      Text('CAM 01 · $t', style: st),
+    ]);
+  }
+}
+
+class _PlayButton extends StatelessWidget {
+  final bool busy;
+  final VoidCallback? onTap;
+  const _PlayButton({required this.busy, this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Pressable(
+        onTap: busy ? null : onTap,
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: BoxDecoration(color: K.neon, borderRadius: BorderRadius.circular(K.radius)),
+          child: busy
+              ? const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: K.ink)))
+              : const Row(children: [
+                  Text('العب الآن', style: TextStyle(color: K.ink, fontSize: 17, fontWeight: FontWeight.w800)),
+                  Spacer(),
+                  Text('ابحث عن شريك', style: TextStyle(color: Color(0xB3120C02), fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  SizedBox(width: 6),
+                  Icon(Icons.radar, color: K.ink, size: 20),
+                ]),
+        ),
+      );
+}
+
+class _Mode extends StatelessWidget {
   final IconData icon;
-  final String title;
-  final String sub;
-  final Color color;
-  final VoidCallback onTap;
-  const _Tile({required this.icon, required this.title, required this.sub, required this.color, required this.onTap});
+  final String label;
+  final VoidCallback? onTap;
+  const _Mode({required this.icon, required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) => Pressable(
         onTap: onTap,
-        child: GlassCard(
-          accent: color,
-          padding: const EdgeInsets.all(14),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: color.withAlpha(30)),
-              child: Icon(icon, color: color, size: 22),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
+          child: Column(children: [
+            Icon(icon, color: K.steel, size: 22),
+            const SizedBox(height: 6),
+            Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+          ]),
+        ),
+      );
+}
+
+class _Row extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String sub;
+  final VoidCallback onTap;
+  final bool last;
+  const _Row({required this.icon, required this.title, required this.sub, required this.onTap, this.last = false});
+
+  @override
+  Widget build(BuildContext context) => Pressable(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(border: last ? null : const Border(bottom: BorderSide(color: K.border))),
+          child: Row(children: [
+            Icon(icon, color: K.text2, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700)),
+                Text(sub, style: const TextStyle(color: K.muted, fontSize: 12)),
+              ]),
             ),
-            const Spacer(),
-            Text(title, style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800)),
-            Text(sub, style: const TextStyle(color: K.muted, fontSize: 12)),
+            const Icon(Icons.chevron_left, color: K.muted, size: 20),
           ]),
         ),
       );

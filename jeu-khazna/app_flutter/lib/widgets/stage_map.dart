@@ -49,8 +49,8 @@ class _StageMapSheetState extends State<_StageMapSheet> with SingleTickerProvide
     return Container(
       height: MediaQuery.of(context).size.height * .86,
       decoration: const BoxDecoration(
-        color: Color(0xFF0A1112),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        color: K.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
         border: Border(top: BorderSide(color: K.borderStrong)),
       ),
       child: SafeArea(
@@ -99,7 +99,7 @@ class _StageMapSheetState extends State<_StageMapSheet> with SingleTickerProvide
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(K.radius),
                     border: Border.all(color: widget.selected == 0 ? K.neon : K.border),
                     color: K.surface,
                   ),
@@ -163,7 +163,7 @@ class _StageNode extends StatelessWidget {
       sound: unlocked,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(K.radius),
           color: unlocked ? c.withAlpha(done ? 26 : 14) : K.surface,
           border: Border.all(color: selected ? K.text : (current ? c : (unlocked ? c.withAlpha(90) : K.border)), width: selected || current ? 2 : 1),
           boxShadow: current ? [BoxShadow(color: c.withAlpha(90), blurRadius: 16)] : null,
@@ -244,7 +244,7 @@ class _UnlockBannerState extends ConsumerState<UnlockBanner> with SingleTickerPr
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(K.radius),
                 color: c.withAlpha(24),
                 border: Border.all(color: c.withAlpha(150)),
                 boxShadow: [BoxShadow(color: c.withAlpha((90 * _a.value).round()), blurRadius: 26)],

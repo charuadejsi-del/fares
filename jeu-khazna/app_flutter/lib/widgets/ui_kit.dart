@@ -1,5 +1,4 @@
 // مكوّنات الواجهة الجديدة: بطاقات زجاجية، أزرار متدرّجة بضغط، شارة الرصيد، شريط سفلي، خزنة متحرّكة.
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -56,43 +55,27 @@ class _PressableState extends ConsumerState<Pressable> {
   }
 }
 
-/// بطاقة زجاجية بحافة متدرّجة.
+/// بطاقة V3: سطح مطفأ بحدّ رفيع وزوايا شبه مستقيمة (accent يلوّن الحدّ فقط).
 class GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final Color? accent;
   final double radius;
   final Gradient? gradient;
-  const GlassCard({super.key, required this.child, this.padding = const EdgeInsets.all(18), this.accent, this.radius = 20, this.gradient});
+  const GlassCard({super.key, required this.child, this.padding = const EdgeInsets.all(16), this.accent, this.radius = K.radius, this.gradient});
 
   @override
   Widget build(BuildContext context) {
-    final a = accent ?? K.neon;
+    final r = radius > 12 ? K.radius : radius;
     return Container(
+      padding: padding,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        gradient: LinearGradient(
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-          colors: [a.withAlpha(110), K.border, K.border, a.withAlpha(40)],
-          stops: const [0, .35, .7, 1],
-        ),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(120), blurRadius: 24, offset: const Offset(0, 10))],
+        borderRadius: BorderRadius.circular(r),
+        color: gradient == null ? K.surface : null,
+        gradient: gradient,
+        border: Border.all(color: accent == null ? K.border : accent!.withAlpha(110)),
       ),
-      padding: const EdgeInsets.all(1),
-      child: Container(
-        padding: padding,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(radius - 1),
-          gradient: gradient ??
-              LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [K.surface2.withAlpha(245), K.surface.withAlpha(245)],
-              ),
-        ),
-        child: child,
-      ),
+      child: child,
     );
   }
 }
@@ -119,7 +102,7 @@ class GlowButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = outline ? color : K.ink;
+    final fg = outline ? K.text : (color == K.neon || color == K.amber ? K.ink : Colors.white);
     return Pressable(
       onTap: busy ? null : onTap,
       child: Container(
@@ -127,20 +110,18 @@ class GlowButton extends StatelessWidget {
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 18),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: outline ? null : LinearGradient(colors: [color, Color.lerp(color, Colors.white, .18)!]),
-          color: outline ? color.withAlpha(16) : null,
-          border: Border.all(color: outline ? color.withAlpha(110) : Colors.transparent),
-          boxShadow: outline ? null : [BoxShadow(color: color.withAlpha(90), blurRadius: 22, offset: const Offset(0, 8))],
+          borderRadius: BorderRadius.circular(K.radius),
+          color: outline ? Colors.transparent : color,
+          border: Border.all(color: outline ? K.borderStrong : Colors.transparent),
         ),
         child: busy
             ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: fg))
             : Row(mainAxisSize: MainAxisSize.min, children: [
-                if (icon != null) ...[Icon(icon, color: fg, size: 22), const SizedBox(width: 10)],
+                if (icon != null) ...[Icon(icon, color: outline ? color : fg, size: 20), const SizedBox(width: 10)],
                 Flexible(
                   child: Text(label,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: fg, fontSize: 17, fontWeight: FontWeight.w800)),
+                      style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.w800)),
                 ),
               ]),
       ),
@@ -159,14 +140,14 @@ class Pill extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: color.withAlpha(22),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: color.withAlpha(70)),
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: color.withAlpha(110)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, size: 16, color: color),
           const SizedBox(width: 5),
-          Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 14)),
+          Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
         ]),
       );
 }
@@ -186,28 +167,27 @@ class BalanceChip extends ConsumerWidget {
         return Pressable(
           onTap: () => openShop(context, ref),
           child: Container(
-            padding: const EdgeInsetsDirectional.fromSTEB(12, 5, 5, 5),
+            padding: const EdgeInsetsDirectional.fromSTEB(10, 5, 5, 5),
             decoration: BoxDecoration(
-              color: c.withAlpha(20),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: c.withAlpha(90)),
-              boxShadow: [BoxShadow(color: c.withAlpha(40), blurRadius: 14)],
+              color: K.surface,
+              borderRadius: BorderRadius.circular(K.radius),
+              border: Border.all(color: low ? K.danger.withAlpha(140) : K.borderStrong),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.timer_outlined, size: 18, color: c),
+              Icon(Icons.timer_outlined, size: 17, color: low ? K.danger : K.text2),
               const SizedBox(width: 6),
               TweenAnimationBuilder<double>(
                 tween: Tween(end: (m ?? 0).toDouble()),
                 duration: const Duration(milliseconds: 700),
                 builder: (context, v, _) => Text(m == null ? '—' : '${v.round()}',
-                    style: TextStyle(fontFamily: K.mono, fontSize: 17, color: c, fontWeight: FontWeight.w700)),
+                    style: TextStyle(fontFamily: K.mono, fontSize: 17, color: low ? K.danger : K.text, fontWeight: FontWeight.w700)),
               ),
-              Text(' د', style: TextStyle(color: c.withAlpha(200), fontSize: 13)),
+              const Text(' د', style: TextStyle(color: K.muted, fontSize: 12)),
               const SizedBox(width: 8),
               Container(
                 width: 26,
                 height: 26,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: c),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(6), color: c),
                 child: const Icon(Icons.add, size: 18, color: K.ink),
               ),
             ]),
@@ -229,7 +209,7 @@ class SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(4, 6, 4, 10),
         child: Row(children: [
-          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: K.text2)),
           if (tag != null) ...[
             const SizedBox(width: 8),
             Text(tag!, style: const TextStyle(fontFamily: K.mono, fontSize: 10, color: K.muted, letterSpacing: 1.4)),
@@ -240,18 +220,19 @@ class SectionTitle extends StatelessWidget {
       );
 }
 
-/// خزنة متحرّكة (حلقات تدور + قرص + توهّج نابض).
+/// صورة باب الخزنة الحقيقية (بدل الرسم الكرتوني) مع إضاءة خافتة تتنفّس ببطء.
 class VaultHero extends StatefulWidget {
   final double size;
   final Color color;
-  const VaultHero({super.key, this.size = 150, this.color = K.neon});
+  final bool open;
+  const VaultHero({super.key, this.size = 150, this.color = K.neon, this.open = false});
 
   @override
   State<VaultHero> createState() => _VaultHeroState();
 }
 
 class _VaultHeroState extends State<VaultHero> with SingleTickerProviderStateMixin {
-  late final AnimationController _t = AnimationController(vsync: this, duration: const Duration(seconds: 12))..repeat();
+  late final AnimationController _t = AnimationController(vsync: this, duration: const Duration(seconds: 5))..repeat(reverse: true);
 
   @override
   void dispose() {
@@ -260,77 +241,31 @@ class _VaultHeroState extends State<VaultHero> with SingleTickerProviderStateMix
   }
 
   @override
-  Widget build(BuildContext context) => RepaintBoundary(
-        child: AnimatedBuilder(
-          animation: _t,
-          builder: (context, _) =>
-              CustomPaint(size: Size.square(widget.size), painter: _VaultPainter(_t.value, widget.color)),
+  Widget build(BuildContext context) => SizedBox.square(
+        dimension: widget.size,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(K.radius),
+          child: Stack(fit: StackFit.expand, children: [
+            ColorFiltered(
+              colorFilter: widget.open
+                  ? const ColorFilter.matrix([1.15, .1, 0, 0, 10, .05, .95, 0, 0, 4, 0, 0, .55, 0, 0, 0, 0, 0, 1, 0])
+                  : const ColorFilter.matrix([.45, .45, .1, 0, 0, .4, .5, .1, 0, 0, .4, .45, .15, 0, 0, 0, 0, 0, 1, 0]),
+              child: Image.asset('assets/images/vault.jpg', fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: K.surface)),
+            ),
+            AnimatedBuilder(
+              animation: _t,
+              builder: (context, _) => DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(colors: [
+                    (widget.open ? K.neon : Colors.white).withAlpha((widget.open ? 70 : 14) + (18 * _t.value).round()),
+                    Colors.transparent,
+                  ], radius: .7),
+                ),
+              ),
+            ),
+          ]),
         ),
       );
-}
-
-class _VaultPainter extends CustomPainter {
-  final double t;
-  final Color c;
-  _VaultPainter(this.t, this.c);
-
-  @override
-  void paint(Canvas canvas, Size s) {
-    final o = s.center(Offset.zero);
-    final r = s.width / 2;
-    final pulse = 0.5 + 0.5 * sin(t * pi * 6);
-    canvas.drawCircle(o, r * .95, Paint()..shader = RadialGradient(colors: [c.withAlpha((40 + 30 * pulse).round()), Colors.transparent]).createShader(Rect.fromCircle(center: o, radius: r)));
-    final ring = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    // حلقة خارجية متقطّعة
-    ring
-      ..strokeWidth = 2
-      ..color = c.withAlpha(120);
-    for (int i = 0; i < 36; i++) {
-      final a = t * 2 * pi + i * 2 * pi / 36;
-      canvas.drawArc(Rect.fromCircle(center: o, radius: r * .92), a, .09, false, ring);
-    }
-    // حلقة وسطى عكسية
-    ring
-      ..strokeWidth = 5
-      ..color = c.withAlpha(200);
-    for (int i = 0; i < 3; i++) {
-      canvas.drawArc(Rect.fromCircle(center: o, radius: r * .74), -t * 4 * pi + i * 2 * pi / 3, 1.3, false, ring);
-    }
-    // جسم القرص
-    canvas.drawCircle(o, r * .58, Paint()..color = const Color(0xFF0A1414));
-    canvas.drawCircle(o, r * .58, Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..color = c.withAlpha(160));
-    // تدريجات القرص
-    final tick = Paint()
-      ..color = c.withAlpha(170)
-      ..strokeWidth = 2;
-    for (int i = 0; i < 24; i++) {
-      final a = t * 2 * pi * 2 + i * 2 * pi / 24;
-      final l = i % 6 == 0 ? .12 : .06;
-      canvas.drawLine(o + Offset(cos(a), sin(a)) * r * .52, o + Offset(cos(a), sin(a)) * r * (.52 - l), tick);
-    }
-    // مقبض
-    final h = Paint()
-      ..color = c
-      ..strokeWidth = 5
-      ..strokeCap = StrokeCap.round;
-    final ha = t * 2 * pi * 2;
-    for (int i = 0; i < 3; i++) {
-      final a = ha + i * 2 * pi / 3;
-      canvas.drawLine(o, o + Offset(cos(a), sin(a)) * r * .3, h);
-    }
-    canvas.drawCircle(o, r * .1, Paint()..color = c);
-    canvas.drawCircle(o, r * .1 + 6 * pulse, Paint()
-      ..style = PaintingStyle.stroke
-      ..color = c.withAlpha((120 * (1 - pulse)).round()));
-  }
-
-  @override
-  bool shouldRepaint(covariant _VaultPainter old) => old.t != t || old.c != c;
 }
 
 /// الشريط السفلي للتطبيق.
@@ -349,9 +284,8 @@ class AppNavBar extends ConsumerWidget {
     final tab = ref.watch(tabProvider);
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xF2070D0E),
-        border: const Border(top: BorderSide(color: K.border)),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(160), blurRadius: 24, offset: const Offset(0, -6))],
+        color: K.bg,
+        border: Border(top: BorderSide(color: K.border)),
       ),
       child: SafeArea(
         top: false,
@@ -383,48 +317,51 @@ class _NavItem extends StatelessWidget {
     final c = active ? K.neon : K.muted;
     return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.symmetric(horizontal: active ? 18 : 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: active ? K.neon.withAlpha(28) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: active ? [BoxShadow(color: K.neon.withAlpha(50), blurRadius: 14)] : null,
-        ),
-        child: Icon(icon, color: c, size: 24),
+        duration: const Duration(milliseconds: 200),
+        width: active ? 22 : 0,
+        height: 2,
+        color: K.neon,
       ),
+      const SizedBox(height: 7),
+      Icon(icon, color: c, size: 22),
       const SizedBox(height: 3),
-      Text(label, style: TextStyle(color: c, fontSize: 11.5, fontWeight: active ? FontWeight.w800 : FontWeight.w500)),
+      Text(label, style: TextStyle(color: c, fontSize: 11, fontWeight: active ? FontWeight.w800 : FontWeight.w600)),
     ]);
   }
 }
 
-/// حرف أوّل الاسم في مربّع متدرّج.
+/// أحرف الاسم الأولى في مربّع فولاذي.
+/// العربية: حرفان متّصلان (الألف وحدها كانت تُقرأ كأنها «i»).
 class Avatar extends StatelessWidget {
   final String name;
   final double size;
   const Avatar(this.name, {super.key, this.size = 44});
 
-  static const _hues = [Color(0xFF00FFA3), Color(0xFF22C7FF), Color(0xFFFFB547), Color(0xFF9D8CFF), Color(0xFFFF7AB6), Color(0xFF7DFF5A)];
+  static String initials(String name) {
+    final n = name.trim();
+    if (n.isEmpty) return '?';
+    final chars = n.characters.toList();
+    final first = chars.first;
+    final arabic = RegExp(r'[\u0600-\u06FF]').hasMatch(first);
+    if (arabic) return chars.where((c) => c.trim().isNotEmpty).take(2).join();
+    return first.toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
-    var h = 0;
-    for (final c in name.codeUnits) {
-      h = (h * 31 + c) & 0x7fffffff;
-    }
-    final c = _hues[h % _hues.length];
+    final t = initials(name);
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(size * .3),
-        gradient: LinearGradient(colors: [c, c.withAlpha(150)], begin: Alignment.topRight, end: Alignment.bottomLeft),
-        boxShadow: [BoxShadow(color: c.withAlpha(80), blurRadius: 16, offset: const Offset(0, 6))],
+        borderRadius: BorderRadius.circular(K.radius),
+        color: K.surface2,
+        border: Border.all(color: K.borderStrong),
       ),
-      child: Text(name.isEmpty ? '?' : name.characters.first.toUpperCase(),
-          style: TextStyle(color: K.ink, fontWeight: FontWeight.w900, fontSize: size * .42)),
+      child: Text(t,
+          maxLines: 1,
+          style: TextStyle(color: K.steel, fontWeight: FontWeight.w800, fontSize: size * (t.characters.length > 1 ? .34 : .42))),
     );
   }
 }
@@ -437,9 +374,9 @@ void showToast(BuildContext context, String msg, {bool error = false}) {
       behavior: SnackBarBehavior.floating,
       backgroundColor: K.surface2,
       shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14), side: BorderSide(color: (error ? K.danger : K.neon).withAlpha(120))),
+          borderRadius: BorderRadius.circular(K.radius), side: BorderSide(color: error ? K.danger.withAlpha(140) : K.borderStrong)),
       content: Row(children: [
-        Icon(error ? Icons.error_outline : Icons.check_circle_outline, color: error ? K.danger : K.neon),
+        Icon(error ? Icons.error_outline : Icons.check_circle_outline, color: error ? K.danger : K.ok),
         const SizedBox(width: 10),
         Expanded(child: Text(msg, style: const TextStyle(fontFamily: K.font, color: K.text, fontWeight: FontWeight.w700))),
       ]),

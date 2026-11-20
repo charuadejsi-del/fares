@@ -246,13 +246,14 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with SingleTickerProvid
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                         decoration: BoxDecoration(
-                          color: _flashColor.withAlpha(235),
-                          borderRadius: BorderRadius.circular(4),
+                          color: K.surface2,
+                          borderRadius: BorderRadius.circular(K.radius),
+                          border: Border.all(color: _flashColor),
                           boxShadow: K.glow(_flashColor, 30, 160),
                         ),
                         child: Text(_flash!,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(color: Color(0xFF02110A), fontSize: 18, fontWeight: FontWeight.w900)),
+                            style: TextStyle(color: _flashColor, fontSize: 17, fontWeight: FontWeight.w800)),
                       ),
                     ),
                   ),
@@ -374,7 +375,7 @@ class _Lobby extends ConsumerWidget {
     final def = s.stage > 0 ? stageDef(s.stage) : null;
     return ListView(padding: const EdgeInsets.all(18), children: [
       Row(children: [
-        IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_forward, color: K.neon)),
+        IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_forward, color: K.text2)),
         const Spacer(),
         PartnerChip(c: c),
         const SizedBox(width: 8),
@@ -387,11 +388,11 @@ class _Lobby extends ConsumerWidget {
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: K.agent.withAlpha(18),
-            border: Border.all(color: K.agent.withAlpha(110)),
+            borderRadius: BorderRadius.circular(K.radius),
+            color: K.surface,
+            border: Border.all(color: K.borderStrong),
           ),
-          child: const Text('📡 شريك من الرادار: الميكروفون مكتوم افتراضياً — فعّله إن أردت، أو استعمل الرسائل السريعة. احترم شريكك 🤝',
+          child: const Text('شريك من الرادار: الميكروفون مكتوم افتراضياً — فعّله إن أردت، أو استعمل الرسائل السريعة. احترم شريكك.',
               style: TextStyle(fontSize: 12.5, color: K.text2)),
         ),
       HudPanel(
@@ -404,12 +405,7 @@ class _Lobby extends ConsumerWidget {
             },
             child: Text(c.code,
                 textDirection: TextDirection.ltr,
-                style: TextStyle(
-                    fontFamily: K.mono,
-                    fontSize: 60,
-                    color: K.neon,
-                    letterSpacing: 14,
-                    shadows: [Shadow(color: K.neon.withAlpha(160), blurRadius: 20)])),
+                style: const TextStyle(fontFamily: K.mono, fontSize: 52, color: K.text, letterSpacing: 14)),
           ),
           const Text('أرسل الرمز لشريكك (اضغط لنسخه)', style: TextStyle(color: K.muted, fontSize: 13)),
         ]),
@@ -417,7 +413,6 @@ class _Lobby extends ConsumerWidget {
       const SizedBox(height: 14),
       HudPanel(
         label: 'TEAM',
-        color: K.agent,
         child: Column(children: [
           for (final e in list)
             Padding(
@@ -435,12 +430,36 @@ class _Lobby extends ConsumerWidget {
               ]),
             ),
           if (list.length < 2)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 10),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: K.agent)),
-                SizedBox(width: 10),
-                Text('في انتظار الشريك…', style: TextStyle(color: K.muted)),
+            // مقعد الشريك الفارغ: يشرح ما يُنتظر ويعطي فعلاً مباشراً (كانت الغرفة تبدو فارغة بلا توجيه).
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(K.radius),
+                border: Border.all(color: K.borderStrong),
+              ),
+              child: Row(children: [
+                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: K.muted)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(list.isNotEmpty && list.first.value.role == 'ex' ? 'العميل الميداني' : 'المحلّل',
+                        style: const TextStyle(fontFamily: K.mono, fontSize: 11, color: K.muted, letterSpacing: 1)),
+                    const Text('بانتظار الاتصال…', style: TextStyle(color: K.text2, fontWeight: FontWeight.w700)),
+                  ]),
+                ),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: K.text,
+                    side: const BorderSide(color: K.borderStrong),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: c.code));
+                    showToast(context, 'نُسخ الرمز ${c.code} — أرسله لصديقك');
+                  },
+                  child: const Text('نسخ الرمز'),
+                ),
               ]),
             ),
         ]),
@@ -448,10 +467,9 @@ class _Lobby extends ConsumerWidget {
       const SizedBox(height: 14),
       HudPanel(
         label: 'TARGET // الهدف',
-        color: def?.region.color ?? K.neon,
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text(def == null ? 'المهمّة الكلاسيكية' : 'المرحلة ${def.n}: ${def.name}',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: def?.region.color ?? K.neon)),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
           if (def != null)
             StageBrief(def: def)
@@ -489,14 +507,14 @@ class _Lobby extends ConsumerWidget {
       ],
       const SizedBox(height: 18),
       if (c.isHost) ...[
-        NeonButton(label: 'تبديل الأدوار', icon: Icons.swap_horiz, filled: false, color: K.agent, onTap: c.swapRoles),
+        NeonButton(label: 'تبديل الأدوار', icon: Icons.swap_horiz, filled: false, color: K.muted, onTap: list.length >= 2 ? c.swapRoles : null),
         const SizedBox(height: 10),
         if (c.notice != null) ...[
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: K.danger.withAlpha(20),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(K.radius),
               border: Border.all(color: K.danger.withAlpha(120)),
             ),
             child: Row(children: [
@@ -508,7 +526,13 @@ class _Lobby extends ConsumerWidget {
           ),
           const SizedBox(height: 10),
         ],
-        GlowButton(label: 'ابدأ المهمّة', icon: Icons.bolt, busy: c.starting, onTap: c.canStart ? c.hostStart : null),
+        GlowButton(label: 'ابدأ المهمّة', busy: c.starting, onTap: c.canStart ? c.hostStart : null),
+        if (!c.canStart && !c.starting)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(list.length < 2 ? 'يتفعّل الزرّ عند انضمام شريكك' : 'انتظر لحظة…',
+                textAlign: TextAlign.center, style: const TextStyle(color: K.muted, fontSize: 12)),
+          ),
       ] else
         const Text('قائد الفريق هو من يبدأ المهمّة.', textAlign: TextAlign.center, style: TextStyle(color: K.muted)),
     ]);
@@ -752,8 +776,7 @@ class _RadarTimerState extends ConsumerState<_RadarTimer> {
           style: TextStyle(
               fontFamily: K.mono,
               fontSize: 26,
-              color: color,
-              shadows: [Shadow(color: color.withAlpha(150), blurRadius: 14)])),
+              color: color)),
       const SizedBox(width: 8),
       SizedBox(
         width: 34,
@@ -817,42 +840,64 @@ class _End extends ConsumerWidget {
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(22),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          MonoLabel(won ? 'MISSION COMPLETE' : 'MISSION FAILED', color: color, size: 14),
-          const SizedBox(height: 18),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 1400),
-            curve: Curves.easeOutBack,
-            builder: (context, v, _) => Transform.rotate(
-              angle: won ? (1 - v) * -2.4 : 0,
-              child: Transform.scale(
-                scale: 0.6 + 0.4 * v,
-                child: Container(
-                  width: 190,
-                  height: 190,
-                  decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: K.glow(color, 50, 150)),
-                  child: ClipOval(
-                    child: ColorFiltered(
-                      colorFilter: ColorFilter.mode(won ? Colors.transparent : K.danger.withAlpha(90), BlendMode.srcATop),
-                      child: Image.asset('assets/images/vault.jpg',
-                          fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.lock_open, size: 90, color: color)),
+          // صورة الخزنة الحقيقية: دافئة ذهبية عند النجاح، حمراء باهتة عند الفشل.
+          ClipRRect(
+            borderRadius: BorderRadius.circular(K.radius),
+            child: SizedBox(
+              height: 250,
+              width: double.infinity,
+              child: Stack(fit: StackFit.expand, children: [
+                ColorFiltered(
+                  colorFilter: won
+                      ? const ColorFilter.matrix([1.1, .15, 0, 0, 12, .1, .9, 0, 0, 2, 0, .05, .45, 0, 0, 0, 0, 0, 1, 0])
+                      : const ColorFilter.matrix([.7, .3, .1, 0, 0, .15, .25, .05, 0, 0, .15, .2, .1, 0, 0, 0, 0, 0, 1, 0]),
+                  child: Image.asset('assets/images/vault.jpg',
+                      fit: BoxFit.cover, errorBuilder: (_, __, ___) => const ColoredBox(color: K.surface)),
+                ),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 1600),
+                  curve: Curves.easeOut,
+                  builder: (context, v, _) => DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(radius: .6, colors: [color.withAlpha((90 * v).round()), Colors.transparent]),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 2.2, end: 1),
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeIn,
-            builder: (context, v, child) => Transform.rotate(angle: -0.12, child: Transform.scale(scale: v, child: child)),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-              decoration: BoxDecoration(border: Border.all(color: color, width: 3)),
-              child: Text(won ? 'تمّت المهمّة' : 'فشلت المهمّة',
-                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: color)),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0x990A0C0E), Color(0x000A0C0E), Color(0xFF0A0C0E)],
+                      stops: [0, .35, 1],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 12,
+                  right: 14,
+                  left: 14,
+                  child: Row(children: [
+                    MonoLabel(s.stage > 0 ? 'FILE ${s.stage.toString().padLeft(2, '0')}' : 'OPERATION', color: K.steel, size: 10.5),
+                    const Spacer(),
+                    MonoLabel(won ? 'ACCESS GRANTED' : 'ACCESS DENIED', color: won ? K.ok : K.danger, size: 10.5),
+                  ]),
+                ),
+                Positioned(
+                  right: 16,
+                  left: 16,
+                  bottom: 14,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    MonoLabel(won ? 'MISSION COMPLETE' : 'MISSION FAILED', color: color, size: 11),
+                    const SizedBox(height: 4),
+                    Text(won ? 'فُتحت الخزنة.' : 'أُغلقت الخزنة.',
+                        style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800)),
+                    if (s.stage > 0)
+                      Text(stageDef(s.stage).name, style: const TextStyle(color: K.text2, fontSize: 13.5)),
+                  ]),
+                ),
+              ]),
             ),
           ),
           const SizedBox(height: 18),
@@ -866,7 +911,7 @@ class _End extends ConsumerWidget {
                   builder: (context, v, _) => Transform.scale(
                     scale: v,
                     child: Icon(i < stars ? Icons.star_rounded : Icons.star_outline_rounded,
-                        size: 54, color: i < stars ? K.amber : K.line),
+                        size: 40, color: i < stars ? K.neon : K.borderStrong),
                   ),
                 ),
             ]),
@@ -876,7 +921,6 @@ class _End extends ConsumerWidget {
           ],
           const SizedBox(height: 12),
           HudPanel(
-            color: color,
             padding: const EdgeInsets.all(14),
             child: Column(children: [
               if (s.stage > 0) _Row('المرحلة', '${s.stage} · ${stageDef(s.stage).name}'),
@@ -906,7 +950,7 @@ class _End extends ConsumerWidget {
                 label: 'أضف ${c.partnerName ?? 'شريكك'} أو أبلغ عنه',
                 icon: Icons.person_add_alt_1,
                 filled: false,
-                color: K.agent,
+                color: K.muted,
                 onTap: () => showPartnerMenu(context, c)),
           ],
           const SizedBox(height: 10),
@@ -1011,7 +1055,7 @@ class _HintButtonState extends ConsumerState<HintButton> {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: K.amber.withAlpha(22),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(K.radius),
             border: Border.all(color: K.amber.withAlpha(110)),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1041,7 +1085,7 @@ class HintBanner extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(K.radius),
               color: K.amber.withAlpha(26),
               border: Border.all(color: K.amber.withAlpha(140)),
               boxShadow: [BoxShadow(color: K.amber.withAlpha(50), blurRadius: 16)],

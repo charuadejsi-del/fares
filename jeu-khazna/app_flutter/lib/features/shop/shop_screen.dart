@@ -44,8 +44,29 @@ class ShopScreen extends ConsumerWidget {
           data: (info) => info.packages.isEmpty
               ? const _Empty(icon: Icons.inventory_2_outlined, text: 'لا توجد باقات حالياً')
               : Column(children: [
+                  if (!info.ready) ...[
+                    // كان الضغط على أي باقة يُظهر خطأً عامّاً «غير متاح» دون شرح.
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(K.radius),
+                        border: Border.all(color: K.borderStrong),
+                        color: K.surface,
+                      ),
+                      child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Icon(Icons.info_outline, color: K.text2, size: 20),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text('الدفع عبر بريدي موب يُفتح قريباً. إلى ذلك الحين: خذ مكافأتك اليومية وأكمل مهامّ اليوم لتربح دقائق مجاناً.',
+                              style: TextStyle(color: K.text2, fontSize: 12.5, height: 1.5)),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   for (int i = 0; i < info.packages.length; i++) ...[
                     _PackageTile(
+                      enabled: info.ready,
                       pkg: info.packages[i],
                       best: info.packages.length > 1 &&
                           info.packages[i].perMinute == info.packages.map((p) => p.perMinute).reduce((a, b) => a < b ? a : b),
@@ -72,7 +93,7 @@ class ShopScreen extends ConsumerWidget {
               : Column(children: [for (final r in list) _RequestTile(r)]),
         ),
         const SizedBox(height: 10),
-        const Text('🔒 لا إعلانات · لا جوائز مالية · الدقائق تُستعمل للعب فقط',
+        const Text('لا إعلانات · لا جوائز مالية · الدقائق تُستعمل للعب فقط',
             textAlign: TextAlign.center, style: TextStyle(color: K.muted, fontSize: 12)),
       ]),
     );
@@ -104,8 +125,8 @@ Future<void> showShopSheet(BuildContext context) => showModalBottomSheet<void>(
       builder: (ctx) => Container(
         height: MediaQuery.of(ctx).size.height * .9,
         decoration: const BoxDecoration(
-          color: Color(0xFF070D0E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          color: K.bg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
           border: Border(top: BorderSide(color: K.borderStrong)),
         ),
         child: Column(children: [
@@ -113,7 +134,7 @@ Future<void> showShopSheet(BuildContext context) => showModalBottomSheet<void>(
           Container(width: 44, height: 4, decoration: BoxDecoration(color: K.borderStrong, borderRadius: BorderRadius.circular(4))),
           Row(children: [
             const SizedBox(width: 18),
-            const Text('المتجر', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+            const Text('رصيد الوقت', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const Spacer(),
             IconButton(onPressed: () => Navigator.of(ctx).pop(), icon: const Icon(Icons.close, color: K.muted)),
           ]),
@@ -180,10 +201,9 @@ class _GiftCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => Pressable(
         onTap: () => _open(context),
         child: GlassCard(
-          accent: K.violet,
           padding: const EdgeInsets.all(14),
           child: const Row(children: [
-            Icon(Icons.redeem, color: K.violet, size: 28),
+            Icon(Icons.redeem, color: K.text2, size: 24),
             SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -206,12 +226,11 @@ class _Header extends StatelessWidget {
         builder: (context, _) {
           final m = authService.profile?.balanceMinutes ?? 0;
           return GlassCard(
-            accent: K.neon,
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(18),
             child: Row(children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const MonoLabel('TIME BALANCE // رصيدك'),
+                  const MonoLabel('AVAILABLE TIME'),
                   const SizedBox(height: 6),
                   Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                     TweenAnimationBuilder<double>(
@@ -219,12 +238,7 @@ class _Header extends StatelessWidget {
                       duration: const Duration(milliseconds: 900),
                       curve: Curves.easeOutCubic,
                       builder: (context, v, _) => Text('${v.round()}',
-                          style: TextStyle(
-                              fontFamily: K.mono,
-                              fontSize: 46,
-                              height: 1,
-                              color: m < 10 ? K.danger : K.neon,
-                              shadows: [Shadow(color: (m < 10 ? K.danger : K.neon).withAlpha(140), blurRadius: 18)])),
+                          style: TextStyle(fontFamily: K.mono, fontSize: 50, height: 1, color: m < 10 ? K.danger : K.text)),
                     ),
                     const SizedBox(width: 6),
                     const Padding(padding: EdgeInsets.only(bottom: 6), child: Text('دقيقة', style: TextStyle(color: K.text2, fontSize: 16))),
@@ -234,7 +248,6 @@ class _Header extends StatelessWidget {
                       style: TextStyle(color: m < 10 ? K.danger : K.muted, fontSize: 12.5)),
                 ]),
               ),
-              const VaultHero(size: 92),
             ]),
           );
         },
@@ -278,56 +291,57 @@ class _DailyRewardCardState extends ConsumerState<DailyRewardCard> {
         final day = (p?.nextStreakDay ?? 1).clamp(1, 999);
         final streak = p?.streakNow ?? 0;
         final reward = rules.rewardMinutes(day);
+        const ordinals = ['الأوّل', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع'];
+        final dayName = day <= 7 ? 'اليوم ${ordinals[day - 1]}' : 'اليوم $day';
         return GlassCard(
-          accent: K.amber,
-          padding: const EdgeInsets.all(16),
+          accent: ok ? K.neon : null,
+          padding: const EdgeInsets.all(14),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
-              Container(
-                width: 52,
-                height: 52,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(colors: ok ? [K.amber, const Color(0xFFFF7A3D)] : [K.surface2, K.surface2]),
-                  boxShadow: ok ? [BoxShadow(color: K.amber.withAlpha(90), blurRadius: 18)] : null,
-                ),
-                child: Text(streak > 0 ? '🔥' : '🎁', style: const TextStyle(fontSize: 26)),
+              SizedBox(
+                width: 70,
+                child: Text('+$reward د',
+                    textDirection: TextDirection.rtl,
+                    style: TextStyle(fontFamily: K.mono, fontSize: 19, fontWeight: FontWeight.w700, color: ok ? K.neon : K.muted)),
               ),
-              const SizedBox(width: 14),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(streak > 0 ? 'سلسلة $streak ${streak == 1 ? 'يوم' : 'أيام'} 🔥' : 'المكافأة اليومية',
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-                  Text(ok ? 'اليوم: +$reward دقيقة (اليوم $day)' : 'غداً: +${rules.rewardMinutes(day + 1)} د — بعد ${left.inHours} سا ${left.inMinutes % 60} د',
-                      style: TextStyle(color: ok ? K.amber : K.muted, fontSize: 13)),
+                  Text(ok ? 'مكافأة $dayName · جاهزة' : 'مكافأة الغد: +${rules.rewardMinutes(day + 1)} د',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  Text(
+                      ok
+                          ? (streak > 0 ? 'سلسلة $streak ${streak == 1 ? 'يوم' : 'أيام'} متتالية' : 'ابدأ سلسلتك اليوم')
+                          : 'بعد ${left.inHours} سا ${left.inMinutes % 60} د',
+                      style: const TextStyle(color: K.muted, fontSize: 12)),
                 ]),
               ),
-              SizedBox(
-                width: 96,
-                child: GlowButton(label: ok ? 'خذها' : 'غداً', height: 44, color: K.amber, outline: !ok, busy: _busy, onTap: ok ? _claim : null),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 84),
+                child: GlowButton(label: ok ? 'استلام' : 'غداً', height: 42, outline: !ok, busy: _busy, onTap: ok ? _claim : null),
               ),
             ]),
             const SizedBox(height: 12),
+            // مسار الأيام السبعة: الرقم فوق والوحدة تحته (كان «30د» يظهر معكوساً «د30» وصغيراً جداً).
             Row(children: [
               for (int d = 1; d <= 7; d++)
                 Expanded(
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 2),
-                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    padding: const EdgeInsets.symmetric(vertical: 7),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color: d <= (ok ? streak : streak) ? K.amber.withAlpha(50) : (d == day && ok ? K.amber.withAlpha(20) : K.surface2),
-                      border: Border.all(color: d == day && ok ? K.amber : (d <= streak ? K.amber.withAlpha(140) : K.border)),
+                      borderRadius: BorderRadius.circular(6),
+                      color: d <= streak ? K.neon.withAlpha(30) : Colors.transparent,
+                      border: Border.all(color: d == day && ok ? K.neon : (d <= streak ? K.neon.withAlpha(110) : K.border)),
                     ),
                     child: Column(children: [
-                      Text(d <= streak ? '🔥' : (d == 7 ? '👑' : '·'), style: const TextStyle(fontSize: 12)),
-                      Text('${rules.rewardMinutes(d)}د', style: TextStyle(fontSize: 10.5, color: d <= streak ? K.amber : K.muted, fontFamily: K.mono)),
+                      Text('${rules.rewardMinutes(d)}',
+                          style: TextStyle(fontFamily: K.mono, fontSize: 15, fontWeight: FontWeight.w700, color: d <= streak || (d == day && ok) ? K.neon : K.text2)),
+                      Text(d == 7 ? 'دقيقة ★' : 'دقيقة', style: const TextStyle(fontSize: 10.5, color: K.muted)),
                     ]),
                   ),
                 ),
             ]),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             const Text('العب كل يوم لتكبر المكافأة. يوم واحد بلا مكافأة يعيد السلسلة إلى البداية.',
                 style: TextStyle(color: K.muted, fontSize: 11.5)),
           ]),
@@ -341,42 +355,36 @@ class _PackageTile extends StatelessWidget {
   final Package pkg;
   final bool best;
   final VoidCallback onTap;
-  const _PackageTile({required this.pkg, required this.best, required this.onTap});
+  final bool enabled;
+  const _PackageTile({required this.pkg, required this.best, required this.onTap, this.enabled = true});
 
   @override
   Widget build(BuildContext context) {
-    final c = best ? K.amber : K.neon;
+    const c = K.text;
     return Pressable(
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       child: GlassCard(
-        accent: c,
+        accent: best ? K.neon : null,
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Row(children: [
-          Container(
+          SizedBox(
             width: 64,
-            height: 64,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: c.withAlpha(140), width: 2),
-              boxShadow: [BoxShadow(color: c.withAlpha(50), blurRadius: 16)],
-            ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text('${pkg.minutes}', style: TextStyle(fontFamily: K.mono, fontSize: 22, color: c, height: 1)),
-              Text('دقيقة', style: TextStyle(fontSize: 10.5, color: c.withAlpha(200))),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Text('${pkg.minutes}', style: const TextStyle(fontFamily: K.mono, fontSize: 24, color: c, height: 1)),
+              const Text('دقيقة', style: TextStyle(fontSize: 11, color: K.muted)),
             ]),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Text('${pkg.minutes} دقيقة لعب', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                Text('${pkg.minutes} دقيقة لعب', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 if (best) ...[
                   const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(color: K.amber, borderRadius: BorderRadius.circular(8)),
-                    child: const Text('الأوفر', style: TextStyle(color: K.ink, fontSize: 11, fontWeight: FontWeight.w900)),
+                    decoration: BoxDecoration(color: K.neon, borderRadius: BorderRadius.circular(4)),
+                    child: const Text('الأوفر', style: TextStyle(color: K.ink, fontSize: 11, fontWeight: FontWeight.w800)),
                   ),
                 ],
               ]),
@@ -386,7 +394,7 @@ class _PackageTile extends StatelessWidget {
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('${pkg.priceDzd}', style: TextStyle(fontFamily: K.mono, fontSize: 22, color: c)),
+            Text('${pkg.priceDzd}', style: const TextStyle(fontFamily: K.mono, fontSize: 20, color: c)),
             const Text('دج', style: TextStyle(color: K.muted, fontSize: 12)),
           ]),
         ]),
@@ -407,13 +415,12 @@ class _HowItWorks extends StatelessWidget {
       (Icons.verified_outlined, 'تُضاف الدقائق بعد التحقّق'),
     ];
     return GlassCard(
-      accent: K.agent,
       padding: const EdgeInsets.all(14),
       child: Row(children: [
         for (int i = 0; i < steps.length; i++) ...[
           Expanded(
             child: Column(children: [
-              Icon(steps[i].$1, color: K.agent, size: 24),
+              Icon(steps[i].$1, color: K.text2, size: 22),
               const SizedBox(height: 6),
               Text(steps[i].$2, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11.5, color: K.text2, height: 1.3)),
             ]),
@@ -537,8 +544,8 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
       child: Container(
         constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * .92),
         decoration: const BoxDecoration(
-          color: Color(0xFF0A1112),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          color: K.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
           border: Border(top: BorderSide(color: K.borderStrong)),
         ),
         child: SafeArea(
@@ -587,7 +594,7 @@ class _CheckoutSheetState extends ConsumerState<_CheckoutSheet> {
               child: Container(
                 height: _image == null ? 120 : 220,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(K.radius),
                   border: Border.all(color: _image == null ? K.borderStrong : K.neon.withAlpha(140)),
                   color: Colors.black26,
                 ),

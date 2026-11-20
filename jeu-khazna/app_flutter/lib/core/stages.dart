@@ -18,11 +18,11 @@ class Region {
 }
 
 const List<Region> kRegions = [
-  Region('الميناء', 'assets/images/map.jpg', Color(0xFF00FF9C)),
-  Region('النهر', 'assets/images/map2.jpg', Color(0xFF00E5FF)),
-  Region('الجبل', 'assets/images/map3.jpg', Color(0xFFFFB020)),
+  Region('الميناء', 'assets/images/map.jpg', Color(0xFF6CD995)),
+  Region('النهر', 'assets/images/map2.jpg', Color(0xFF8DB4D9)),
+  Region('الجبل', 'assets/images/map3.jpg', Color(0xFFE8A13A)),
 ];
-const Region kProRegion = Region('العاصمة', 'assets/images/map4.jpg', Color(0xFFFF3B4E));
+const Region kProRegion = Region('العاصمة', 'assets/images/map4.jpg', Color(0xFFE5484D));
 
 // ───── المؤثّرات ─────
 class ModInfo {

@@ -17,11 +17,10 @@ class TitleAvatar extends StatelessWidget {
     if (t == null) return Avatar(name, size: size);
     final c = Color(t.$2);
     return Container(
-      padding: const EdgeInsets.all(3),
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: SweepGradient(colors: [c, Colors.white, c, c.withAlpha(120), c]),
-        boxShadow: [BoxShadow(color: c.withAlpha(140), blurRadius: 14)],
+        borderRadius: BorderRadius.circular(K.radius + 2),
+        border: Border.all(color: c, width: 1.5),
       ),
       child: Avatar(name, size: size - 6),
     );
@@ -39,7 +38,7 @@ class TitleBadge extends StatelessWidget {
     final c = Color(t.$2);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: c.withAlpha(30), borderRadius: BorderRadius.circular(10), border: Border.all(color: c.withAlpha(150))),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(4), border: Border.all(color: c.withAlpha(150))),
       child: Text(t.$1, style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w800)),
     );
   }

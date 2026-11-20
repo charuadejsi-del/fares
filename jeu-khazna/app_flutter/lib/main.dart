@@ -61,7 +61,7 @@ class _KhaznaAppState extends ConsumerState<KhaznaApp> {
         return LayoutBuilder(builder: (context, box) {
           if (box.maxWidth <= 700) return app;
           return ColoredBox(
-            color: const Color(0xFF010302),
+            color: const Color(0xFF0A0C0E),
             child: Center(
               child: Container(
                 width: 540,

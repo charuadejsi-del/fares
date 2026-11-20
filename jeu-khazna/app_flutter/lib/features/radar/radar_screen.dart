@@ -132,19 +132,19 @@ class _RadarScreenState extends ConsumerState<RadarScreen> with SingleTickerProv
     final canBot = _waited >= _botAfter;
     return Scaffold(
       body: SpyBackground(
-        image: 'assets/images/home_bg.jpg',
-        dim: .86,
+        image: 'assets/images/map4.jpg',
+        dim: .92,
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
             child: Column(children: [
               Row(children: [
-                IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_forward, color: K.neon)),
+                IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_forward, color: K.text2)),
                 const Spacer(),
                 const BalanceChip(),
               ]),
               const SizedBox(height: 6),
-              MonoLabel(found != null ? 'TARGET ACQUIRED' : 'SCANNING // مسح', color: found != null ? K.neon : K.agent, size: 12),
+              MonoLabel(found != null ? 'TARGET ACQUIRED' : 'SIGINT · SEARCHING', color: K.ok, size: 11),
               const SizedBox(height: 6),
               Text(
                 found != null
@@ -152,7 +152,7 @@ class _RadarScreenState extends ConsumerState<RadarScreen> with SingleTickerProv
                     : _error != null
                         ? 'الرادار متوقّف'
                         : 'نبحث عن عميل متصل…',
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 18),
               Expanded(
@@ -168,7 +168,18 @@ class _RadarScreenState extends ConsumerState<RadarScreen> with SingleTickerProv
                           locked: found != null,
                           seed: _started.millisecondsSinceEpoch,
                         ),
-                        child: Center(child: found != null ? _FoundBadge(r: found) : const Avatar('أنت', size: 54)),
+                        child: Center(
+                            child: found != null
+                                ? _FoundBadge(r: found)
+                                : Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: K.neon,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: K.neon.withAlpha(70), width: 4, strokeAlign: BorderSide.strokeAlignOutside),
+                                    ),
+                                  )),
                       ),
                     ),
                   ),
@@ -181,9 +192,9 @@ class _RadarScreenState extends ConsumerState<RadarScreen> with SingleTickerProv
                 GlowButton(label: 'اشحن دقائقك', icon: Icons.storefront_outlined, onTap: () => showShopSheet(context)),
               ] else if (found == null) ...[
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Pill(icon: Icons.timer_outlined, text: _fmt(_waited), color: K.agent),
+                  Pill(icon: Icons.timer_outlined, text: _fmt(_waited), color: K.text2),
                   const SizedBox(width: 8),
-                  Pill(icon: Icons.people_alt_outlined, text: _others == 0 ? 'لا أحد يبحث الآن' : '$_others يبحثون الآن', color: K.amber),
+                  Pill(icon: Icons.people_alt_outlined, text: _others == 0 ? 'لا أحد يبحث الآن' : '$_others يبحثون الآن', color: K.text2),
                 ]),
                 const SizedBox(height: 10),
                 Text(
@@ -196,15 +207,14 @@ class _RadarScreenState extends ConsumerState<RadarScreen> with SingleTickerProv
                   child: canBot
                       ? GlassCard(
                           key: const ValueKey('bot'),
-                          accent: K.violet,
                           padding: const EdgeInsets.all(14),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                            const Text('لا يوجد عملاء كثيرون الآن 🤖', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                            const Text('لا يوجد عملاء كثيرون الآن', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                             const SizedBox(height: 4),
                             Text('العب مع «$kBotName»: يقرأ الدليل ويوجّهك كتابةً خطوة بخطوة. نواصل البحث إن فضّلت الانتظار.',
                                 style: const TextStyle(color: K.text2, fontSize: 12.5)),
                             const SizedBox(height: 10),
-                            GlowButton(label: 'العب مع العميل الآلي', icon: Icons.smart_toy_outlined, color: K.violet, height: 48, onTap: _playBot),
+                            GlowButton(label: 'التدريب مع $kBotName', icon: Icons.smart_toy_outlined, outline: true, height: 48, onTap: _playBot),
                           ]),
                         )
                       : Text('بعد ${_botAfter - _waited} ث يمكنك اللعب مع العميل الآلي',
@@ -237,8 +247,8 @@ class _FoundBadge extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Avatar(r.partnerNick, size: 66),
           const SizedBox(height: 8),
-          Text(r.partnerNick, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-          Text('المستوى ${r.partnerSkill}', style: const TextStyle(color: K.amber, fontSize: 12)),
+          Text(r.partnerNick, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text('المستوى ${r.partnerSkill}', style: const TextStyle(color: K.muted, fontSize: 12)),
         ]),
       );
 }
@@ -254,12 +264,12 @@ class _RadarPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final c = size.center(Offset.zero);
     final r = size.shortestSide / 2 - 4;
-    final color = locked ? K.neon : K.agent;
-    canvas.drawCircle(c, r, Paint()..color = color.withAlpha(14));
+    const color = K.ok;
+    canvas.drawCircle(c, r, Paint()..color = const Color(0xFF0B140F));
     final ring = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..color = color.withAlpha(70);
+      ..strokeWidth = 1
+      ..color = color.withAlpha(locked ? 90 : 45);
     for (var i = 1; i <= 4; i++) {
       canvas.drawCircle(c, r * i / 4, ring);
     }
@@ -270,14 +280,15 @@ class _RadarPainter extends CustomPainter {
         ..shader = SweepGradient(
           startAngle: 0,
           endAngle: pi / 2,
-          colors: [color.withAlpha(0), color.withAlpha(120)],
+          colors: [color.withAlpha(0), color.withAlpha(110)],
           transform: GradientRotation(angle - pi / 2),
         ).createShader(Rect.fromCircle(center: c, radius: r));
-      canvas.drawCircle(c, r, sweep);
+      // قطاع 90° فقط خلف خطّ المسح (كان القرص كلّه يمتلئ لأن التدرّج يمتدّ خارج نطاقه).
+      canvas.drawArc(Rect.fromCircle(center: c, radius: r), angle - pi / 2, pi / 2, true, sweep);
       final tip = Offset(c.dx + r * cos(angle), c.dy + r * sin(angle));
       canvas.drawLine(c, tip, Paint()
-        ..color = color
-        ..strokeWidth = 2);
+        ..color = color.withAlpha(200)
+        ..strokeWidth = 1.5);
     }
     final rnd = Random(seed);
     for (var i = 0; i < blips; i++) {
@@ -288,8 +299,8 @@ class _RadarPainter extends CustomPainter {
       var diff = (angle - a) % (2 * pi);
       if (diff < 0) diff += 2 * pi;
       final glow = locked ? 1.0 : (1 - diff / (2 * pi)).clamp(0.15, 1.0);
-      canvas.drawCircle(p, 9, Paint()..color = K.amber.withAlpha((60 * glow).round()));
-      canvas.drawCircle(p, 4, Paint()..color = K.amber.withAlpha((255 * glow).round()));
+      canvas.drawCircle(p, 7, Paint()..color = color.withAlpha((50 * glow).round()));
+      canvas.drawCircle(p, 3.5, Paint()..color = color.withAlpha((255 * glow).round()));
     }
   }
 

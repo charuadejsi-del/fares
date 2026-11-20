@@ -120,7 +120,6 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
               ]),
               const SizedBox(height: 12),
               GlassCard(
-                accent: K.agent,
                 padding: const EdgeInsets.all(14),
                 child: Row(children: [
                   Expanded(
@@ -133,9 +132,10 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  SizedBox(
-                    width: 96,
-                    child: GlowButton(label: 'إضافة', icon: Icons.person_add_alt, height: 48, busy: _busy, onTap: _add),
+                  // عرض ثابت كافٍ وبلا أيقونة: كان النص «إضافة» يُقصّ.
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 96),
+                    child: GlowButton(label: 'إضافة', height: 48, busy: _busy, onTap: _add),
                   ),
                 ]),
               ),
@@ -381,7 +381,7 @@ class ReferralCard extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(K.radius),
                   color: K.amber.withAlpha(20),
                   border: Border.all(color: K.amber.withAlpha(140)),
                 ),

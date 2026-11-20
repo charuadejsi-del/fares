@@ -35,19 +35,17 @@ class MainShell extends ConsumerWidget {
         extendBody: true,
         bottomNavigationBar: const AppNavBar(),
         body: SpyBackground(
-          image: tab == 0 ? 'assets/images/home_bg.jpg' : null,
-          dim: tab == 0 ? .82 : .72,
+          image: null,
           child: SafeArea(
             bottom: false,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 74),
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 260),
-                switchInCurve: Curves.easeOutCubic,
-                transitionBuilder: (child, a) => FadeTransition(
-                  opacity: a,
-                  child: SlideTransition(position: Tween(begin: const Offset(0, .02), end: Offset.zero).animate(a), child: child),
-                ),
+                duration: const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOut,
+                // لا تراكب بين التبويبين (كان يسبّب «شبحاً»): نعرض الجديد فقط.
+                layoutBuilder: (current, previous) => current ?? const SizedBox.shrink(),
+                transitionBuilder: (child, a) => FadeTransition(opacity: a, child: child),
                 child: KeyedSubtree(key: ValueKey(tab), child: _tabs[tab]),
               ),
             ),
@@ -68,8 +66,8 @@ class _ShopTab extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
           child: Row(children: [
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('المتجر', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
-              MonoLabel('SUPPLY DEPOT // التموين', size: 10),
+              Text('رصيد الوقت', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+              MonoLabel('AVAILABLE TIME', size: 10),
             ]),
           ]),
         ),

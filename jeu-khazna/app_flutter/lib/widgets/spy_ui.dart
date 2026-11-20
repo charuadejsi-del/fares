@@ -8,92 +8,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../app/theme.dart';
 import '../core/services.dart';
 
-/// خلفية: صورة (اختيارية) + تعتيم + شبكة + خطوط مسح متحرّكة.
-class SpyBackground extends StatefulWidget {
+/// خلفية V3: صورة حقيقية (اختيارية) باهتة الألوان + تعتيم متدرّج. بلا شبكة ولا مسح متحرّك.
+class SpyBackground extends StatelessWidget {
   final String? image;
   final double dim;
   final Widget child;
   const SpyBackground({super.key, this.image, this.dim = 0.72, required this.child});
 
-  @override
-  State<SpyBackground> createState() => _SpyBackgroundState();
-}
-
-class _SpyBackgroundState extends State<SpyBackground> with SingleTickerProviderStateMixin {
-  late final AnimationController _scan = AnimationController(vsync: this, duration: const Duration(seconds: 6))
-    ..repeat();
-
-  @override
-  void dispose() {
-    _scan.dispose();
-    super.dispose();
-  }
+  static const _desat = ColorFilter.matrix([.5, .4, .1, 0, 0, .4, .5, .1, 0, 0, .4, .4, .2, 0, 0, 0, 0, 0, 1, 0]);
 
   @override
   Widget build(BuildContext context) {
     return Stack(fit: StackFit.expand, children: [
       const ColoredBox(color: K.bg),
-      if (widget.image != null)
-        Image.asset(widget.image!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox()),
+      if (image != null)
+        ColorFiltered(
+          colorFilter: _desat,
+          child: Image.asset(image!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox()),
+        ),
       DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              K.bg.withAlpha((widget.dim * 255 * 0.85).round()),
-              K.bg.withAlpha((widget.dim * 255).round()),
+              K.bg.withAlpha((dim * 255 * 0.85).round()),
+              K.bg.withAlpha((dim * 255).round()),
               K.bg.withAlpha(250),
             ],
           ),
         ),
       ),
-      RepaintBoundary(
-        child: AnimatedBuilder(
-          animation: _scan,
-          builder: (context, _) => CustomPaint(painter: _GridPainter(_scan.value)),
-        ),
-      ),
-      widget.child,
+      child,
     ]);
   }
 }
 
-class _GridPainter extends CustomPainter {
-  final double t;
-  _GridPainter(this.t);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final grid = Paint()
-      ..color = K.neon.withAlpha(10)
-      ..strokeWidth = 1;
-    const step = 32.0;
-    for (double x = 0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
-    }
-    for (double y = 0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
-    }
-    final lines = Paint()..color = Colors.black.withAlpha(40);
-    for (double y = 0; y < size.height; y += 3) {
-      canvas.drawRect(Rect.fromLTWH(0, y, size.width, 1), lines);
-    }
-    final y = t * (size.height + 160) - 80;
-    final band = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Colors.transparent, K.neon.withAlpha(18), Colors.transparent],
-      ).createShader(Rect.fromLTWH(0, y - 80, size.width, 160));
-    canvas.drawRect(Rect.fromLTWH(0, y - 80, size.width, 160), band);
-  }
-
-  @override
-  bool shouldRepaint(covariant _GridPainter old) => old.t != t;
-}
-
-/// لوحة بزوايا مضيئة (طابع شاشات العمليات).
+/// لوحة V3: سطح مطفأ بحدّ رفيع وعنوان صغير بخط أحادي (بدل الزوايا المضيئة).
 class HudPanel extends StatelessWidget {
   final Widget child;
   final Color color;
@@ -103,61 +54,24 @@ class HudPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _CornersPainter(color),
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.all(1),
-        padding: padding,
-        decoration: BoxDecoration(
-          color: K.panel,
-          border: Border.all(color: color.withAlpha(45)),
-        ),
-        child: label == null
-            ? child
-            : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Row(children: [
-                  Container(width: 6, height: 6, color: color),
-                  const SizedBox(width: 8),
-                  Text(label!, style: TextStyle(fontFamily: K.mono, color: color, fontSize: 12, letterSpacing: 2)),
-                ]),
-                const SizedBox(height: 10),
-                child,
-              ]),
+    final accent = color != K.neon && color != K.muted;
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: K.surface,
+        borderRadius: BorderRadius.circular(K.radius),
+        border: Border.all(color: accent ? color.withAlpha(110) : K.border),
       ),
+      child: label == null
+          ? child
+          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text(label!, style: TextStyle(fontFamily: K.mono, color: accent ? color : K.muted, fontSize: 11, letterSpacing: 2)),
+              const SizedBox(height: 10),
+              child,
+            ]),
     );
   }
-}
-
-class _CornersPainter extends CustomPainter {
-  final Color color;
-  _CornersPainter(this.color);
-
-  @override
-  void paint(Canvas canvas, Size s) {
-    final p = Paint()
-      ..color = color
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-    const l = 14.0;
-    final path = Path()
-      ..moveTo(0, l)
-      ..lineTo(0, 0)
-      ..lineTo(l, 0)
-      ..moveTo(s.width - l, 0)
-      ..lineTo(s.width, 0)
-      ..lineTo(s.width, l)
-      ..moveTo(s.width, s.height - l)
-      ..lineTo(s.width, s.height)
-      ..lineTo(s.width - l, s.height)
-      ..moveTo(l, s.height)
-      ..lineTo(0, s.height)
-      ..lineTo(0, s.height - l);
-    canvas.drawPath(path, p);
-  }
-
-  @override
-  bool shouldRepaint(covariant _CornersPainter old) => old.color != color;
 }
 
 /// زرّ نيون كبير مع صوت واهتزاز.
@@ -188,8 +102,12 @@ class _NeonButtonState extends ConsumerState<NeonButton> {
   @override
   Widget build(BuildContext context) {
     final enabled = widget.onTap != null;
-    final c = enabled ? widget.color : K.muted;
-    final fg = widget.filled ? const Color(0xFF00170D) : c;
+    final c = enabled ? widget.color : K.borderStrong;
+    final fg = !enabled
+        ? K.muted
+        : widget.filled
+            ? (c == K.neon || c == K.amber ? K.ink : Colors.white)
+            : (c == K.muted ? K.text2 : K.text);
     return GestureDetector(
       onTapDown: enabled ? (_) => setState(() => _down = true) : null,
       onTapCancel: () => setState(() => _down = false),
@@ -207,17 +125,16 @@ class _NeonButtonState extends ConsumerState<NeonButton> {
           duration: const Duration(milliseconds: 150),
           height: widget.height,
           decoration: BoxDecoration(
-            color: widget.filled ? c.withAlpha(enabled ? 255 : 60) : c.withAlpha(_down ? 40 : 14),
-            border: Border.all(color: c, width: 1.5),
-            borderRadius: BorderRadius.circular(4),
-            boxShadow: enabled ? K.glow(c, _down ? 26 : 14, widget.filled ? 120 : 60) : null,
+            color: widget.filled ? (enabled ? c : K.surface2) : (_down ? K.surface2 : Colors.transparent),
+            border: Border.all(color: widget.filled ? Colors.transparent : (c == K.neon || c == K.muted ? K.borderStrong : c.withAlpha(150))),
+            borderRadius: BorderRadius.circular(K.radius),
           ),
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            if (widget.icon != null) ...[Icon(widget.icon, color: fg, size: 22), const SizedBox(width: 10)],
+            if (widget.icon != null) ...[Icon(widget.icon, color: widget.filled ? fg : c, size: 20), const SizedBox(width: 10)],
             Flexible(
               child: Text(widget.label,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: fg, fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                  style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.w800)),
             ),
           ]),
         ),
@@ -295,7 +212,7 @@ class _GlitchTitleState extends State<GlitchTitle> {
     super.initState();
     _t = Timer.periodic(const Duration(milliseconds: 120), (_) {
       if (!mounted) return;
-      final glitch = _r.nextDouble() < 0.07;
+      final glitch = _r.nextDouble() < 0.015;
       setState(() => _dx = glitch ? (_r.nextDouble() * 6 - 3) : 0);
     });
   }
@@ -318,7 +235,7 @@ class _GlitchTitleState extends State<GlitchTitle> {
         Transform.translate(
             offset: Offset(-_dx * 2, 0), child: Text(widget.text, style: base.copyWith(color: K.agent.withAlpha(160)))),
       Text(widget.text,
-          style: base.copyWith(color: K.neon, shadows: [Shadow(color: K.neon.withAlpha(180), blurRadius: 24)])),
+          style: base.copyWith(color: K.text, letterSpacing: -.5)),
     ]);
   }
 }
@@ -335,9 +252,9 @@ class RoleBadge extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: big ? 14 : 10, vertical: big ? 7 : 4),
       decoration: BoxDecoration(
-        color: c.withAlpha(30),
-        border: Border.all(color: c),
-        borderRadius: BorderRadius.circular(3),
+        color: Colors.transparent,
+        border: Border.all(color: c.withAlpha(150)),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(K.roleIcon(role), color: c, size: big ? 20 : 16),
@@ -353,7 +270,7 @@ class MonoLabel extends StatelessWidget {
   final String text;
   final Color color;
   final double size;
-  const MonoLabel(this.text, {super.key, this.color = K.neonDim, this.size = 12});
+  const MonoLabel(this.text, {super.key, this.color = K.muted, this.size = 11});
 
   @override
   Widget build(BuildContext context) =>

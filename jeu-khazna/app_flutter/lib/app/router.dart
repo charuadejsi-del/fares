@@ -17,17 +17,22 @@ import '../features/settings/settings_screen.dart';
 import '../features/shell/main_shell.dart';
 import '../features/tutorial/tutorial_screen.dart';
 
-/// انتقال تلاشي + انزلاق خفيف بين الشاشات.
+/// انتقال بلا تداخل: الشاشة القديمة تختفي أوّلاً ثم تظهر الجديدة على خلفية معتمة
+/// (يصلح «الشبح» الذي كان يظهر عند تراكب شاشتين شبه شفافتين).
 CustomTransitionPage<void> _fade(GoRouterState state, Widget child) => CustomTransitionPage<void>(
       key: state.pageKey,
       child: child,
-      transitionDuration: const Duration(milliseconds: 420),
-      transitionsBuilder: (context, anim, _, child) => FadeTransition(
-        opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
-        child: SlideTransition(
-          position: Tween(begin: const Offset(0, 0.03), end: Offset.zero)
-              .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
-          child: child,
+      opaque: true,
+      transitionDuration: const Duration(milliseconds: 260),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      transitionsBuilder: (context, anim, sec, child) => ColoredBox(
+        color: const Color(0xFF0A0C0E),
+        child: FadeTransition(
+          opacity: CurvedAnimation(parent: anim, curve: const Interval(.35, 1, curve: Curves.easeOut)),
+          child: FadeTransition(
+            opacity: ReverseAnimation(CurvedAnimation(parent: sec, curve: const Interval(0, .5))),
+            child: child,
+          ),
         ),
       ),
     );

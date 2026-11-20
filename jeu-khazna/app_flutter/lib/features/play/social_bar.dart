@@ -32,7 +32,7 @@ class QuickBar extends ConsumerWidget {
                   label: Text(e.value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                   backgroundColor: K.surface2,
                   side: const BorderSide(color: K.borderStrong),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(K.radius)),
                   onPressed: () {
                     ref.read(audioProvider).fx(Sfx.click, HapticKind.tap, volume: 0.5);
                     c.sendQuick(e.key);
@@ -104,7 +104,7 @@ class _ChatStripState extends State<ChatStrip> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 constraints: const BoxConstraints(maxWidth: 330),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(K.radius),
                   color: (l.mine ? K.agent : (l.bot ? K.violet : K.analyst)).withAlpha(30),
                   border: Border.all(color: (l.mine ? K.agent : (l.bot ? K.violet : K.analyst)).withAlpha(130)),
                 ),
@@ -135,7 +135,7 @@ class PartnerChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(4, 3, 8, 3),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(K.radius),
           color: K.surface2,
           border: Border.all(color: K.borderStrong),
         ),

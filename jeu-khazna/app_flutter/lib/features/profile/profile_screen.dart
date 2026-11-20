@@ -82,7 +82,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             gradient: const LinearGradient(
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
-              colors: [Color(0xFF1E1A0E), Color(0xFF111614), Color(0xFF0A1011)],
+              colors: [K.surface2, K.surface, K.surface],
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Row(children: [
@@ -195,7 +195,7 @@ class _Big extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(children: [
-        Text(v, style: TextStyle(fontFamily: K.mono, fontSize: 24, color: c, shadows: [Shadow(color: c.withAlpha(120), blurRadius: 12)])),
+        Text(v, style: TextStyle(fontFamily: K.mono, fontSize: 24, color: c)),
         Text(k, style: const TextStyle(color: K.muted, fontSize: 11.5)),
       ]);
 }
