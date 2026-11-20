@@ -1,0 +1,41 @@
+/* ═══ رموز التصميم: كل الألوان والمسافات من هنا فقط ═══ */
+:root {
+  --bg: #05090a;
+  --bg-elev: #0a1112;
+  --surface: #0d1617;
+  --surface-2: #121d1e;
+  --surface-3: #18262776;
+  --border: #1b2a2b;
+  --border-strong: #26393a;
+
+  --text: #e8f3f0;
+  --text-2: #a4b8b3;
+  --text-3: #66807a;
+
+  --accent: #00ffa3;
+  --accent-2: #00d488;
+  --accent-ink: #00170d;
+  --accent-soft: rgba(0, 255, 163, .09);
+  --info: #22c7ff;
+  --info-soft: rgba(34, 199, 255, .1);
+  --warn: #ffb547;
+  --warn-soft: rgba(255, 181, 71, .1);
+  --danger: #ff4d6a;
+  --danger-soft: rgba(255, 77, 106, .1);
+  --violet: #9d8cff;
+  --violet-soft: rgba(157, 140, 255, .1);
+
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 18px;
+  --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 12px 32px -12px rgba(0, 0, 0, .6);
+  --glow: 0 0 0 1px rgba(0, 255, 163, .25), 0 8px 30px -6px rgba(0, 255, 163, .35);
+
+  --font: 'IBM Plex Sans Arabic', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --sidebar: 264px;
+  --topbar: 64px;
+  --tabbar: 68px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}

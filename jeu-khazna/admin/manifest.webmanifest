@@ -1,0 +1,11 @@
+{
+  "name": "الخزنة — مركز القيادة",
+  "short_name": "مركز القيادة",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/#/dashboard",
+  "display": "standalone",
+  "background_color": "#05090a",
+  "theme_color": "#05090a",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
