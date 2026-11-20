@@ -10,7 +10,13 @@ import 'package:supabase/supabase.dart';
 import '../net/transport.dart';
 
 /// العميل المشترك: كل الطلبات (الغرف، الصوت، الرصيد) تمرّ به برمز اللاعب.
-final SupabaseClient supa = SupabaseClient(kSupabaseUrl, kSupabaseAnonKey);
+/// تدفّق «implicit»: تدفّق PKCE الافتراضي يحتاج تخزيناً غير متوفّر في نسخة Dart الخالصة،
+/// فكان التسجيل يفشل قبل الوصول للخادم.
+final SupabaseClient supa = SupabaseClient(
+  kSupabaseUrl,
+  kSupabaseAnonKey,
+  authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit),
+);
 
 class Profile {
   final String id;
@@ -141,5 +147,6 @@ String authErrorText(Object e) {
   if (m.contains('nickname taken')) return 'هذا الاسم مأخوذ';
   if (m.contains('rate limit')) return 'محاولات كثيرة، انتظر قليلاً';
   if (m.contains('socket') || m.contains('failed host') || m.contains('timeout')) return 'لا يوجد اتصال بالإنترنت';
-  return 'تعذّر الطلب، حاول مجدّداً';
+  final raw = (e is AuthException ? e.message : '$e');
+  return 'تعذّر الطلب، حاول مجدّداً\n(${raw.length > 80 ? raw.substring(0, 80) : raw})';
 }
