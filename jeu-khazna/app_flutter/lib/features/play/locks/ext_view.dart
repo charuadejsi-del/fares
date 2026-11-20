@@ -630,9 +630,9 @@ class _ExtInputState extends ConsumerState<ExtInput> {
           height: 50,
           child: DeviceKey(
             onTap: onTap ?? () {},
-            color: onTap == null ? const Color(0xFF1A2420) : const Color(0xFF0E5E3C),
+            color: onTap == null ? K.surface2 : K.neon,
             sfx: Sfx.click,
-            child: Text(label, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: onTap == null ? K.muted : K.neon)),
+            child: Text(label, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: onTap == null ? K.muted : K.ink)),
           ),
         ),
       );
@@ -673,11 +673,11 @@ class _ExtInputState extends ConsumerState<ExtInput> {
                       _digits += k;
                     }
                   }),
-                  color: k == 'OK' ? const Color(0xFF0E5E3C) : const Color(0xFF1A2420),
+                  color: k == 'OK' ? K.neon : K.surface2,
                   sfx: k == 'OK' ? Sfx.click : Sfx.beep,
                   child: k == '⌫'
                       ? const Icon(Icons.backspace_outlined, color: K.text)
-                      : Text(k, style: TextStyle(fontFamily: K.mono, fontSize: 24, color: k == 'OK' ? K.neon : K.text, fontWeight: FontWeight.w700)),
+                      : Text(k, style: TextStyle(fontFamily: K.mono, fontSize: 24, color: k == 'OK' ? K.ink : K.text, fontWeight: FontWeight.w700)),
                 ),
             ]),
           ),

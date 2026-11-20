@@ -135,7 +135,7 @@ class DeviceKey extends ConsumerStatefulWidget {
   final Widget child;
   final Color color;
   final Sfx sfx;
-  const DeviceKey({super.key, required this.onTap, required this.child, this.color = const Color(0xFF1A2420), this.sfx = Sfx.beep});
+  const DeviceKey({super.key, required this.onTap, required this.child, this.color = K.surface2, this.sfx = Sfx.beep});
 
   @override
   ConsumerState<DeviceKey> createState() => _DeviceKeyState();
@@ -270,13 +270,13 @@ class _KeypadOpState extends State<KeypadOp> {
             for (final k in keys)
               DeviceKey(
                 onTap: () => _key(k),
-                color: k == 'OK' ? const Color(0xFF0E5E3C) : const Color(0xFF1A2420),
+                color: k == 'OK' ? K.neon : K.surface2,
                 sfx: k == 'OK' ? Sfx.click : Sfx.beep,
                 child: k == '⌫'
                     ? const Icon(Icons.backspace_outlined, color: K.text)
                     : Text(k,
                         style: TextStyle(
-                            fontFamily: K.mono, fontSize: 26, color: k == 'OK' ? K.neon : K.text, fontWeight: FontWeight.w700)),
+                            fontFamily: K.mono, fontSize: 26, color: k == 'OK' ? K.ink : K.text, fontWeight: FontWeight.w700)),
               ),
           ],
         ),
