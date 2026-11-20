@@ -18,6 +18,7 @@ import '../../core/voice.dart';
 import '../shop/shop_screen.dart' show showShopSheet;
 import '../../widgets/spy_ui.dart';
 import '../../widgets/stage_brief.dart';
+import '../../widgets/coach_card.dart';
 import '../../widgets/stage_map.dart';
 import '../../core/ext_locks.dart' show vaultDigit, kVaultCode;
 import '../../widgets/ui_kit.dart';
@@ -572,72 +573,109 @@ class _Game extends StatelessWidget {
     final s = c.state!;
     final p = c.puzzles!;
     final role = c.myRole ?? 'op';
+    final total = s.rooms.length;
+    final silent = stageMods(c.stage).contains('silent');
+    final idx = min(s.room + 1, total);
     return Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+      // ── الشريط العلوي: خروج · الشريك/الدور · المؤقّت
+      Container(
+        padding: const EdgeInsets.fromLTRB(10, 6, 14, 8),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: K.border))),
         child: Row(children: [
-          InkWell(onTap: onExit, child: const Padding(padding: EdgeInsets.all(6), child: Icon(Icons.close, color: K.muted))),
-          const SizedBox(width: 4),
-          if (c.online || c.bot) RoleBadge(role) else _RoleSwitch(c: c),
-          if (voice != null && !stageMods(c.stage).contains('silent')) ...[const SizedBox(width: 8), VoiceButton(voice: voice!)],
-          if (stageMods(c.stage).contains('silent')) const Padding(padding: EdgeInsets.only(left: 6), child: Text('🔇', style: TextStyle(fontSize: 18))),
-          const SizedBox(width: 8),
-          HintButton(c: c),
-          InkWell(
-            onTap: () => showLockHelp(context, s),
-            child: const Padding(padding: EdgeInsets.all(6), child: Icon(Icons.help_outline, color: K.muted, size: 22)),
+          _SquareBtn(icon: Icons.close, label: 'انسحاب', onTap: onExit),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              if (c.online || c.bot) PartnerChip(c: c) else _RoleSwitch(c: c),
+              const SizedBox(height: 2),
+              MonoLabel('LOCK ${idx.toString().padLeft(2, '0')}/${total.toString().padLeft(2, '0')} · ERR ${s.errors}', size: 10.5),
+            ]),
           ),
-          const Spacer(),
           _RadarTimer(c: c),
         ]),
       ),
-      if (c.online || c.bot)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
-          child: Row(children: [PartnerChip(c: c), const Spacer()]),
-        ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-        child: _Progress(room: s.room, total: s.rooms.length, codename: codenameFor(s.seed)),
-      ),
-      if (s.hint.isNotEmpty) HintBanner(text: s.hint),
+      // ── شريط التقدّم الرفيع
+      _Progress(room: s.room, total: total, codename: codenameFor(s.seed)),
       Expanded(
         child: AnimatedBuilder(
           animation: shake,
           builder: (context, child) => Transform.translate(
               offset: Offset(sin(shake.value * pi * 7) * 12 * (1 - shake.value), 0), child: child),
-          child: LayoutBuilder(
-            builder: (context, box) => SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 20),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: max(0.0, box.maxHeight - 20)),
-              child: Center(child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 380),
-              transitionBuilder: (child, anim) => FadeTransition(
-                opacity: anim,
-                child: ScaleTransition(scale: Tween(begin: 0.97, end: 1.0).animate(anim), child: child),
-              ),
-              child: KeyedSubtree(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 20),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              layoutBuilder: (cur, prev) => cur ?? const SizedBox.shrink(),
+              transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
+              child: Column(
                 key: ValueKey('${s.seed}-${s.room}-$role'),
-                child: HudPanel(
-                  color: K.role(role),
-                  label: '${(s.room + 1).toString().padLeft(2, '0')} // ${K.room(s.roomId)}',
-                  child: LockView(state: s, puzzles: p, role: role, dispatch: c.dispatch),
-                ),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ── عنوان القفل + أزرار التلميح والشرح والصوت
+                  Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        MonoLabel('LOCK ${idx.toString().padLeft(2, '0')} · ${K.roleName(role)}', color: K.neon, size: 10.5),
+                        const SizedBox(height: 2),
+                        Text(K.room(s.roomId), style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+                      ]),
+                    ),
+                    if (voice != null && !silent) ...[VoiceButton(voice: voice!), const SizedBox(width: 6)],
+                    if (silent) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.mic_off, color: K.danger, size: 20)),
+                    HintButton(c: c),
+                    const SizedBox(width: 6),
+                    _SquareBtn(icon: Icons.question_mark, label: 'شرح القفل', onTap: () => showLockHelp(context, s)),
+                  ]),
+                  const SizedBox(height: 10),
+                  CoachCard(lockId: s.roomId, role: role, guided: s.stage == 1),
+                  if (s.hint.isNotEmpty) ...[const SizedBox(height: 8), HintBanner(text: s.hint)],
+                  const SizedBox(height: 10),
+                  HudPanel(
+                    padding: const EdgeInsets.all(14),
+                    child: LockView(state: s, puzzles: p, role: role, dispatch: c.dispatch),
+                  ),
+                ],
               ),
-            )),
             ),
-          ),
           ),
         ),
       ),
-      if (c.online || c.bot) ...[
-        ChatStrip(c: c),
-        QuickBar(c: c),
-        const SizedBox(height: 6),
-      ],
+      if (c.online || c.bot)
+        Container(
+          decoration: const BoxDecoration(border: Border(top: BorderSide(color: K.border))),
+          padding: const EdgeInsets.only(top: 6, bottom: 6),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [ChatStrip(c: c), QuickBar(c: c)]),
+        ),
     ]);
   }
+}
+
+/// زرّ مربّع صغير بحدّ رفيع (انسحاب، شرح…).
+class _SquareBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _SquareBtn({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: label,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(K.radius),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(K.radius),
+              color: K.surface,
+              border: Border.all(color: K.borderStrong),
+            ),
+            child: Icon(icon, color: K.text2, size: 18),
+          ),
+        ),
+      );
 }
 
 /// وضع الطاولة: النصف العلوي للمحلّل (مقلوب باتجاهه)، والسفلي للعميل.
@@ -722,27 +760,16 @@ class _Progress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(children: [
-        MonoLabel(codename, color: K.muted, size: 11),
-        const Spacer(),
-        MonoLabel('${room.clamp(0, total)}/$total', color: K.neon, size: 12),
-      ]),
-      const SizedBox(height: 6),
-      Row(children: [
-        for (int i = 0; i < total; i++)
-          Expanded(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 400),
-              margin: const EdgeInsets.symmetric(horizontal: 2),
-              height: 6,
-              decoration: BoxDecoration(
-                color: i < room ? K.neon : (i == room ? K.amber : K.line),
-                boxShadow: i < room ? K.glow(K.neon, 8, 120) : (i == room ? K.glow(K.amber, 8, 100) : null),
-              ),
-            ),
+    return Row(children: [
+      for (int i = 0; i < total; i++)
+        Expanded(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 400),
+            margin: EdgeInsets.only(left: i == total - 1 ? 0 : 2),
+            height: 3,
+            color: i < room ? K.neon : (i == room ? K.neon.withAlpha(110) : K.border),
           ),
-      ]),
+        ),
     ]);
   }
 }
@@ -789,7 +816,7 @@ class _RadarTimerState extends ConsumerState<_RadarTimer> {
     final r = widget.c.remaining;
     final frac = (r / (widget.c.state?.effectiveDuration ?? kDuration)).clamp(0.0, 1.0).toDouble();
     final warn = r < 60;
-    final color = warn ? K.danger : (r < 180 ? K.amber : K.neon);
+    final color = warn ? K.danger : K.neon;
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Text(fmtTime(r),
           textDirection: TextDirection.ltr,
@@ -799,8 +826,8 @@ class _RadarTimerState extends ConsumerState<_RadarTimer> {
               color: color)),
       const SizedBox(width: 8),
       SizedBox(
-        width: 34,
-        height: 34,
+        width: 22,
+        height: 22,
         child: CustomPaint(painter: _RingPainter(frac, color)),
       ),
     ]);
@@ -816,15 +843,15 @@ class _RingPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
     final bg = Paint()
-      ..color = K.line
+      ..color = K.border
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4;
+      ..strokeWidth = 3;
     canvas.drawArc(rect.deflate(3), 0, 2 * pi, false, bg);
     final fg = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.butt;
     canvas.drawArc(rect.deflate(3), -pi / 2, 2 * pi * frac, false, fg);
   }
 
@@ -1106,9 +1133,8 @@ class HintBanner extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(K.radius),
-              color: K.amber.withAlpha(26),
+              color: K.surface,
               border: Border.all(color: K.amber.withAlpha(140)),
-              boxShadow: [BoxShadow(color: K.amber.withAlpha(50), blurRadius: 16)],
             ),
             child: Row(children: [
               const Icon(Icons.lightbulb, color: K.amber),

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
+import '../core/coach.dart';
 import '../core/ext_locks.dart';
 import '../core/game.dart';
 import '../core/stages.dart';
@@ -86,13 +87,20 @@ void showLockHelp(BuildContext context, GameState s) {
   showModalBottomSheet(
     context: context,
     backgroundColor: K.surface,
+    isScrollControlled: true,
     builder: (ctx) => SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(18),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('${info?.icon ?? '🔐'} ${K.room(s.roomId)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+          Text(K.room(s.roomId), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
           Text(info?.how ?? 'العميل يصف ما يراه، والمحلّل يقرأ الدليل ويُملي الحلّ.', style: const TextStyle(color: K.text2, height: 1.5)),
+          const SizedBox(height: 12),
+          Text('العميل: ${coachFor(s.roomId).agent}', style: const TextStyle(height: 1.55)),
+          const SizedBox(height: 6),
+          Text('المحلّل: ${coachFor(s.roomId).analyst}', style: const TextStyle(height: 1.55)),
+          const SizedBox(height: 6),
+          Text('مثال: ${coachFor(s.roomId).example}', style: const TextStyle(color: K.muted, height: 1.55, fontSize: 13)),
           if (mods.isNotEmpty) ...[
             const SizedBox(height: 14),
             const Text('مؤثّرات هذه المرحلة', style: TextStyle(color: K.danger, fontWeight: FontWeight.w800)),
