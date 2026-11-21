@@ -1071,7 +1071,7 @@ Future<Uint8List> buildFicheLot({
   /// Tableau élégant : en-tête or clair, lignes alternées ; [nums] = colonnes numériques.
   pw.Widget tableau(List<String> entetes, List<List<String>> lignes, List<int> flex, Set<int> nums) {
     pw.Widget cell(String v, int i, {bool head = false}) => pw.Container(
-          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: head ? 6 : 5),
+          padding: pw.EdgeInsets.symmetric(horizontal: 8, vertical: head ? 6 : 5),
           alignment: nums.contains(i) ? pw.Alignment.center : (pdfSens == pw.TextDirection.rtl ? pw.Alignment.centerRight : pw.Alignment.centerLeft),
           child: head
               ? t(v, size: 8.5, gras: true, color: _ink)
