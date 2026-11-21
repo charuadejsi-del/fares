@@ -270,3 +270,26 @@ final statsProvider = FutureProvider.autoDispose<PlayerStats>((ref) async {
   final m = Map<String, dynamic>.from(r as Map);
   return PlayerStats((m['xp'] as num? ?? 0).toInt(), (m['online'] as num? ?? 0).toInt());
 });
+
+// ───── «فريقي»: كل من لعبت معهم ─────
+class TeamMate {
+  final String partner;
+  final String nickname;
+  final int top;
+  final int stars;
+  final DateTime? lastPlayed;
+  final bool friend;
+  const TeamMate(this.partner, this.nickname, this.top, this.stars, this.lastPlayed, this.friend);
+
+  factory TeamMate.fromJson(Map m) => TeamMate(
+        '${m['partner']}',
+        '${m['nickname'] ?? 'عميل'}',
+        (m['top'] as num? ?? 0).toInt(),
+        (m['stars'] as num? ?? 0).toInt(),
+        DateTime.tryParse('${m['last_played'] ?? ''}')?.toLocal(),
+        m['friend'] == true,
+      );
+}
+
+final teamMatesProvider = FutureProvider.autoDispose<List<TeamMate>>((ref) async =>
+    [for (final m in (await supa.rpc('my_teams') as List? ?? const [])) TeamMate.fromJson(m as Map)]);

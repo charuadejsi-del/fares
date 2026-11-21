@@ -17,9 +17,11 @@ Future<bool> launchOnline(
   required bool host,
   bool matched = false,
   RejoinData? resume,
+  int? stage,
 }) async {
   final name = authService.profile?.nickname ?? 'عميل';
-  final c = GameController.online(meName: name, code: code, channel: channel, isHost: host, matched: matched, resume: resume);
+  final c = GameController.online(meName: name, code: code, channel: channel, isHost: host, matched: matched, resume: resume)
+    ..preferredStage = stage;
   try {
     await c.connect();
   } catch (_) {

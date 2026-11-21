@@ -149,6 +149,9 @@ class GameController extends ChangeNotifier {
 
   /// أُعيدت المرحلة (بذرة وترتيب جديدان) — لإظهار «خزنة جديدة».
   bool replayed = false;
+
+  /// مرحلة مختارة مسبقاً (من «فريقي» أو لتحسين النجوم): تُختار تلقائياً عند انضمام الشريك.
+  int? preferredStage;
   int _roomIdx = -1;
   int _roomAt = 0;
   bool meBroke = false;

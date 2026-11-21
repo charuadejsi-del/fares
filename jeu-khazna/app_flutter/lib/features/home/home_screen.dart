@@ -361,6 +361,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             border: Border.all(color: K.border),
           ),
           child: Column(children: [
+            _Row(icon: Icons.handshake_outlined, title: 'فريقي', sub: 'كل من لعبت معهم · أكمِلوا من مرحلتكم', onTap: () => context.push('/team')),
             _Row(icon: Icons.group_outlined, title: 'الأصدقاء', sub: 'ادعُ واربح دقائق', onTap: () => context.push('/friends')),
             _Row(icon: Icons.leaderboard_outlined, title: 'الترتيب والموسم', sub: 'أقوى الفرق هذا الأسبوع', onTap: () => context.push('/leaderboard')),
             _Row(icon: Icons.tune, title: 'مهمّة حرّة', sub: 'اختر الأقفال والصعوبة', onTap: () => context.push('/briefing')),

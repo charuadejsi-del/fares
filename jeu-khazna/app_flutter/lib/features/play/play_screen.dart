@@ -23,6 +23,7 @@ import '../shop/shop_screen.dart' show showShopSheet;
 import '../../widgets/spy_ui.dart';
 import '../../widgets/stage_brief.dart';
 import '../../widgets/coach_card.dart';
+import '../../widgets/session_summary.dart';
 import '../../widgets/stage_map.dart';
 import '../../core/ext_locks.dart' show vaultDigit, kVaultCode;
 import '../../widgets/ui_kit.dart';
@@ -58,6 +59,11 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with TickerProviderStat
   VoiceService? _voice;
   int? _unlocked; // المرحلة التي فُتحت بهذا الفوز
   bool _autoStageTried = false;
+
+  // ملخّص الجلسة (كل المهمّات في هذه الغرفة) — يظهر عند الخروج
+  int _sumGames = 0, _sumWins = 0, _sumStars = 0, _sumXp = 0;
+  int? _sumBest;
+  final Set<int> _sumStages = {};
 
   GameController get c => widget.controller;
 
@@ -109,7 +115,9 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with TickerProviderStat
       final p = await ref.read(teamProgressProvider(partner).future);
       final st = c.state;
       if (!mounted || st == null || st.phase != 'lobby' || st.stage > 0) return;
-      c.chooseStage(p.current < 1 ? 1 : p.current);
+      final want = c.preferredStage;
+      // مرحلة مختارة مسبقاً (إعادة لتحسين النجوم) إن كانت مفتوحة لهذا الفريق، وإلا مرحلة الفريق الحالية.
+      c.chooseStage(want != null && want >= 1 && p.unlocked(want) ? want : (p.current < 1 ? 1 : p.current));
     } catch (_) {
       _autoStageTried = false;
     }
@@ -133,6 +141,14 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with TickerProviderStat
       final stage = s.stage;
       _unlocked = null;
       ref.read(progressProvider.notifier).record(won: won, finishedIn: s.finishedIn, stars: stars, mission: stage, coins: 0);
+      _sumGames++;
+      _sumXp += xpForSession(won: won, errors: s.errors, hints: s.hints, stage: stage);
+      if (won) {
+        _sumWins++;
+        _sumStars += stars;
+        if (stage > 0) _sumStages.add(stage);
+        if (_sumBest == null || s.finishedIn < _sumBest!) _sumBest = s.finishedIn;
+      }
       if (won && stage > 0) {
         final partner = c.online ? c.partnerUid : null;
         if (!c.online || partner != null) {
@@ -238,6 +254,11 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with TickerProviderStat
       final ok = await confirmDialog(context,
           title: 'إلغاء المهمّة؟', body: 'ستخسر تقدّمك في هذه المهمّة.', confirm: 'انسحاب');
       if (!ok || !mounted) return;
+    }
+    if (_sumGames > 0) {
+      await showSessionSummary(context,
+          games: _sumGames, wins: _sumWins, stars: _sumStars, xp: _sumXp, best: _sumBest, stages: _sumStages.toList()..sort());
+      if (!mounted) return;
     }
     context.pop();
   }
@@ -1204,6 +1225,25 @@ class _End extends ConsumerWidget {
               _Row('العملية', codenameFor(s.seed)),
             ]),
           ),
+          if (won && s.stage > 0 && stars < 3) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(K.radius),
+                border: Border.all(color: K.neon.withAlpha(110)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.star_half_rounded, color: K.neon),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                      'للحصول على ★★★: افتحاها بلا أي خطأ وفي أقلّ من 5 دقائق. أعيداها الآن أو لاحقاً من «فريقي» — لن يتغيّر تقدّمكما.',
+                      style: const TextStyle(fontSize: 12.5, height: 1.5, color: K.text2)),
+                ),
+              ]),
+            ),
+          ],
           const SizedBox(height: 20),
           if (c.isHost && won && s.stage > 0) ...[
             NeonButton(label: 'المرحلة التالية ${s.stage + 1}', icon: Icons.arrow_back, onTap: () => _next(context, ref, s.stage + 1)),
