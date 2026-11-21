@@ -965,3 +965,105 @@ Future<Uint8List> buildCloturePaie({required Atelier atelier, required DateTime 
   }
   return doc.save();
 }
+
+// ============================================================== fiche de livraison d'un paquet de broderie
+
+/// Fiche remise à l'atelier de couture quand un paquet brodé est livré.
+Future<Uint8List> buildFicheLot({
+  required Atelier atelier,
+  required String numero,
+  required int nbPieces,
+  required String? dessinNom,
+  required int dessinPoints,
+  required String? dessinPhotoUrl,
+  required String? machineNom,
+  required String? fil,
+  required String? note,
+  required DateTime? debut,
+  required DateTime? livraison,
+  required List<(String, String, int, int)> parOuvrier, // nom, équipes, points, pièces
+  required List<(DateTime, String, String, int, int)> jours, // date, équipe, ouvrier, points, pièces
+}) async {
+  final doc = await _nouveau(atelier, 'Paquet {0}'.trf([numero]));
+  final theme = await _pdfTheme();
+  pw.ImageProvider? photo;
+  if (dessinPhotoUrl != null) {
+    try {
+      photo = await networkImage(dessinPhotoUrl);
+    } catch (_) {}
+  }
+  final fin = livraison ?? DateTime.now();
+  final duree = debut == null ? 0 : DateTime(fin.year, fin.month, fin.day).difference(DateTime(debut.year, debut.month, debut.day)).inDays + 1;
+  final pieces = parOuvrier.fold<int>(0, (s, x) => s + x.$4);
+  final points = parOuvrier.fold<int>(0, (s, x) => s + x.$3);
+
+  pw.Widget info(String k, String v) => pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 3),
+        child: pw.Row(children: [
+          pw.SizedBox(width: 120, child: pw.Text(k, style: const pw.TextStyle(color: _grey, fontSize: 10))),
+          pw.Expanded(child: pw.Text(v, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11))),
+        ]),
+      );
+
+  doc.addPage(pw.MultiPage(
+    pageTheme: _page(theme),
+    footer: (ctx) => _footer(ctx, atelier),
+    build: (ctx) => [
+      _entete(atelier, 'FICHE DE LIVRAISON BRODERIE'.tr, [
+        ['N°'.tr, numero],
+        ['Date de livraison'.tr, livraison == null ? '—' : fmtDate(livraison)],
+      ]),
+      pw.SizedBox(height: 16),
+      pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Expanded(
+          child: pw.Container(
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(color: _goldLight, borderRadius: pw.BorderRadius.circular(8)),
+            child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+              info('Paquet'.tr, '#$numero'),
+              info('Pièces confiées'.tr, '$nbPieces'),
+              info('Pièces brodées'.tr, '$pieces'),
+              info('Rechma (dessin)'.tr, dessinNom == null ? '—' : '$dessinNom · ${fmtInt(dessinPoints)} ${'points'.tr}'),
+              if (machineNom != null) info('Machine'.tr, machineNom),
+              if (fil != null && fil.isNotEmpty) info('Fil'.tr, fil),
+              info('Début de la broderie'.tr, debut == null ? '—' : fmtDate(debut)),
+              info('Durée en broderie'.tr, duree == 0 ? '—' : '{0} jour(s)'.trf([duree])),
+              info('Total des points'.tr, fmtInt(points)),
+            ]),
+          ),
+        ),
+        if (photo != null) ...[
+          pw.SizedBox(width: 14),
+          pw.Container(
+            width: 150,
+            height: 150,
+            decoration: pw.BoxDecoration(border: pw.Border.all(color: _line), borderRadius: pw.BorderRadius.circular(8)),
+            child: pw.ClipRRect(horizontalRadius: 8, verticalRadius: 8, child: pw.Image(photo, fit: pw.BoxFit.cover)),
+          ),
+        ],
+      ]),
+      pw.SizedBox(height: 18),
+      pw.Text('BRODEURS'.tr, style: _label()),
+      pw.SizedBox(height: 6),
+      _tableau(
+        ['Brodeur'.tr, 'Équipe'.tr, 'Points'.tr, 'Pièces'.tr],
+        [for (final o in parOuvrier) [o.$1, o.$2, fmtInt(o.$3), '${o.$4}']],
+        widths: const {0: pw.FlexColumnWidth(2), 1: pw.FlexColumnWidth(1.2), 2: pw.FlexColumnWidth(1.2), 3: pw.FlexColumnWidth()},
+        droite: {2, 3},
+      ),
+      pw.SizedBox(height: 16),
+      pw.Text('DÉTAIL PAR JOUR'.tr, style: _label()),
+      pw.SizedBox(height: 6),
+      _tableau(
+        ['Date'.tr, 'Équipe'.tr, 'Brodeur'.tr, 'Points'.tr, 'Pièces'.tr],
+        [for (final j in jours) [fmtDate(j.$1), j.$2, j.$3, fmtInt(j.$4), '${j.$5}']],
+        widths: const {0: pw.FlexColumnWidth(1.2), 1: pw.FlexColumnWidth(), 2: pw.FlexColumnWidth(2), 3: pw.FlexColumnWidth(1.2), 4: pw.FlexColumnWidth()},
+        droite: {3, 4},
+      ),
+      if (note != null && note.isNotEmpty) ...[pw.SizedBox(height: 12), pw.Text('Remarque : {0}'.trf([note]), style: const pw.TextStyle(fontSize: 10))],
+      pw.SizedBox(height: 30),
+      _signatures(const ['Atelier de broderie', 'Reçu par (couture)']),
+    ],
+  ));
+  return doc.save();
+}

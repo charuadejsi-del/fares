@@ -146,12 +146,12 @@ class _ProductionScreenState extends State<ProductionScreen> {
 }
 
 /// Ouvre le formulaire détaillé (ajout ou modification).
-Future<void> openProductionForm(BuildContext context, [Production? p]) async {
+Future<void> openProductionForm(BuildContext context, [Production? p, String? lotId]) async {
   if (p == null && data.ouvriers.where((o) => o.actif && o.brodeur).isEmpty) {
     showSnack(context, 'Ajoutez d\'abord un brodeur (mode de paie « Points »).'.tr, error: true);
     return;
   }
-  final saved = await showDialog<bool>(context: context, builder: (_) => ProductionForm(existing: p));
+  final saved = await showDialog<bool>(context: context, builder: (_) => ProductionForm(existing: p, lotId: lotId));
   if (saved == true && context.mounted) showSnack(context, p == null ? 'Saisie enregistrée'.tr : 'Saisie modifiée'.tr);
 }
 
@@ -239,7 +239,8 @@ class ProductionTile extends StatelessWidget {
 /// Formulaire d'ajout / modification d'un relevé de compteur.
 class ProductionForm extends StatefulWidget {
   final Production? existing;
-  const ProductionForm({super.key, this.existing});
+  final String? lotId;
+  const ProductionForm({super.key, this.existing, this.lotId});
 
   @override
   State<ProductionForm> createState() => _ProductionFormState();
@@ -253,10 +254,22 @@ class _ProductionFormState extends State<ProductionForm> {
   String? _typeId;
   String? _machineId;
   String? _dessinId;
+  String? _lotId;
   final _points = TextEditingController();
   final _robes = TextEditingController();
   final _note = TextEditingController();
   bool _busy = false;
+
+  void _choisirLot(String? id) {
+    setState(() {
+      _lotId = id;
+      final l = data.lot(id);
+      if (l != null) {
+        if (data.dessin(l.dessinId) != null) _dessinId = l.dessinId;
+        if (data.machine(l.machineId) != null) _machineId = l.machineId;
+      }
+    });
+  }
 
   Production? get _ex => widget.existing;
 
@@ -273,6 +286,12 @@ class _ProductionFormState extends State<ProductionForm> {
     _dessinId = data.dessin(e?.dessinId) == null ? null : e?.dessinId;
     if (e != null) _points.text = ThousandsFormatter().formatEditUpdate(TextEditingValue.empty, TextEditingValue(text: '${e.totalPoints}')).text;
     if (e?.nbRobes != null) _robes.text = '${e!.nbRobes}';
+    _lotId = e?.lotId ?? widget.lotId;
+    if (e == null && widget.lotId != null) {
+      final l = data.lot(widget.lotId);
+      if (data.dessin(l?.dessinId) != null) _dessinId = l!.dessinId;
+      if (data.machine(l?.machineId) != null) _machineId = l!.machineId;
+    }
     _note.text = e?.note ?? '';
     _points.addListener(() => setState(() {}));
   }
@@ -300,6 +319,7 @@ class _ProductionFormState extends State<ProductionForm> {
     try {
       await data.saveProduction(
         Production.toRow(
+          lotId: _lotId,
           dateKey: dateKey(_date),
           equipe: _equipe,
           ouvrierId: _ouvrierId!,
@@ -393,6 +413,23 @@ class _ProductionFormState extends State<ProductionForm> {
                 },
               ),
               const SizedBox(height: 12),
+              if (data.lots.isNotEmpty) ...[
+                DropdownButtonFormField<String?>(
+                  value: data.lot(_lotId) == null ? null : _lotId,
+                  isExpanded: true,
+                  decoration: InputDecoration(labelText: 'Paquet (facultatif)'.tr, prefixIcon: const Icon(Icons.inventory_2_outlined)),
+                  items: [
+                    const DropdownMenuItem<String?>(value: null, child: Text('—')),
+                    for (final l in data.lots.where((l) => !l.livre || l.id == _lotId))
+                      DropdownMenuItem<String?>(
+                        value: l.id,
+                        child: Text('{0} · {1} / {2} pièces'.trf(['#${l.numero}', data.avancement(l.id).pieces, l.nbPieces])),
+                      ),
+                  ],
+                  onChanged: _choisirLot,
+                ),
+                const SizedBox(height: 12),
+              ],
               if (machines.isNotEmpty) ...[
                 DropdownButtonFormField<String?>(
                   value: _machineId,
@@ -422,7 +459,13 @@ class _ProductionFormState extends State<ProductionForm> {
                 controller: _robes,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: InputDecoration(labelText: 'Nombre de robes (facultatif)'.tr, prefixIcon: Icon(Icons.checkroom_rounded)),
+                decoration: InputDecoration(
+                  labelText: _lotId != null ? 'Pièces terminées ce jour'.tr : 'Nombre de robes (facultatif)'.tr,
+                  helperText: data.lot(_lotId) == null
+                      ? null
+                      : 'Reste {0} pièces dans le paquet'.trf([data.lot(_lotId)!.nbPieces - data.avancement(_lotId!).pieces + (_ex?.lotId == _lotId ? (_ex?.nbRobes ?? 0) : 0)]),
+                  prefixIcon: const Icon(Icons.checkroom_rounded),
+                ),
               ),
               const SizedBox(height: 12),
               TextFormField(controller: _note, decoration: InputDecoration(labelText: 'Remarque (facultatif)'.tr, prefixIcon: Icon(Icons.notes))),

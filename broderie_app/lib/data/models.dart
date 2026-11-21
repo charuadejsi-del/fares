@@ -390,6 +390,7 @@ class Production {
   final double montant;
   final String? note;
   final DateTime createdAt;
+  final String? lotId;
 
   const Production({
     required this.id,
@@ -405,6 +406,7 @@ class Production {
     required this.montant,
     this.note,
     required this.createdAt,
+    this.lotId,
   });
 
   factory Production.fromMap(Map<String, dynamic> m) => Production(
@@ -421,9 +423,11 @@ class Production {
         montant: _toD(m['montant']),
         note: m['note'] as String?,
         createdAt: DateTime.tryParse((m['created_at'] ?? '') as String) ?? DateTime.now(),
+        lotId: m['lot_id'] as String?,
       );
 
   static Map<String, dynamic> toRow({
+    String? lotId,
     required String dateKey,
     required Equipe equipe,
     required String ouvrierId,
@@ -447,5 +451,71 @@ class Production {
         'total_points': totalPoints,
         'tarif_1000': tarif1000,
         'note': _nullIfEmpty(note),
+        'lot_id': lotId,
       };
+}
+
+/// Paquet de pièces coupées confié à l'atelier de broderie (ex. paquet n° 53, 128 pièces).
+class Lot {
+  final String id;
+  final String numero;
+  final int nbPieces;
+  final String? dessinId;
+  final String? machineId;
+  final String? fil;
+  final String? note;
+  final DateTime? dateLivraison;
+  final DateTime createdAt;
+
+  const Lot({
+    required this.id,
+    required this.numero,
+    required this.nbPieces,
+    this.dessinId,
+    this.machineId,
+    this.fil,
+    this.note,
+    this.dateLivraison,
+    required this.createdAt,
+  });
+
+  bool get livre => dateLivraison != null;
+
+  factory Lot.fromMap(Map<String, dynamic> m) => Lot(
+        id: m['id'] as String,
+        numero: (m['numero'] ?? '') as String,
+        nbPieces: _toI(m['nb_pieces']),
+        dessinId: m['dessin_id'] as String?,
+        machineId: m['machine_id'] as String?,
+        fil: m['fil'] as String?,
+        note: m['note'] as String?,
+        dateLivraison: m['date_livraison'] == null ? null : DateTime.parse(m['date_livraison'] as String),
+        createdAt: DateTime.tryParse((m['created_at'] ?? '') as String) ?? DateTime.now(),
+      );
+
+  static Map<String, dynamic> toRow({
+    required String numero,
+    required int nbPieces,
+    String? dessinId,
+    String? machineId,
+    String? fil,
+    String? note,
+  }) =>
+      {
+        'numero': numero.trim(),
+        'nb_pieces': nbPieces,
+        'dessin_id': dessinId,
+        'machine_id': machineId,
+        'fil': _nullIfEmpty(fil),
+        'note': _nullIfEmpty(note),
+      };
+}
+
+/// Avancement d'un paquet, calculé à partir des saisies journalières.
+class AvancementLot {
+  int pieces = 0;
+  int points = 0;
+  DateTime? debut;
+  DateTime? dernier;
+  final Set<String> ouvriers = {};
 }

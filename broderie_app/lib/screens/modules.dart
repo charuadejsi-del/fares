@@ -9,6 +9,7 @@ import 'refs_screens.dart';
 import 'stock/clients_screen.dart';
 import 'stock/commandes_screen.dart';
 import 'stock/ventes_screen.dart';
+import 'lots_screen.dart';
 import 'travaux_screens.dart';
 import '../i18n.dart';
 
@@ -83,6 +84,7 @@ class BroderieModule extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _Onglets([
         ('Saisie'.tr, Icons.add_circle_outline_rounded, QuickEntryScreen(onGoToRefs: onGoToOuvriers)),
+        ('Paquets'.tr, Icons.inventory_2_rounded, const LotsScreen()),
         ('Historique'.tr, Icons.history_rounded, const ProductionScreen()),
         ('Statistiques'.tr, Icons.insights_rounded, const DashboardScreen()),
         ('Dessins'.tr, Icons.local_florist_outlined, const DessinsScreen()),

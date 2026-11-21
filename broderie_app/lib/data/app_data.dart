@@ -18,6 +18,8 @@ class AppData extends ChangeNotifier {
   List<Machine> machines = [];
   List<TypeTravail> types = [];
   List<Tache> taches = [];
+  List<Lot> lots = [];
+  Map<String, AvancementLot> avancements = {};
   Map<String, Solde> soldes = {};
   bool refsLoaded = false;
 
@@ -41,6 +43,8 @@ class AppData extends ChangeNotifier {
   Machine? machine(String? id) => _find(machines, id, (m) => m.id);
   TypeTravail? type(String? id) => _find(types, id, (t) => t.id);
   Tache? tache(String? id) => _find(taches, id, (t) => t.id);
+  Lot? lot(String? id) => _find(lots, id, (l) => l.id);
+  AvancementLot avancement(String id) => avancements[id] ?? AvancementLot();
 
   /// Tâches actives d'un département (toutes si aucune ne correspond).
   List<Tache> tachesPour(String departement) {
@@ -89,7 +93,7 @@ class AppData extends ChangeNotifier {
       ]).select();
       types = rows.map(TypeTravail.fromMap).toList()..sort((a, b) => a.ordre.compareTo(b.ordre));
     }
-    await Future.wait([_loadSoldes(), loadTaches(notify: false)]);
+    await Future.wait([_loadSoldes(), loadTaches(notify: false), loadLots(notify: false)]);
     refsLoaded = true;
     notifyListeners();
   }
@@ -118,6 +122,59 @@ class AppData extends ChangeNotifier {
       taches = [];
     }
     if (notify) notifyListeners();
+  }
+
+  /// Paquets de broderie et leur avancement (tolérant si la table n'existe pas).
+  Future<void> loadLots({bool notify = true}) async {
+    try {
+      final res = await Future.wait([
+        _db.from('broderie_lots').select().order('created_at', ascending: false),
+        _db.from('broderie_production').select('lot_id, nb_robes, total_points, date_prod, ouvrier_id').not('lot_id', 'is', null),
+      ]);
+      lots = res[0].map(Lot.fromMap).toList();
+      final av = <String, AvancementLot>{};
+      for (final r in res[1]) {
+        final a = av.putIfAbsent(r['lot_id'] as String, AvancementLot.new);
+        a.pieces += (r['nb_robes'] as num?)?.toInt() ?? 0;
+        a.points += (r['total_points'] as num?)?.toInt() ?? 0;
+        final d = DateTime.parse(r['date_prod'] as String);
+        if (a.debut == null || d.isBefore(a.debut!)) a.debut = d;
+        if (a.dernier == null || d.isAfter(a.dernier!)) a.dernier = d;
+        a.ouvriers.add(r['ouvrier_id'] as String);
+      }
+      avancements = av;
+    } catch (_) {
+      lots = [];
+      avancements = {};
+    }
+    if (notify) notifyListeners();
+  }
+
+  Future<String> saveLot(Map<String, dynamic> row, {String? id}) async {
+    late String rid;
+    if (id == null) {
+      rid = (await _db.from('broderie_lots').insert(row).select('id').single())['id'] as String;
+    } else {
+      await _db.from('broderie_lots').update(row).eq('id', id);
+      rid = id;
+    }
+    await loadLots();
+    return rid;
+  }
+
+  Future<void> livrerLot(String id, DateTime? date) async {
+    await _db.from('broderie_lots').update({'date_livraison': date == null ? null : dateKey(date)}).eq('id', id);
+    await loadLots();
+  }
+
+  Future<void> deleteLot(String id) async {
+    await _db.from('broderie_lots').delete().eq('id', id);
+    await loadLots();
+  }
+
+  Future<List<Production>> fetchProductionLot(String lotId) async {
+    final rows = await _db.from('broderie_production').select().eq('lot_id', lotId).order('date_prod').order('created_at');
+    return rows.map(Production.fromMap).toList();
   }
 
   Future<void> saveTache(Map<String, dynamic> row, {String? id}) async {
@@ -152,6 +209,8 @@ class AppData extends ChangeNotifier {
     machines = [];
     types = [];
     taches = [];
+    lots = [];
+    avancements = {};
     soldes = {};
     refsLoaded = false;
     productionVersion = 0;
@@ -197,7 +256,7 @@ class AppData extends ChangeNotifier {
 
   void _productionChanged() {
     productionVersion++;
-    _loadSoldes().whenComplete(notifyListeners);
+    Future.wait([_loadSoldes(), loadLots(notify: false)]).whenComplete(notifyListeners);
     notifyListeners();
   }
 

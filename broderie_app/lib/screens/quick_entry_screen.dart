@@ -32,6 +32,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
   String? _typeId;
   String? _machineId;
   String? _dessinId;
+  String? _lotId;
   late Equipe _equipe;
   late DateTime _date;
   final _points = TextEditingController();
@@ -96,6 +97,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
     setState(() => _busy = true);
     try {
       await data.saveProduction(Production.toRow(
+        lotId: _lotId,
         dateKey: dateKey(_date),
         equipe: _equipe,
         ouvrierId: o.id,
@@ -115,6 +117,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
           _robes.clear();
           _note.clear();
           _dessinId = null;
+          _lotId = null;
           _ouvrierId = null;
           _typeId = null;
         });
@@ -273,8 +276,31 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
                   child: ExpansionTile(
                     tilePadding: EdgeInsets.zero,
                     title: Text('Détails facultatifs'.tr, style: TextStyle(color: context.pal.muted, fontSize: 14)),
-                    subtitle: Text('Dessin, nombre de robes, remarque'.tr, style: TextStyle(color: context.pal.muted, fontSize: 12)),
+                    subtitle: Text('Paquet, dessin, nombre de robes, remarque'.tr, style: TextStyle(color: context.pal.muted, fontSize: 12)),
+                    initiallyExpanded: data.lots.any((l) => !l.livre),
                     children: [
+                      if (data.lots.any((l) => !l.livre)) ...[
+                        DropdownButtonFormField<String?>(
+                          value: data.lot(_lotId) == null ? null : _lotId,
+                          isExpanded: true,
+                          decoration: InputDecoration(labelText: 'Paquet'.tr, prefixIcon: const Icon(Icons.inventory_2_outlined)),
+                          items: [
+                            const DropdownMenuItem<String?>(value: null, child: Text('—')),
+                            for (final l in data.lots.where((l) => !l.livre))
+                              DropdownMenuItem<String?>(
+                                value: l.id,
+                                child: Text('{0} · {1} / {2} pièces'.trf(['#${l.numero}', data.avancement(l.id).pieces, l.nbPieces])),
+                              ),
+                          ],
+                          onChanged: (v) => setState(() {
+                            _lotId = v;
+                            final l = data.lot(v);
+                            if (l != null && data.dessin(l.dessinId) != null) _dessinId = l.dessinId;
+                            if (l != null && data.machine(l.machineId) != null) _machineId = l.machineId;
+                          }),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
                       DropdownButtonFormField<String?>(
                         value: _dessinId,
                         isExpanded: true,
@@ -290,7 +316,13 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
                         controller: _robes,
                         keyboardType: TextInputType.number,
                         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        decoration: InputDecoration(labelText: 'Nombre de robes'.tr, prefixIcon: Icon(Icons.checkroom_rounded)),
+                        decoration: InputDecoration(
+                          labelText: _lotId != null ? 'Pièces terminées ce jour'.tr : 'Nombre de robes'.tr,
+                          helperText: data.lot(_lotId) == null
+                              ? null
+                              : 'Reste {0} pièces dans le paquet'.trf([data.lot(_lotId)!.nbPieces - data.avancement(_lotId!).pieces]),
+                          prefixIcon: const Icon(Icons.checkroom_rounded),
+                        ),
                       ),
                       const SizedBox(height: 10),
                       TextField(controller: _note, decoration: InputDecoration(labelText: 'Remarque'.tr, prefixIcon: Icon(Icons.notes))),
