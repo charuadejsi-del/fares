@@ -425,6 +425,16 @@ class AppData extends ChangeNotifier {
     }
   }
 
+  /// Octets d'une photo de dessin (pour les PDF), ou null.
+  Future<Uint8List?> photoBytes(String? path) async {
+    if (path == null || path.isEmpty) return null;
+    try {
+      return await _db.storage.from(_bucket).download(path);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<String> uploadPhoto(String dessinId, Uint8List bytes, String ext) async {
     final uid = session.atelierId ?? _db.auth.currentUser!.id;
     final e = ext.toLowerCase().replaceAll('.', '');

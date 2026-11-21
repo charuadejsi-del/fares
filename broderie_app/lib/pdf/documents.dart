@@ -968,101 +968,216 @@ Future<Uint8List> buildCloturePaie({required Atelier atelier, required DateTime 
 
 // ============================================================== fiche de livraison d'un paquet de broderie
 
+const _red2 = PdfColor.fromInt(0xFFE5486B);
+
 /// Fiche remise à l'atelier de couture quand un paquet brodé est livré.
+/// Uniquement des pièces (pas de points par brodeur) + les points de la rechma.
 Future<Uint8List> buildFicheLot({
   required Atelier atelier,
   required String numero,
   required int nbPieces,
   required String? dessinNom,
   required int dessinPoints,
-  required String? dessinPhotoUrl,
+  required Uint8List? dessinPhoto,
   required String? machineNom,
   required String? fil,
   required String? note,
   required DateTime? debut,
   required DateTime? livraison,
-  required List<(String, String, int, int)> parOuvrier, // nom, équipes, points, pièces
-  required List<(DateTime, String, String, int, int)> jours, // date, équipe, ouvrier, points, pièces
+  required List<(String, String, int, int)> parOuvrier, // nom, équipes, jours, pièces
+  required List<(DateTime, String, String, int)> jours, // date, équipe, brodeur, pièces
 }) async {
   final doc = await _nouveau(atelier, 'Paquet {0}'.trf([numero]));
   final theme = await _pdfTheme();
-  pw.ImageProvider? photo;
-  if (dessinPhotoUrl != null) {
-    try {
-      photo = await networkImage(dessinPhotoUrl);
-    } catch (_) {}
-  }
   final fin = livraison ?? DateTime.now();
   final duree = debut == null ? 0 : DateTime(fin.year, fin.month, fin.day).difference(DateTime(debut.year, debut.month, debut.day)).inDays + 1;
-  final pieces = parOuvrier.fold<int>(0, (s, x) => s + x.$4);
-  final points = parOuvrier.fold<int>(0, (s, x) => s + x.$3);
+  final brodees = parOuvrier.fold<int>(0, (s, x) => s + x.$4);
+  final ecart = brodees - nbPieces;
+  final ok = ecart == 0;
+  final cEcart = ok ? _green : _red2;
 
-  pw.Widget info(String k, String v) => pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(vertical: 3),
-        child: pw.Row(children: [
-          pw.SizedBox(width: 120, child: pw.Text(k, style: const pw.TextStyle(color: _grey, fontSize: 10))),
-          pw.Expanded(child: pw.Text(v, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11))),
+  pw.Widget grandeCase(String titre, String valeur, PdfColor fond, PdfColor texte, {PdfColor? bord}) => pw.Expanded(
+        child: pw.Container(
+          height: 92,
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(
+            color: fond,
+            borderRadius: pw.BorderRadius.circular(12),
+            border: bord == null ? null : pw.Border.all(color: bord, width: 2),
+          ),
+          child: pw.Column(mainAxisAlignment: pw.MainAxisAlignment.center, children: [
+            pw.Text(titre.toUpperCase(), style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: texte, letterSpacing: 1)),
+            pw.SizedBox(height: 6),
+            pw.Text(valeur, style: pw.TextStyle(fontSize: 34, fontWeight: pw.FontWeight.bold, color: texte)),
+          ]),
+        ),
+      );
+
+  pw.Widget puce(String k, String v) => pw.Container(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: pw.BoxDecoration(border: pw.Border.all(color: _line), borderRadius: pw.BorderRadius.circular(8)),
+        child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.Text(k, style: const pw.TextStyle(fontSize: 8, color: _grey)),
+          pw.SizedBox(height: 2),
+          pw.Text(v, style: pw.TextStyle(fontSize: 11.5, fontWeight: pw.FontWeight.bold, color: _ink)),
         ]),
+      );
+
+  pw.Widget titreSection(String t) => pw.Padding(
+        padding: const pw.EdgeInsets.only(top: 16, bottom: 6),
+        child: pw.Row(children: [
+          pw.Container(width: 4, height: 14, color: _gold),
+          pw.SizedBox(width: 8),
+          pw.Text(t, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: _ink)),
+        ]),
+      );
+
+  pw.Widget signature(String titre) => pw.Expanded(
+        child: pw.Container(
+          height: 104,
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(border: pw.Border.all(color: _ink, width: 1.2), borderRadius: pw.BorderRadius.circular(10)),
+          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text(titre.toUpperCase(), style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: _gold, letterSpacing: 1)),
+            pw.SizedBox(height: 10),
+            pw.Text('{0} ......................................'.trf(['Nom :'.tr]), style: const pw.TextStyle(fontSize: 9.5)),
+            pw.SizedBox(height: 8),
+            pw.Text('{0} ......................................'.trf(['Date :'.tr]), style: const pw.TextStyle(fontSize: 9.5)),
+            pw.Spacer(),
+            pw.Text('Signature'.tr, style: const pw.TextStyle(fontSize: 8, color: _grey)),
+          ]),
+        ),
       );
 
   doc.addPage(pw.MultiPage(
     pageTheme: _page(theme),
     footer: (ctx) => _footer(ctx, atelier),
     build: (ctx) => [
-      _entete(atelier, 'FICHE DE LIVRAISON BRODERIE'.tr, [
-        ['N°'.tr, numero],
-        ['Date de livraison'.tr, livraison == null ? '—' : fmtDate(livraison)],
-      ]),
-      pw.SizedBox(height: 16),
-      pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-        pw.Expanded(
-          child: pw.Container(
-            padding: const pw.EdgeInsets.all(12),
-            decoration: pw.BoxDecoration(color: _goldLight, borderRadius: pw.BorderRadius.circular(8)),
+      // ---- bandeau
+      pw.Container(
+        padding: const pw.EdgeInsets.fromLTRB(18, 14, 18, 14),
+        decoration: pw.BoxDecoration(color: _ink, borderRadius: pw.BorderRadius.circular(14)),
+        child: pw.Row(children: [
+          if (_logo != null) ...[
+            pw.Container(
+              width: 46,
+              height: 46,
+              padding: const pw.EdgeInsets.all(4),
+              decoration: pw.BoxDecoration(color: PdfColors.white, borderRadius: pw.BorderRadius.circular(10)),
+              child: pw.Image(pw.MemoryImage(_logo!), fit: pw.BoxFit.contain),
+            ),
+            pw.SizedBox(width: 12),
+          ],
+          pw.Expanded(
             child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-              info('Paquet'.tr, '#$numero'),
-              info('Pièces confiées'.tr, '$nbPieces'),
-              info('Pièces brodées'.tr, '$pieces'),
-              info('Rechma (dessin)'.tr, dessinNom == null ? '—' : '$dessinNom · ${fmtInt(dessinPoints)} ${'points'.tr}'),
-              if (machineNom != null) info('Machine'.tr, machineNom),
-              if (fil != null && fil.isNotEmpty) info('Fil'.tr, fil),
-              info('Début de la broderie'.tr, debut == null ? '—' : fmtDate(debut)),
-              info('Durée en broderie'.tr, duree == 0 ? '—' : '{0} jour(s)'.trf([duree])),
-              info('Total des points'.tr, fmtInt(points)),
+              pw.Text(atelier.nom.toUpperCase(), style: pw.TextStyle(color: _gold, fontSize: 10, fontWeight: pw.FontWeight.bold, letterSpacing: 1.5)),
+              pw.SizedBox(height: 3),
+              pw.Text('FICHE DE LIVRAISON BRODERIE'.tr, style: pw.TextStyle(color: PdfColors.white, fontSize: 19, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 2),
+              pw.Text('Broderie → Couture'.tr, style: const pw.TextStyle(color: PdfColor.fromInt(0xFFB7BDCB), fontSize: 9)),
             ]),
           ),
-        ),
-        if (photo != null) ...[
-          pw.SizedBox(width: 14),
           pw.Container(
-            width: 150,
-            height: 150,
-            decoration: pw.BoxDecoration(border: pw.Border.all(color: _line), borderRadius: pw.BorderRadius.circular(8)),
-            child: pw.ClipRRect(horizontalRadius: 8, verticalRadius: 8, child: pw.Image(photo, fit: pw.BoxFit.cover)),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: pw.BoxDecoration(color: _gold, borderRadius: pw.BorderRadius.circular(12)),
+            child: pw.Column(children: [
+              pw.Text('PAQUET'.tr, style: pw.TextStyle(color: _ink, fontSize: 8, fontWeight: pw.FontWeight.bold, letterSpacing: 1.5)),
+              pw.Text('#$numero', style: pw.TextStyle(color: _ink, fontSize: 30, fontWeight: pw.FontWeight.bold)),
+            ]),
           ),
-        ],
+        ]),
+      ),
+      pw.SizedBox(height: 14),
+      // ---- rechma
+      pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Container(
+          width: 170,
+          height: 170,
+          decoration: pw.BoxDecoration(
+            color: _goldLight,
+            borderRadius: pw.BorderRadius.circular(14),
+            border: pw.Border.all(color: _gold, width: 2),
+          ),
+          child: dessinPhoto != null
+              ? pw.ClipRRect(horizontalRadius: 12, verticalRadius: 12, child: pw.Image(pw.MemoryImage(dessinPhoto), fit: pw.BoxFit.cover))
+              : pw.Center(child: pw.Text('Pas de photo'.tr, style: const pw.TextStyle(color: _grey, fontSize: 10))),
+        ),
+        pw.SizedBox(width: 16),
+        pw.Expanded(
+          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text('RECHMA'.tr, style: _label()),
+            pw.SizedBox(height: 4),
+            pw.Text(dessinNom ?? '—', style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold, color: _ink)),
+            pw.SizedBox(height: 8),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: pw.BoxDecoration(color: _ink, borderRadius: pw.BorderRadius.circular(20)),
+              child: pw.Text('{0} points par pièce'.trf([fmtInt(dessinPoints)]),
+                  style: pw.TextStyle(color: _gold, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+            ),
+            pw.SizedBox(height: 12),
+            pw.Wrap(spacing: 8, runSpacing: 8, children: [
+              if (machineNom != null) puce('Machine'.tr, machineNom),
+              if (fil != null && fil.isNotEmpty) puce('Fil'.tr, fil),
+              puce('Début'.tr, debut == null ? '—' : fmtDate(debut)),
+              puce('Livraison'.tr, livraison == null ? '—' : fmtDate(livraison)),
+              puce('Durée'.tr, duree == 0 ? '—' : '{0} jour(s)'.trf([duree])),
+            ]),
+          ]),
+        ),
       ]),
-      pw.SizedBox(height: 18),
-      pw.Text('BRODEURS'.tr, style: _label()),
-      pw.SizedBox(height: 6),
-      _tableau(
-        ['Brodeur'.tr, 'Équipe'.tr, 'Points'.tr, 'Pièces'.tr],
-        [for (final o in parOuvrier) [o.$1, o.$2, fmtInt(o.$3), '${o.$4}']],
-        widths: const {0: pw.FlexColumnWidth(2), 1: pw.FlexColumnWidth(1.2), 2: pw.FlexColumnWidth(1.2), 3: pw.FlexColumnWidth()},
-        droite: {2, 3},
-      ),
       pw.SizedBox(height: 16),
-      pw.Text('DÉTAIL PAR JOUR'.tr, style: _label()),
-      pw.SizedBox(height: 6),
+      // ---- comptage
+      pw.Row(children: [
+        grandeCase('Pièces reçues'.tr, '$nbPieces', _goldLight, _ink, bord: _gold),
+        pw.SizedBox(width: 10),
+        grandeCase('Pièces brodées'.tr, '$brodees', _ink, PdfColors.white),
+        pw.SizedBox(width: 10),
+        grandeCase('Écart'.tr, ok ? '0 ✓' : (ecart > 0 ? '+$ecart' : '$ecart'), PdfColors.white, cEcart, bord: cEcart),
+      ]),
+      if (!ok)
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 6),
+          child: pw.Text(ecart < 0 ? 'Attention : {0} pièce(s) manquante(s).'.trf([-ecart]) : 'Attention : {0} pièce(s) en plus.'.trf([ecart]),
+              style: pw.TextStyle(color: _red2, fontWeight: pw.FontWeight.bold, fontSize: 10)),
+        ),
+      // ---- brodeurs
+      titreSection('Brodeurs'.tr),
       _tableau(
-        ['Date'.tr, 'Équipe'.tr, 'Brodeur'.tr, 'Points'.tr, 'Pièces'.tr],
-        [for (final j in jours) [fmtDate(j.$1), j.$2, j.$3, fmtInt(j.$4), '${j.$5}']],
-        widths: const {0: pw.FlexColumnWidth(1.2), 1: pw.FlexColumnWidth(), 2: pw.FlexColumnWidth(2), 3: pw.FlexColumnWidth(1.2), 4: pw.FlexColumnWidth()},
-        droite: {3, 4},
+        ['Brodeur'.tr, 'Équipe'.tr, 'Jours'.tr, 'Pièces'.tr],
+        [for (final o in parOuvrier) [o.$1, o.$2, '${o.$3}', '${o.$4}']],
+        widths: const {0: pw.FlexColumnWidth(2.4), 1: pw.FlexColumnWidth(1.4), 2: pw.FlexColumnWidth(), 3: pw.FlexColumnWidth()},
+        centre: {2, 3},
       ),
-      if (note != null && note.isNotEmpty) ...[pw.SizedBox(height: 12), pw.Text('Remarque : {0}'.trf([note]), style: const pw.TextStyle(fontSize: 10))],
-      pw.SizedBox(height: 30),
-      _signatures(const ['Atelier de broderie', 'Reçu par (couture)']),
+      // ---- jours
+      titreSection('Détail par jour'.tr),
+      _tableau(
+        ['Date'.tr, 'Équipe'.tr, 'Brodeur'.tr, 'Pièces'.tr],
+        [for (final j in jours) [fmtDate(j.$1), j.$2, j.$3, '${j.$4}']],
+        widths: const {0: pw.FlexColumnWidth(1.3), 1: pw.FlexColumnWidth(1.2), 2: pw.FlexColumnWidth(2.4), 3: pw.FlexColumnWidth()},
+        centre: {3},
+      ),
+      if (note != null && note.isNotEmpty) ...[
+        pw.SizedBox(height: 10),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(color: _goldLight, borderRadius: pw.BorderRadius.circular(8)),
+          child: pw.Text('Remarque : {0}'.trf([note]), style: const pw.TextStyle(fontSize: 10)),
+        ),
+      ],
+      pw.SizedBox(height: 16),
+      // ---- contrôle + signatures
+      pw.Row(children: [
+        pw.Container(width: 14, height: 14, decoration: pw.BoxDecoration(border: pw.Border.all(color: _ink, width: 1.5), borderRadius: pw.BorderRadius.circular(3))),
+        pw.SizedBox(width: 8),
+        pw.Text('Pièces comptées et vérifiées à la réception'.tr, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+      ]),
+      pw.SizedBox(height: 12),
+      pw.Row(children: [
+        signature('Livré par (broderie)'.tr),
+        pw.SizedBox(width: 14),
+        signature('Reçu par (couture)'.tr),
+      ]),
     ],
   ));
   return doc.save();

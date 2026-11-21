@@ -354,14 +354,16 @@ class _LotDetailScreenState extends State<LotDetailScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
+  /// Par brodeur : (nom, équipes, jours, pièces).
   List<(String, String, int, int)> _parOuvrier() {
-    final m = <String, (Set<String>, int, int)>{};
+    final m = <String, (Set<String>, Set<String>, int)>{};
     for (final j in _prod) {
-      final a = m[j.p.ouvrierId] ?? (<String>{}, 0, 0);
+      final a = m[j.p.ouvrierId] ?? (<String>{}, <String>{}, 0);
       a.$1.add(j.p.equipe.label);
-      m[j.p.ouvrierId] = (a.$1, a.$2 + j.points, a.$3 + j.pieces);
+      a.$2.add(dateKey(j.p.dateProd));
+      m[j.p.ouvrierId] = (a.$1, a.$2, a.$3 + j.pieces);
     }
-    final l = [for (final e in m.entries) (data.ouvrierNom(e.key), e.value.$1.join(' / '), e.value.$2, e.value.$3)];
+    final l = [for (final e in m.entries) (data.ouvrierNom(e.key), e.value.$1.join(' / '), e.value.$2.length, e.value.$3)];
     l.sort((a, b) => b.$4.compareTo(a.$4));
     return l;
   }
@@ -377,14 +379,14 @@ class _LotDetailScreenState extends State<LotDetailScreen> {
         nbPieces: l.nbPieces,
         dessinNom: d?.nom,
         dessinPoints: d?.points ?? 0,
-        dessinPhotoUrl: await data.photoUrl(d?.photoPath),
+        dessinPhoto: await data.photoBytes(d?.photoPath),
         machineNom: data.machine(l.machineId)?.nom,
         fil: l.fil,
         note: l.note,
         debut: data.avancement(l.id).debut,
         livraison: l.dateLivraison,
         parOuvrier: _parOuvrier(),
-        jours: [for (final j in _prod) (j.p.dateProd, j.p.equipe.label, data.ouvrierNom(j.p.ouvrierId), j.points, j.pieces)],
+        jours: [for (final j in _prod) (j.p.dateProd, j.p.equipe.label, data.ouvrierNom(j.p.ouvrierId), j.pieces)],
       );
       final nom = 'Paquet_${l.numero}.pdf';
       partage ? await partager(bytes, nom) : await imprimer(bytes, nom);
@@ -541,7 +543,7 @@ class _LotDetailScreenState extends State<LotDetailScreen> {
             contentPadding: EdgeInsets.zero,
             leading: NameAvatar(o.$1, size: 38),
             title: Text(o.$1, style: const TextStyle(fontWeight: FontWeight.w800)),
-            subtitle: Text('{0} · {1} points'.trf([o.$2, fmtInt(o.$3)])),
+            subtitle: Text('{0} · {1} jour(s)'.trf([o.$2, o.$3])),
             trailing: Text('{0} pcs'.trf([o.$4]), style: const TextStyle(fontWeight: FontWeight.w900)),
           ),
       ]),
