@@ -173,6 +173,8 @@ class _CarteLot extends StatelessWidget {
         Text(
           [
             if (a.ouvriers.isNotEmpty) a.ouvriers.map(data.ouvrierNom).join(', '),
+            if (a.debut != null) 'début {0}'.trf([fmtShort(a.debut!)]),
+            if (a.fin != null) 'terminé {0}'.trf([fmtShort(a.fin!)]),
             if (_duree(l) > 0) '{0} jour(s)'.trf([_duree(l)]),
             if (l.livre) 'livré le {0}'.trf([fmtDate(l.dateLivraison!)]),
           ].join(' · '),
@@ -316,7 +318,7 @@ class LotDetailScreen extends StatefulWidget {
 }
 
 class _LotDetailScreenState extends State<LotDetailScreen> {
-  List<Production> _prod = [];
+  List<JourneeLot> _prod = [];
   bool _loading = true;
   int _seen = -1;
 
@@ -354,10 +356,10 @@ class _LotDetailScreenState extends State<LotDetailScreen> {
 
   List<(String, String, int, int)> _parOuvrier() {
     final m = <String, (Set<String>, int, int)>{};
-    for (final p in _prod) {
-      final a = m[p.ouvrierId] ?? (<String>{}, 0, 0);
-      a.$1.add(p.equipe.label);
-      m[p.ouvrierId] = (a.$1, a.$2 + p.totalPoints, a.$3 + (p.nbRobes ?? 0));
+    for (final j in _prod) {
+      final a = m[j.p.ouvrierId] ?? (<String>{}, 0, 0);
+      a.$1.add(j.p.equipe.label);
+      m[j.p.ouvrierId] = (a.$1, a.$2 + j.points, a.$3 + j.pieces);
     }
     final l = [for (final e in m.entries) (data.ouvrierNom(e.key), e.value.$1.join(' / '), e.value.$2, e.value.$3)];
     l.sort((a, b) => b.$4.compareTo(a.$4));
@@ -382,7 +384,7 @@ class _LotDetailScreenState extends State<LotDetailScreen> {
         debut: data.avancement(l.id).debut,
         livraison: l.dateLivraison,
         parOuvrier: _parOuvrier(),
-        jours: [for (final p in _prod) (p.dateProd, p.equipe.label, data.ouvrierNom(p.ouvrierId), p.totalPoints, p.nbRobes ?? 0)],
+        jours: [for (final j in _prod) (j.p.dateProd, j.p.equipe.label, data.ouvrierNom(j.p.ouvrierId), j.points, j.pieces)],
       );
       final nom = 'Paquet_${l.numero}.pdf';
       partage ? await partager(bytes, nom) : await imprimer(bytes, nom);
@@ -478,10 +480,13 @@ class _LotDetailScreenState extends State<LotDetailScreen> {
         const SizedBox(height: 14),
         AutoGrid(minItemWidth: 150, children: [
           StatTile(label: 'Points brodés'.tr, value: fmtInt(a.points), icon: Icons.blur_on_rounded, color: AppColors.violet),
+          StatTile(label: 'Début'.tr, value: a.debut == null ? '—' : fmtDate(a.debut!), icon: Icons.play_circle_outline_rounded, color: AppColors.sky),
           StatTile(label: 'Durée en broderie'.tr, value: jours == 0 ? '—' : '{0} j'.trf([jours]), icon: Icons.timer_outlined, color: AppColors.gold),
           StatTile(
-            label: 'Fin estimée'.tr,
-            value: l.livre ? fmtDate(l.dateLivraison!) : (restantJours == null ? (reste == 0 ? 'Terminé'.tr : '—') : '~{0} j'.trf([restantJours])),
+            label: l.livre ? 'Livré le'.tr : (a.fin != null ? 'Terminé le'.tr : 'Fin estimée'.tr),
+            value: l.livre
+                ? fmtDate(l.dateLivraison!)
+                : (a.fin != null ? fmtDate(a.fin!) : (restantJours == null ? '—' : '~{0} j'.trf([restantJours]))),
             icon: l.livre ? Icons.local_shipping_rounded : Icons.flag_outlined,
             color: AppColors.green,
           ),
@@ -551,14 +556,24 @@ class _LotDetailScreenState extends State<LotDetailScreen> {
         else if (_prod.isEmpty)
           EmptyState('Aucune journée. Touchez « Ajouter une journée ».'.tr, icon: Icons.event_note_outlined)
         else
-          for (final p in _prod.reversed)
-            ListTile(
+          for (final j in _prod.reversed)
+            Builder(builder: (context) {
+              final p = j.p;
+              final debut = identical(j, _prod.first);
+              final fin = data.avancement(l.id).fin != null && identical(j, _prod.lastWhere((x) => x.p.dateProd == data.avancement(l.id).fin));
+              final partiel = p.nbRobes != null && p.nbRobes! > j.pieces;
+              return ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 4),
               leading: Icon(p.equipe == Equipe.nuit ? Icons.nights_stay_rounded : Icons.wb_sunny_rounded, color: AppColors.gold),
               title: Text('{0} · {1}'.trf([fmtDate(p.dateProd), data.ouvrierNom(p.ouvrierId)]), style: const TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text('{0} points'.trf([fmtInt(p.totalPoints)])),
+              subtitle: Text([
+                '{0} points'.trf([fmtInt(j.points)]),
+                if (partiel) 'saisie partagée avec un autre paquet'.tr,
+                if (debut) 'début du paquet'.tr,
+                if (fin) 'paquet terminé ✓'.tr,
+              ].join(' · ')),
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('{0} pcs'.trf([p.nbRobes ?? 0]), style: const TextStyle(fontWeight: FontWeight.w900)),
+                Text('{0} pcs'.trf([j.pieces]), style: const TextStyle(fontWeight: FontWeight.w900)),
                 PopupMenuButton<String>(
                   itemBuilder: (_) => [
                     PopupMenuItem(value: 'edit', child: Text('Modifier'.tr)),
@@ -567,7 +582,8 @@ class _LotDetailScreenState extends State<LotDetailScreen> {
                   onSelected: (v) => v == 'edit' ? openProductionForm(context, p) : deleteProductionWithConfirm(context, p),
                 ),
               ]),
-            ),
+              );
+            }),
       ]),
     );
 
@@ -597,6 +613,128 @@ class _LotDetailScreenState extends State<LotDetailScreen> {
           ],
         ],
       ),
+    );
+  }
+}
+
+// ====================================================================== paquets d'une saisie
+
+/// Une ligne « paquet + pièces » dans une saisie de broderie.
+class LigneLot {
+  String? lotId;
+  final TextEditingController qte;
+  LigneLot({this.lotId, int? pieces}) : qte = TextEditingController(text: pieces == null || pieces == 0 ? '' : '$pieces');
+  int get pieces => parseInt(qte.text) ?? 0;
+}
+
+List<(String, int)> liensDe(List<LigneLot> lignes) => [
+      for (final l in lignes)
+        if (l.lotId != null && l.pieces > 0) (l.lotId!, l.pieces),
+    ];
+
+/// Éditeur des paquets brodés dans une même saisie (ex. fin du #53 puis début du #54).
+class EditeurLots extends StatelessWidget {
+  final List<LigneLot> lignes;
+  final VoidCallback onChanged;
+
+  /// Pièces déjà enregistrées par cette saisie, par paquet (modification d'une saisie).
+  final Map<String, int> dejaSaisi;
+
+  /// Appelé quand le premier paquet est choisi (pour remplir rechma et machine).
+  final ValueChanged<Lot>? onPremierLot;
+
+  const EditeurLots({super.key, required this.lignes, required this.onChanged, this.dejaSaisi = const {}, this.onPremierLot});
+
+  int _reste(Lot l) => l.nbPieces - data.avancement(l.id).pieces + (dejaSaisi[l.id] ?? 0);
+
+  @override
+  Widget build(BuildContext context) {
+    final choisis = {for (final l in lignes) l.lotId};
+    final total = lignes.fold<int>(0, (s, l) => s + l.pieces);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.gold.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Icon(Icons.inventory_2_rounded, color: AppColors.gold, size: 20),
+          const SizedBox(width: 8),
+          Expanded(child: Text('Paquets de cette journée'.tr, style: const TextStyle(fontWeight: FontWeight.w800))),
+          if (total > 0) Text('{0} pcs'.trf([total]), style: const TextStyle(fontWeight: FontWeight.w900)),
+        ]),
+        const SizedBox(height: 8),
+        for (var i = 0; i < lignes.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<String?>(
+                  value: data.lot(lignes[i].lotId) == null ? null : lignes[i].lotId,
+                  isExpanded: true,
+                  decoration: InputDecoration(isDense: true, labelText: 'Paquet'.tr),
+                  items: [
+                    for (final l in data.lots.where((l) => (!l.livre && !choisis.contains(l.id)) || l.id == lignes[i].lotId))
+                      DropdownMenuItem<String?>(value: l.id, child: Text('{0} · reste {1}'.trf(['#${l.numero}', _reste(l)]))),
+                  ],
+                  onChanged: (v) {
+                    lignes[i].lotId = v;
+                    final l = data.lot(v);
+                    if (l != null) {
+                      if (lignes[i].qte.text.isEmpty) lignes[i].qte.text = '${_reste(l).clamp(0, l.nbPieces)}';
+                      if (i == 0) onPremierLot?.call(l);
+                    }
+                    onChanged();
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: lignes[i].qte,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    isDense: true,
+                    labelText: 'Pièces'.tr,
+                    helperText: () {
+                      final l = data.lot(lignes[i].lotId);
+                      if (l == null) return null;
+                      final r = _reste(l) - lignes[i].pieces;
+                      return r <= 0 ? 'Paquet terminé ✓'.tr : 'Il restera {0}'.trf([r]);
+                    }(),
+                  ),
+                  onChanged: (_) => onChanged(),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Retirer'.tr,
+                onPressed: () {
+                  lignes.removeAt(i);
+                  onChanged();
+                },
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ]),
+          ),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton.icon(
+            onPressed: data.lots.any((l) => !l.livre && !choisis.contains(l.id))
+                ? () {
+                    lignes.add(LigneLot());
+                    onChanged();
+                  }
+                : null,
+            icon: const Icon(Icons.add_rounded),
+            label: Text(lignes.isEmpty ? 'Ajouter un paquet'.tr : 'Ajouter un autre paquet'.tr),
+          ),
+        ),
+      ]),
     );
   }
 }

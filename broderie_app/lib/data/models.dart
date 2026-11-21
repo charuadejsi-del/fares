@@ -427,7 +427,6 @@ class Production {
       );
 
   static Map<String, dynamic> toRow({
-    String? lotId,
     required String dateKey,
     required Equipe equipe,
     required String ouvrierId,
@@ -451,7 +450,6 @@ class Production {
         'total_points': totalPoints,
         'tarif_1000': tarif1000,
         'note': _nullIfEmpty(note),
-        'lot_id': lotId,
       };
 }
 
@@ -517,5 +515,23 @@ class AvancementLot {
   int points = 0;
   DateTime? debut;
   DateTime? dernier;
+
+  /// Jour où la dernière pièce du paquet a été brodée.
+  DateTime? fin;
   final Set<String> ouvriers = {};
+}
+
+/// Une journée de broderie vue depuis un paquet : la saisie, ses pièces dans ce paquet
+/// et la part de points correspondante (au prorata des pièces de la saisie).
+class JourneeLot {
+  final Production p;
+  final int pieces;
+  final int points;
+  const JourneeLot(this.p, this.pieces, this.points);
+}
+
+/// Part des points d'une saisie attribuée à un paquet, au prorata des pièces.
+int partPoints(int totalPoints, int pieces, int piecesSaisie, int nbLots) {
+  if (piecesSaisie > 0) return (totalPoints * pieces / piecesSaisie).round();
+  return nbLots == 0 ? 0 : (totalPoints / nbLots).round();
 }

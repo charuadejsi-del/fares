@@ -129,18 +129,45 @@ class AppData extends ChangeNotifier {
     try {
       final res = await Future.wait([
         _db.from('broderie_lots').select().order('created_at', ascending: false),
-        _db.from('broderie_production').select('lot_id, nb_robes, total_points, date_prod, ouvrier_id').not('lot_id', 'is', null),
+        _db.from('broderie_production_lots').select('lot_id, production_id, pieces, broderie_production(date_prod, ouvrier_id, total_points, created_at)'),
       ]);
       lots = res[0].map(Lot.fromMap).toList();
+      final liens = res[1];
+      final parSaisie = <String, (int, int)>{}; // production -> (pièces, nb paquets)
+      for (final r in liens) {
+        final k = r['production_id'] as String;
+        final a = parSaisie[k] ?? (0, 0);
+        parSaisie[k] = (a.$1 + ((r['pieces'] as num?)?.toInt() ?? 0), a.$2 + 1);
+      }
       final av = <String, AvancementLot>{};
-      for (final r in res[1]) {
-        final a = av.putIfAbsent(r['lot_id'] as String, AvancementLot.new);
-        a.pieces += (r['nb_robes'] as num?)?.toInt() ?? 0;
-        a.points += (r['total_points'] as num?)?.toInt() ?? 0;
-        final d = DateTime.parse(r['date_prod'] as String);
+      final chrono = <String, List<(DateTime, String, int)>>{};
+      for (final r in liens) {
+        final p = r['broderie_production'] as Map?;
+        if (p == null) continue;
+        final lotId = r['lot_id'] as String;
+        final pcs = (r['pieces'] as num?)?.toInt() ?? 0;
+        final s = parSaisie[r['production_id'] as String]!;
+        final a = av.putIfAbsent(lotId, AvancementLot.new);
+        a.pieces += pcs;
+        a.points += partPoints((p['total_points'] as num?)?.toInt() ?? 0, pcs, s.$1, s.$2);
+        final d = DateTime.parse(p['date_prod'] as String);
         if (a.debut == null || d.isBefore(a.debut!)) a.debut = d;
         if (a.dernier == null || d.isAfter(a.dernier!)) a.dernier = d;
-        a.ouvriers.add(r['ouvrier_id'] as String);
+        a.ouvriers.add(p['ouvrier_id'] as String);
+        chrono.putIfAbsent(lotId, () => []).add((d, '${p['created_at']}', pcs));
+      }
+      for (final l in lots) {
+        final c = chrono[l.id];
+        if (c == null) continue;
+        c.sort((x, y) => x.$1 != y.$1 ? x.$1.compareTo(y.$1) : x.$2.compareTo(y.$2));
+        var cumul = 0;
+        for (final e in c) {
+          cumul += e.$3;
+          if (cumul >= l.nbPieces) {
+            av[l.id]!.fin = e.$1;
+            break;
+          }
+        }
       }
       avancements = av;
     } catch (_) {
@@ -148,6 +175,16 @@ class AppData extends ChangeNotifier {
       avancements = {};
     }
     if (notify) notifyListeners();
+  }
+
+  /// Paquets liés à une saisie : (paquet, pièces).
+  Future<List<(String, int)>> fetchLiensSaisie(String productionId) async {
+    try {
+      final rows = await _db.from('broderie_production_lots').select('lot_id, pieces').eq('production_id', productionId);
+      return [for (final r in rows) (r['lot_id'] as String, (r['pieces'] as num?)?.toInt() ?? 0)];
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<String> saveLot(Map<String, dynamic> row, {String? id}) async {
@@ -172,9 +209,30 @@ class AppData extends ChangeNotifier {
     await loadLots();
   }
 
-  Future<List<Production>> fetchProductionLot(String lotId) async {
-    final rows = await _db.from('broderie_production').select().eq('lot_id', lotId).order('date_prod').order('created_at');
-    return rows.map(Production.fromMap).toList();
+  /// Journées d'un paquet, dans l'ordre chronologique.
+  Future<List<JourneeLot>> fetchProductionLot(String lotId) async {
+    final rows = await _db.from('broderie_production_lots').select('production_id, pieces, broderie_production(*)').eq('lot_id', lotId);
+    final ids = [for (final r in rows) r['production_id'] as String];
+    final freres = ids.isEmpty
+        ? <Map<String, dynamic>>[]
+        : await _db.from('broderie_production_lots').select('production_id, pieces').inFilter('production_id', ids);
+    final parSaisie = <String, (int, int)>{};
+    for (final r in freres) {
+      final k = r['production_id'] as String;
+      final a = parSaisie[k] ?? (0, 0);
+      parSaisie[k] = (a.$1 + ((r['pieces'] as num?)?.toInt() ?? 0), a.$2 + 1);
+    }
+    final out = <JourneeLot>[];
+    for (final r in rows) {
+      final m = r['broderie_production'];
+      if (m == null) continue;
+      final p = Production.fromMap(Map<String, dynamic>.from(m as Map));
+      final pcs = (r['pieces'] as num?)?.toInt() ?? 0;
+      final s = parSaisie[p.id] ?? (pcs, 1);
+      out.add(JourneeLot(p, pcs, partPoints(p.totalPoints, pcs, s.$1, s.$2)));
+    }
+    out.sort((a, b) => a.p.dateProd != b.p.dateProd ? a.p.dateProd.compareTo(b.p.dateProd) : a.p.createdAt.compareTo(b.p.createdAt));
+    return out;
   }
 
   Future<void> saveTache(Map<String, dynamic> row, {String? id}) async {
@@ -240,11 +298,23 @@ class AppData extends ChangeNotifier {
     return out;
   }
 
-  Future<void> saveProduction(Map<String, dynamic> row, {String? id}) async {
+  /// Enregistre une saisie. [lots] : paquets brodés dans cette saisie (paquet, pièces) ;
+  /// null = ne pas toucher aux paquets déjà liés.
+  Future<void> saveProduction(Map<String, dynamic> row, {String? id, List<(String, int)>? lots}) async {
+    final liens = [for (final l in lots ?? const <(String, int)>[]) if (l.$2 > 0) l];
+    if (liens.isNotEmpty) row = {...row, 'nb_robes': liens.fold<int>(0, (s, l) => s + l.$2)};
+    late String pid;
     if (id == null) {
-      await _db.from('broderie_production').insert(row);
+      pid = (await _db.from('broderie_production').insert(row).select('id').single())['id'] as String;
     } else {
       await _db.from('broderie_production').update(row).eq('id', id);
+      pid = id;
+    }
+    if (lots != null) {
+      await _db.from('broderie_production_lots').delete().eq('production_id', pid);
+      if (liens.isNotEmpty) {
+        await _db.from('broderie_production_lots').insert([for (final l in liens) {'production_id': pid, 'lot_id': l.$1, 'pieces': l.$2}]);
+      }
     }
     _productionChanged();
   }

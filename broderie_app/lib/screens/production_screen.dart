@@ -6,6 +6,7 @@ import '../data/models.dart';
 import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
+import 'lots_screen.dart' show EditeurLots, LigneLot, liensDe;
 import 'quick_entry_screen.dart';
 import '../i18n.dart';
 
@@ -254,20 +255,18 @@ class _ProductionFormState extends State<ProductionForm> {
   String? _typeId;
   String? _machineId;
   String? _dessinId;
-  String? _lotId;
+  final List<LigneLot> _lots = [];
+  Map<String, int> _dejaSaisi = {};
+  bool _liensCharges = true;
   final _points = TextEditingController();
   final _robes = TextEditingController();
   final _note = TextEditingController();
   bool _busy = false;
 
-  void _choisirLot(String? id) {
+  void _premierLot(Lot l) {
     setState(() {
-      _lotId = id;
-      final l = data.lot(id);
-      if (l != null) {
-        if (data.dessin(l.dessinId) != null) _dessinId = l.dessinId;
-        if (data.machine(l.machineId) != null) _machineId = l.machineId;
-      }
+      if (data.dessin(l.dessinId) != null) _dessinId = l.dessinId;
+      if (data.machine(l.machineId) != null) _machineId = l.machineId;
     });
   }
 
@@ -286,11 +285,24 @@ class _ProductionFormState extends State<ProductionForm> {
     _dessinId = data.dessin(e?.dessinId) == null ? null : e?.dessinId;
     if (e != null) _points.text = ThousandsFormatter().formatEditUpdate(TextEditingValue.empty, TextEditingValue(text: '${e.totalPoints}')).text;
     if (e?.nbRobes != null) _robes.text = '${e!.nbRobes}';
-    _lotId = e?.lotId ?? widget.lotId;
-    if (e == null && widget.lotId != null) {
-      final l = data.lot(widget.lotId);
-      if (data.dessin(l?.dessinId) != null) _dessinId = l!.dessinId;
-      if (data.machine(l?.machineId) != null) _machineId = l!.machineId;
+    if (e == null && data.lot(widget.lotId) != null) {
+      final l = data.lot(widget.lotId)!;
+      _lots.add(LigneLot(lotId: l.id));
+      if (data.dessin(l.dessinId) != null) _dessinId = l.dessinId;
+      if (data.machine(l.machineId) != null) _machineId = l.machineId;
+    }
+    if (e != null) {
+      _liensCharges = false;
+      data.fetchLiensSaisie(e.id).then((liens) {
+        if (!mounted) return;
+        setState(() {
+          _dejaSaisi = {for (final x in liens) x.$1: x.$2};
+          for (final x in liens) {
+            _lots.add(LigneLot(lotId: x.$1, pieces: x.$2));
+          }
+          _liensCharges = true;
+        });
+      });
     }
     _note.text = e?.note ?? '';
     _points.addListener(() => setState(() {}));
@@ -319,7 +331,6 @@ class _ProductionFormState extends State<ProductionForm> {
     try {
       await data.saveProduction(
         Production.toRow(
-          lotId: _lotId,
           dateKey: dateKey(_date),
           equipe: _equipe,
           ouvrierId: _ouvrierId!,
@@ -332,6 +343,7 @@ class _ProductionFormState extends State<ProductionForm> {
           note: _note.text,
         ),
         id: _ex?.id,
+        lots: _liensCharges ? liensDe(_lots) : null,
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -413,21 +425,8 @@ class _ProductionFormState extends State<ProductionForm> {
                 },
               ),
               const SizedBox(height: 12),
-              if (data.lots.isNotEmpty) ...[
-                DropdownButtonFormField<String?>(
-                  value: data.lot(_lotId) == null ? null : _lotId,
-                  isExpanded: true,
-                  decoration: InputDecoration(labelText: 'Paquet (facultatif)'.tr, prefixIcon: const Icon(Icons.inventory_2_outlined)),
-                  items: [
-                    const DropdownMenuItem<String?>(value: null, child: Text('—')),
-                    for (final l in data.lots.where((l) => !l.livre || l.id == _lotId))
-                      DropdownMenuItem<String?>(
-                        value: l.id,
-                        child: Text('{0} · {1} / {2} pièces'.trf(['#${l.numero}', data.avancement(l.id).pieces, l.nbPieces])),
-                      ),
-                  ],
-                  onChanged: _choisirLot,
-                ),
+              if (data.lots.isNotEmpty && _liensCharges) ...[
+                EditeurLots(lignes: _lots, dejaSaisi: _dejaSaisi, onPremierLot: _premierLot, onChanged: () => setState(() {})),
                 const SizedBox(height: 12),
               ],
               if (machines.isNotEmpty) ...[
@@ -455,18 +454,13 @@ class _ProductionFormState extends State<ProductionForm> {
                 onChanged: (v) => setState(() => _dessinId = v),
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _robes,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: InputDecoration(
-                  labelText: _lotId != null ? 'Pièces terminées ce jour'.tr : 'Nombre de robes (facultatif)'.tr,
-                  helperText: data.lot(_lotId) == null
-                      ? null
-                      : 'Reste {0} pièces dans le paquet'.trf([data.lot(_lotId)!.nbPieces - data.avancement(_lotId!).pieces + (_ex?.lotId == _lotId ? (_ex?.nbRobes ?? 0) : 0)]),
-                  prefixIcon: const Icon(Icons.checkroom_rounded),
+              if (liensDe(_lots).isEmpty)
+                TextFormField(
+                  controller: _robes,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(labelText: 'Nombre de robes (facultatif)'.tr, prefixIcon: const Icon(Icons.checkroom_rounded)),
                 ),
-              ),
               const SizedBox(height: 12),
               TextFormField(controller: _note, decoration: InputDecoration(labelText: 'Remarque (facultatif)'.tr, prefixIcon: Icon(Icons.notes))),
               const SizedBox(height: 16),

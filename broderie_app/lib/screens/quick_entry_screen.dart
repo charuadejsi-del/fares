@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
 import '../i18n.dart';
+import 'lots_screen.dart' show EditeurLots, LigneLot, liensDe;
 
 /// Équipe et date par défaut selon l'heure : 8 h–20 h = jour,
 /// après 20 h = nuit du jour, avant 8 h = nuit de la veille.
@@ -32,7 +33,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
   String? _typeId;
   String? _machineId;
   String? _dessinId;
-  String? _lotId;
+  final List<LigneLot> _lots = [];
   late Equipe _equipe;
   late DateTime _date;
   final _points = TextEditingController();
@@ -97,7 +98,6 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
     setState(() => _busy = true);
     try {
       await data.saveProduction(Production.toRow(
-        lotId: _lotId,
         dateKey: dateKey(_date),
         equipe: _equipe,
         ouvrierId: o.id,
@@ -108,7 +108,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
         totalPoints: _pts,
         tarif1000: o.tarifPour(t.tarif1000),
         note: _note.text,
-      ));
+      ), lots: liensDe(_lots));
       HapticFeedback.mediumImpact();
       if (mounted) {
         showSnack(context, '✓ {0} · {1} : {2} points{3}'.trf([o.nom, t.nom, fmtInt(_pts), o.brodeur ? ' = ${fmtDA(_pts * t.tarif1000 / 1000)}' : ' (payé au mois, sans montant)'.tr]));
@@ -117,7 +117,7 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
           _robes.clear();
           _note.clear();
           _dessinId = null;
-          _lotId = null;
+          _lots.clear();
           _ouvrierId = null;
           _typeId = null;
         });
@@ -280,23 +280,12 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
                     initiallyExpanded: data.lots.any((l) => !l.livre),
                     children: [
                       if (data.lots.any((l) => !l.livre)) ...[
-                        DropdownButtonFormField<String?>(
-                          value: data.lot(_lotId) == null ? null : _lotId,
-                          isExpanded: true,
-                          decoration: InputDecoration(labelText: 'Paquet'.tr, prefixIcon: const Icon(Icons.inventory_2_outlined)),
-                          items: [
-                            const DropdownMenuItem<String?>(value: null, child: Text('—')),
-                            for (final l in data.lots.where((l) => !l.livre))
-                              DropdownMenuItem<String?>(
-                                value: l.id,
-                                child: Text('{0} · {1} / {2} pièces'.trf(['#${l.numero}', data.avancement(l.id).pieces, l.nbPieces])),
-                              ),
-                          ],
-                          onChanged: (v) => setState(() {
-                            _lotId = v;
-                            final l = data.lot(v);
-                            if (l != null && data.dessin(l.dessinId) != null) _dessinId = l.dessinId;
-                            if (l != null && data.machine(l.machineId) != null) _machineId = l.machineId;
+                        EditeurLots(
+                          lignes: _lots,
+                          onChanged: () => setState(() {}),
+                          onPremierLot: (l) => setState(() {
+                            if (data.dessin(l.dessinId) != null) _dessinId = l.dessinId;
+                            if (data.machine(l.machineId) != null) _machineId = l.machineId;
                           }),
                         ),
                         const SizedBox(height: 10),
@@ -312,18 +301,14 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
                         onChanged: (v) => setState(() => _dessinId = v),
                       ),
                       const SizedBox(height: 10),
-                      TextField(
-                        controller: _robes,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        decoration: InputDecoration(
-                          labelText: _lotId != null ? 'Pièces terminées ce jour'.tr : 'Nombre de robes'.tr,
-                          helperText: data.lot(_lotId) == null
-                              ? null
-                              : 'Reste {0} pièces dans le paquet'.trf([data.lot(_lotId)!.nbPieces - data.avancement(_lotId!).pieces]),
-                          prefixIcon: const Icon(Icons.checkroom_rounded),
+                      if (liensDe(_lots).isEmpty) ...[
+                        TextField(
+                          controller: _robes,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          decoration: InputDecoration(labelText: 'Nombre de robes'.tr, prefixIcon: const Icon(Icons.checkroom_rounded)),
                         ),
-                      ),
+                      ],
                       const SizedBox(height: 10),
                       TextField(controller: _note, decoration: InputDecoration(labelText: 'Remarque'.tr, prefixIcon: Icon(Icons.notes))),
                       const SizedBox(height: 8),
