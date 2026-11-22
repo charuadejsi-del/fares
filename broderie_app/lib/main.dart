@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
 import 'screens/home_shell.dart';
 import 'screens/login_screen.dart';
+import 'data/hors_ligne.dart';
 import 'data/session.dart';
 import 'screens/activation_screen.dart';
 import 'screens/plateforme_screen.dart' show ProprietaireShell;
@@ -18,7 +19,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   ErrorWidget.builder = _ecranErreur;
   await Future.wait([ThemeController.instance.load(), UiPrefs.instance.load(), langue.load()]);
-  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
+  await HorsLigne.instance.init();
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey, httpClient: ClientHorsLigne());
   runApp(const AtelierApp());
 }
 

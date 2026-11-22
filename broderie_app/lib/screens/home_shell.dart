@@ -10,6 +10,7 @@ import '../utils.dart';
 import '../widgets.dart';
 import 'admin_screens.dart';
 import 'gestion_screens.dart';
+import '../data/hors_ligne.dart';
 import 'abonnement_screen.dart';
 import 'atelier_screen.dart';
 import 'suivi_screen.dart';
@@ -93,7 +94,28 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
+    _versionSynchro = HorsLigne.instance.version;
+    HorsLigne.instance.addListener(_surSynchro);
     _load();
+  }
+
+  int _versionSynchro = 0;
+
+  /// Après l'envoi des enregistrements faits hors ligne : on recharge depuis le serveur.
+  void _surSynchro() {
+    if (!mounted) return;
+    if (HorsLigne.instance.version != _versionSynchro) {
+      _versionSynchro = HorsLigne.instance.version;
+      _load();
+    } else {
+      setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    HorsLigne.instance.removeListener(_surSynchro);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -212,10 +234,65 @@ class _HomeShellState extends State<HomeShell> {
   // ------------------------------------------------------------------ pages
 
   Widget _page(_Dest d) {
-    final banniere = _banniereAbonnement();
+    final bannieres = [_banniereSynchro(), _banniereAbonnement()].whereType<Widget>().toList();
     final page = _pageModule(d);
-    return banniere == null ? page : Column(children: [banniere, Expanded(child: page)]);
+    return bannieres.isEmpty ? page : Column(children: [...bannieres, Expanded(child: page)]);
   }
+
+  /// Bandeau de connexion : hors ligne, enregistrements en attente, refus du serveur.
+  Widget? _banniereSynchro() {
+    final hl = HorsLigne.instance;
+    final b = hl.blocage;
+    if (b != null) return _bandeau(b.tr, AppColors.rose, abonnement: false);
+    if (hl.rejets.isNotEmpty) {
+      return _bandeau('{0} enregistrement(s) refusé(s) par le serveur'.trf([hl.rejets.length]), AppColors.rose,
+          abonnement: false, action: ('Voir'.tr, () => _voirRejets()));
+    }
+    if (!hl.enLigne) {
+      final reste = hl.resteHorsLigne;
+      final txt = [
+        'Hors ligne'.tr,
+        if (hl.file.isNotEmpty) '{0} enregistrement(s) en attente d\'envoi'.trf([hl.file.length]),
+        if (reste != null) 'connexion requise dans {0}'.trf([reste.inDays >= 1 ? '${reste.inDays} ${'j'.tr}' : '${reste.inHours} h']),
+      ].join(' · ');
+      return _bandeau(txt, AppColors.sky, abonnement: false, action: ('Réessayer'.tr, () => HorsLigne.instance.vider()));
+    }
+    if (hl.file.isNotEmpty) return _bandeau('Envoi de {0} enregistrement(s)…'.trf([hl.file.length]), AppColors.sky, abonnement: false);
+    return null;
+  }
+
+  Future<void> _voirRejets() => showDialog(
+        context: context,
+        builder: (ctx) => ListenableBuilder(
+          listenable: HorsLigne.instance,
+          builder: (ctx, _) {
+            final l = HorsLigne.instance.rejets;
+            return AlertDialog(
+              title: Text('Enregistrements refusés'.tr),
+              content: SizedBox(
+                width: 480,
+                child: l.isEmpty
+                    ? Text('Aucun.'.tr)
+                    : ListView(shrinkWrap: true, children: [
+                        Text('Faits sans internet, ils ont été refusés à l\'envoi (droits, abonnement…). Refaites-les si nécessaire.'.tr,
+                            style: const TextStyle(fontSize: 12)),
+                        for (var i = 0; i < l.length; i++)
+                          ListTile(
+                            dense: true,
+                            title: Text('${l[i]['methode']} · ${l[i]['table']}'),
+                            subtitle: Text('${l[i]['erreur']}'),
+                            trailing: IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => HorsLigne.instance.supprimerRejet(i)),
+                          ),
+                      ]),
+              ),
+              actions: [
+                TextButton(onPressed: () => HorsLigne.instance.viderRejets(), child: Text('Tout effacer'.tr)),
+                FilledButton(onPressed: () => Navigator.pop(ctx), child: Text('Fermer'.tr)),
+              ],
+            );
+          },
+        ),
+      );
 
   /// Bandeau d'abonnement : expire bientôt, expiré ou suspendu (lecture seule).
   Widget? _banniereAbonnement() {
@@ -229,7 +306,7 @@ class _HomeShellState extends State<HomeShell> {
     return null;
   }
 
-  Widget _bandeau(String t, Color c) => Material(
+  Widget _bandeau(String t, Color c, {bool abonnement = true, (String, VoidCallback)? action}) => Material(
         color: c.withValues(alpha: .16),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -237,7 +314,8 @@ class _HomeShellState extends State<HomeShell> {
             Icon(Icons.info_rounded, color: c),
             const SizedBox(width: 10),
             Expanded(child: Text(t, style: TextStyle(color: c, fontWeight: FontWeight.w700))),
-            if (session.admin)
+            if (action != null) TextButton(onPressed: action.$2, child: Text(action.$1)),
+            if (abonnement && session.admin)
               TextButton(
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AbonnementScreen())).then((_) => setState(() {})),
                 child: Text('Mon abonnement'.tr),

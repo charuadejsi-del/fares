@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../i18n.dart';
 import '../utils.dart' show masquerMontants;
+import 'hors_ligne.dart';
 
 double _d(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
 String? _s(dynamic v) => (v == null || v.toString().trim().isEmpty) ? null : v.toString().trim();
@@ -58,7 +59,11 @@ class Atelier {
   bool get essai => abonnement == 'essai';
 
   bool get illimite => abonnement == 'illimite' || abonnementFin == null;
-  int? get joursRestants => illimite ? null : DateTime(abonnementFin!.year, abonnementFin!.month, abonnementFin!.day).difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)).inDays;
+  int? get joursRestants {
+    if (illimite) return null;
+    final n = HorsLigne.instance.maintenant; // heure du serveur, pas celle de l'appareil
+    return DateTime(abonnementFin!.year, abonnementFin!.month, abonnementFin!.day).difference(DateTime(n.year, n.month, n.day)).inDays;
+  }
   /// Abonnement valide : sinon l'atelier est en lecture seule.
   bool get actif => !suspendu && (illimite || joursRestants! >= 0);
 
@@ -254,6 +259,8 @@ class AtelierSession extends ChangeNotifier {
       atelier = a == null ? Atelier(id: membre!.atelierId, nom: 'Mon atelier') : Atelier.fromMap(a);
     }
     masquerMontants = !voitPrix;
+    final at = atelier;
+    if (at != null) HorsLigne.instance.configurer(at.abonnement == 'illimite' || at.abonnementFin == null ? 'illimite' : at.abonnement, at.abonnementFin);
     try {
       proprietaire = (await _db.rpc('est_proprietaire')) == true;
     } catch (_) {
