@@ -215,7 +215,7 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _page(_Dest d) {
     final banniere = _banniereAbonnement();
-    final page = _contenu(d);
+    final page = _pageModule(d);
     return banniere == null ? page : Column(children: [banniere, Expanded(child: page)]);
   }
 
@@ -242,7 +242,7 @@ class _HomeShellState extends State<HomeShell> {
         ),
       );
 
-  Widget _contenu(_Dest d) {
+  Widget _pageModule(_Dest d) {
     return switch (d.cle) {
       _Cle.plateforme => const PlateformeScreen(),
       _Cle.accueil => VueEnsembleScreen(
