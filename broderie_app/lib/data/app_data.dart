@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../i18n.dart';
 import '../utils.dart';
 import 'session.dart';
 import 'models.dart';
@@ -23,7 +24,7 @@ class AppData extends ChangeNotifier {
   Map<String, Solde> soldes = {};
   bool refsLoaded = false;
 
-  static const departementsParDefaut = ['Broderie', 'Couture', 'Coupe', 'Repassage', 'Finition', 'Emballage'];
+  static const departementsParDefaut = ['Broderie', 'Couture', 'Coupe', 'Appliqué', 'Akkach', 'Repassage', 'Finition', 'Emballage'];
 
   /// Départements utilisés + ceux par défaut.
   List<String> get departements {
@@ -234,6 +235,18 @@ class AppData extends ChangeNotifier {
     await loadLots();
   }
 
+  /// Travail des ateliers internes (coupe, appliqué, akkach, finition) sur un paquet.
+  Future<List<Piece>> fetchPiecesLot(String lotId) async {
+    final rows = await _db.from('broderie_pieces').select().eq('lot_id', lotId).order('date_travail').order('created_at');
+    return rows.map(Piece.fromMap).toList();
+  }
+
+  /// Entrée du paquet terminé au stock (compté par modèle).
+  Future<void> entrerStock(Lot l, int pieces, DateTime date) async {
+    await _db.from('broderie_lots').update({'pieces_stock': pieces, 'date_stock': dateKey(date)}).eq('id', l.id);
+    await deplacerLot(l, 'stock', date, note: '{0} pièces au stock'.trf([pieces]));
+  }
+
   Future<List<MouvementLot>> fetchMouvementsLot(String lotId) async {
     final rows = await _db.from('lot_mouvements').select().eq('lot_id', lotId).order('date_mvt').order('created_at');
     return rows.map(MouvementLot.fromMap).toList();
@@ -387,6 +400,12 @@ class AppData extends ChangeNotifier {
     } else {
       await _db.from('broderie_pieces').update(row).eq('id', id);
     }
+    _productionChanged();
+  }
+
+  Future<void> savePieces(List<Map<String, dynamic>> rows) async {
+    if (rows.isEmpty) return;
+    await _db.from('broderie_pieces').insert(rows);
     _productionChanged();
   }
 

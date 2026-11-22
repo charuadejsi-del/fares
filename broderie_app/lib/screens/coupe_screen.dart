@@ -8,7 +8,9 @@ import '../i18n.dart';
 import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
+import 'atelier_screen.dart' show OngletsAtelier, EquipeAtelier;
 import 'lots_screen.dart' show LotDetailScreen;
+import 'travaux_screens.dart' show TravauxSaisieScreen;
 import 'couture_screen.dart' show CarteEnvoi, ouvrirEnvoi;
 import 'refs_screens.dart' show FormDialog;
 
@@ -81,14 +83,25 @@ class FrisesParcours extends StatelessWidget {
 
 // ====================================================================== module Coupe
 
-class CoupeModule extends StatefulWidget {
+class CoupeModule extends StatelessWidget {
   const CoupeModule({super.key});
 
   @override
-  State<CoupeModule> createState() => _CoupeModuleState();
+  Widget build(BuildContext context) => OngletsAtelier([
+        ('Paquets'.tr, Icons.inventory_2_rounded, const _CoupePaquets()),
+        ('Saisie du travail'.tr, Icons.add_task_rounded, TravauxSaisieScreen(departements: departementsEtape['coupe'])),
+        ('Équipe'.tr, Icons.groups_rounded, EquipeAtelier(departements: departementsEtape['coupe']!)),
+      ]);
 }
 
-class _CoupeModuleState extends State<CoupeModule> {
+class _CoupePaquets extends StatefulWidget {
+  const _CoupePaquets();
+
+  @override
+  State<_CoupePaquets> createState() => _CoupePaquetsState();
+}
+
+class _CoupePaquetsState extends State<_CoupePaquets> {
   String? _etape; // null = en cours (hors stock)
   String _q = '';
 
@@ -124,8 +137,8 @@ class _CoupeModuleState extends State<CoupeModule> {
                     StatTile(label: 'En coupe'.tr, value: '${nb('coupe')}', icon: iconeEtape('coupe'), color: couleurEtape('coupe')),
                     StatTile(label: 'En broderie'.tr, value: '${nb('broderie')}', icon: iconeEtape('broderie'), color: couleurEtape('broderie')),
                     StatTile(
-                      label: 'Appliqué · akkach · dentelle'.tr,
-                      value: '${nb('applique') + nb('akkach') + nb('dentelle')}',
+                      label: 'Appliqué · akkach'.tr,
+                      value: '${nb('applique') + nb('akkach')}',
                       icon: iconeEtape('applique'),
                       color: couleurEtape('applique'),
                     ),
@@ -223,8 +236,11 @@ class _FicheCoupeState extends State<_FicheCoupe> {
   late final _couleur = TextEditingController(text: widget.existing?.couleur ?? '');
   late final _note = TextEditingController(text: widget.existing?.note ?? '');
   late DateTime _date = widget.existing?.dateCoupe ?? DateTime.now();
-  late final Set<String> _deco = {...?widget.existing?.parcours.where(decorations.contains)};
+  late bool _broderie = widget.existing?.parcours.contains('broderie') ?? false;
+  late String _applique = _position('applique');
+  late String _akkach = _position('akkach');
   late bool _couture = widget.existing?.parcours.contains('couture') ?? true;
+  late bool _dentelle = (widget.existing?.dentelle ?? false) || (widget.existing?.parcours.contains('dentelle') ?? false);
   bool _envoyer = true;
   bool _busy = false;
 
@@ -238,7 +254,46 @@ class _FicheCoupeState extends State<_FicheCoupe> {
     super.dispose();
   }
 
-  List<String> get _parcours => [for (final d in decorations) if (_deco.contains(d)) d, if (_couture) 'couture', 'finition'];
+  /// 'non', 'avant' ou 'apres' (la couture) selon le parcours existant.
+  String _position(String e) {
+    final p = widget.existing?.parcours ?? const <String>[];
+    if (!p.contains(e)) return 'non';
+    final c = p.indexOf('couture');
+    return c >= 0 && p.indexOf(e) > c ? 'apres' : 'avant';
+  }
+
+  List<String> get _parcours => [
+        if (_broderie) 'broderie',
+        if (_applique == 'avant') 'applique',
+        if (_akkach == 'avant') 'akkach',
+        if (_couture) 'couture',
+        if (_applique == 'apres') 'applique',
+        if (_akkach == 'apres') 'akkach',
+        'finition',
+      ];
+
+  Widget _choixPosition(String etape, String valeur, ValueChanged<String> onChange) => Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Icon(iconeEtape(etape), size: 18, color: couleurEtape(etape)),
+            const SizedBox(width: 8),
+            Text(etapeNom(etape), style: const TextStyle(fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 6),
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(visualDensity: VisualDensity.compact),
+            segments: [
+              ButtonSegment(value: 'non', label: Text('Non'.tr)),
+              ButtonSegment(value: 'avant', label: Text('Avant couture'.tr)),
+              ButtonSegment(value: 'apres', label: Text('Après couture'.tr)),
+            ],
+            selected: {valeur},
+            onSelectionChanged: (v) => setState(() => onChange(v.first)),
+          ),
+        ]),
+      );
 
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
@@ -263,6 +318,7 @@ class _FicheCoupeState extends State<_FicheCoupe> {
         'note': _note.text.trim().isEmpty ? null : _note.text.trim(),
         'date_coupe': dateKey(_date),
         'parcours': parcours,
+        'dentelle': _couture && _dentelle,
         if (_nouveau) 'etape': 'coupe',
       };
       final id = await data.saveLot(row, id: ex?.id);
@@ -326,27 +382,32 @@ class _FicheCoupeState extends State<_FicheCoupe> {
           },
         ),
         const SizedBox(height: 4),
-        Text('Décorations (dans l\'ordre)'.tr, style: const TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 6),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final d in decorations)
-            FilterChip(
-              avatar: Icon(iconeEtape(d), size: 16, color: couleurEtape(d)),
-              label: Text(etapeNom(d)),
-              selected: _deco.contains(d),
-              onSelected: (v) => setState(() => v ? _deco.add(d) : _deco.remove(d)),
-            ),
-        ]),
-        if (_deco.isEmpty) ...[
-          const SizedBox(height: 4),
-          Text('Aucune décoration : tissu qui part directement à la couture.'.tr, style: TextStyle(fontSize: 12, color: muted)),
-        ],
+        Text('Étapes du modèle'.tr, style: const TextStyle(fontWeight: FontWeight.w700)),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
+          secondary: Icon(iconeEtape('broderie'), color: couleurEtape('broderie')),
+          value: _broderie,
+          onChanged: (v) => setState(() => _broderie = v),
+          title: Text('Broderie'.tr),
+        ),
+        _choixPosition('applique', _applique, (v) => _applique = v),
+        _choixPosition('akkach', _akkach, (v) => _akkach = v),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          secondary: Icon(iconeEtape('couture'), color: couleurEtape('couture')),
           value: _couture,
           onChanged: (v) => setState(() => _couture = v),
           title: Text('Couture (atelier externe)'.tr),
         ),
+        if (_couture)
+          CheckboxListTile(
+            contentPadding: const EdgeInsetsDirectional.only(start: 40),
+            value: _dentelle,
+            onChanged: (v) => setState(() => _dentelle = v ?? false),
+            title: Text('Avec dentelle (posée à la couture)'.tr),
+          ),
+        if (!_broderie && _applique == 'non' && _akkach == 'non')
+          Text('Aucune décoration : tissu qui part directement à la couture.'.tr, style: TextStyle(fontSize: 12, color: muted)),
         const SizedBox(height: 4),
         Text('Parcours'.tr, style: const TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
@@ -378,48 +439,19 @@ class PaquetDetailScreen extends StatefulWidget {
 
 class _PaquetDetailScreenState extends State<PaquetDetailScreen> {
   late Future<List<MouvementLot>> _mvts = data.fetchMouvementsLot(widget.lotId);
+  late Future<List<Piece>> _travail = data.fetchPiecesLot(widget.lotId);
 
-  void _recharger() => setState(() => _mvts = data.fetchMouvementsLot(widget.lotId));
+  void _recharger() => setState(() {
+        _mvts = data.fetchMouvementsLot(widget.lotId);
+        _travail = data.fetchPiecesLot(widget.lotId);
+      });
 
   Future<void> _deplacer(Lot l, String vers) async {
-    final note = TextEditingController();
-    var date = DateTime.now();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, set) => AlertDialog(
-          title: Text('{0} → {1}'.trf(['#${l.numero}', etapeNom(vers)])),
-          content: SizedBox(
-            width: 400,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.event_rounded),
-                title: Text('Date'.tr),
-                subtitle: Text(fmtDate(date)),
-                onTap: () async {
-                  final d = await showDatePicker(context: ctx, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 7)));
-                  if (d != null) set(() => date = d);
-                },
-              ),
-              TextField(controller: note, decoration: InputDecoration(labelText: 'Note (facultatif)'.tr)),
-            ]),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Confirmer'.tr)),
-          ],
-        ),
-      ),
-    );
-    if (ok != true || !mounted) return;
-    try {
-      await data.deplacerLot(l, vers, date, note: note.text);
-      if (mounted) showSnack(context, 'Paquet envoyé : {0}'.trf([etapeNom(vers)]));
-      _recharger();
-    } catch (e) {
-      if (mounted) showSnack(context, errorMessage(e), error: true);
-    }
+    if (await deplacerAvecDialogue(context, l, vers)) _recharger();
+  }
+
+  Future<void> _stock(Lot l) async {
+    if (await entrerStockDialogue(context, l)) _recharger();
   }
 
   Future<void> _supprimer(Lot l) async {
@@ -480,7 +512,13 @@ class _PaquetDetailScreenState extends State<PaquetDetailScreen> {
                   FrisesParcours(l),
                   const SizedBox(height: 14),
                   Wrap(spacing: 10, runSpacing: 10, children: [
-                    if (suivante != null && !l.enBroderie)
+                    if (suivante == 'stock')
+                      FilledButton.icon(
+                        onPressed: () => _stock(l),
+                        icon: Icon(iconeEtape('stock')),
+                        label: Text('Entrer au stock'.tr),
+                      )
+                    else if (suivante != null && !l.enBroderie)
                       FilledButton.icon(
                         onPressed: () => _deplacer(l, suivante),
                         icon: Icon(iconeEtape(suivante)),
@@ -512,6 +550,39 @@ class _PaquetDetailScreenState extends State<PaquetDetailScreen> {
                 const SizedBox(height: 8),
                 AutoGrid(minItemWidth: 340, children: [for (final e in couture.envoisDuLot(l.id)) CarteEnvoi(e)]),
               ],
+              FutureBuilder<List<Piece>>(
+                future: _travail,
+                builder: (context, snap) {
+                  final t = snap.data ?? const <Piece>[];
+                  if (t.isEmpty) return const SizedBox.shrink();
+                  // regroupement par atelier (département de l'ouvrier)
+                  final parDep = <String, List<Piece>>{};
+                  for (final p in t) {
+                    parDep.putIfAbsent(data.ouvrier(p.ouvrierId)?.departement ?? '—', () => []).add(p);
+                  }
+                  return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    const SizedBox(height: 16),
+                    SectionTitle('Travail des ateliers'.tr),
+                    const SizedBox(height: 8),
+                    for (final e in parDep.entries)
+                      AppCard(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 8, 6),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('{0} · {1} pièces'.trf([e.key, fmtInt(e.value.fold<double>(0, (s, p) => s + p.quantite))]),
+                              style: const TextStyle(fontWeight: FontWeight.w800)),
+                          for (final p in e.value)
+                            ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text('${data.ouvrierNom(p.ouvrierId)} · ${p.libelle}'),
+                              subtitle: Text(fmtDate(p.date)),
+                              trailing: Text(fmtInt(p.quantite), style: const TextStyle(fontWeight: FontWeight.w800)),
+                            ),
+                        ]),
+                      ),
+                  ]);
+                },
+              ),
               const SizedBox(height: 16),
               SectionTitle('Historique des mouvements'.tr),
               const SizedBox(height: 8),
@@ -548,4 +619,103 @@ class _PaquetDetailScreenState extends State<PaquetDetailScreen> {
         Text('$label : ', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         Text(v, style: const TextStyle(fontWeight: FontWeight.w700)),
       ]);
+}
+
+
+// ====================================================================== dialogues communs
+
+/// Fait passer un paquet à l'étape [vers] après choix de la date. Renvoie true si fait.
+Future<bool> deplacerAvecDialogue(BuildContext context, Lot l, String vers) async {
+  final note = TextEditingController();
+  var date = DateTime.now();
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, set) => AlertDialog(
+        title: Text('{0} → {1}'.trf(['#${l.numero}', etapeNom(vers)])),
+        content: SizedBox(
+          width: 400,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_rounded),
+              title: Text('Date'.tr),
+              subtitle: Text(fmtDate(date)),
+              onTap: () async {
+                final d = await showDatePicker(context: ctx, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 7)));
+                if (d != null) set(() => date = d);
+              },
+            ),
+            TextField(controller: note, decoration: InputDecoration(labelText: 'Note (facultatif)'.tr)),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Confirmer'.tr)),
+        ],
+      ),
+    ),
+  );
+  if (ok != true || !context.mounted) return false;
+  try {
+    await data.deplacerLot(l, vers, date, note: note.text);
+    if (context.mounted) showSnack(context, 'Paquet envoyé : {0}'.trf([etapeNom(vers)]));
+    return true;
+  } catch (e) {
+    if (context.mounted) showSnack(context, errorMessage(e), error: true);
+    return false;
+  }
+}
+
+/// Entrée d'un paquet terminé au stock (nombre de pièces par modèle).
+Future<bool> entrerStockDialogue(BuildContext context, Lot l) async {
+  final abimees = couture.envoisDuLot(l.id).fold<int>(0, (s, e) => s + e.abimees);
+  final pieces = TextEditingController(text: '${(l.nbPieces - abimees).clamp(0, l.nbPieces)}');
+  var date = DateTime.now();
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, set) => AlertDialog(
+        title: Text('Entrer le paquet {0} au stock'.trf(['#${l.numero}'])),
+        content: SizedBox(
+          width: 400,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (l.modele != null) Text('{0} : {1}'.trf(['Modèle'.tr, l.modele!])),
+            if (abimees > 0) Text('{0} pièces abîmées à la couture'.trf([abimees]), style: const TextStyle(color: AppColors.rose)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: pieces,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(labelText: 'Pièces terminées'.tr, prefixIcon: const Icon(Icons.inventory_rounded)),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_rounded),
+              title: Text('Date'.tr),
+              subtitle: Text(fmtDate(date)),
+              onTap: () async {
+                final d = await showDatePicker(context: ctx, initialDate: date, firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 7)));
+                if (d != null) set(() => date = d);
+              },
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Confirmer'.tr)),
+        ],
+      ),
+    ),
+  );
+  final n = parseInt(pieces.text) ?? 0;
+  if (ok != true || n <= 0 || !context.mounted) return false;
+  try {
+    await data.entrerStock(l, n, date);
+    if (context.mounted) showSnack(context, 'Paquet entré au stock : {0} pièces'.trf([n]));
+    return true;
+  } catch (e) {
+    if (context.mounted) showSnack(context, errorMessage(e), error: true);
+    return false;
+  }
 }

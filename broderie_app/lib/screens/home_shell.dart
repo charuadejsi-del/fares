@@ -10,6 +10,7 @@ import '../utils.dart';
 import '../widgets.dart';
 import 'admin_screens.dart';
 import 'gestion_screens.dart';
+import 'atelier_screen.dart';
 import 'coupe_screen.dart';
 import 'couture_screen.dart';
 import '../data/couture.dart';
@@ -30,7 +31,7 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-enum _Cle { accueil, coupe, broderie, couture, paie, stock, ventes, achats }
+enum _Cle { accueil, coupe, broderie, decoration, couture, finition, paie, stock, ventes, achats }
 
 class _Dest {
   final _Cle cle;
@@ -70,7 +71,11 @@ class _HomeShellState extends State<HomeShell> {
         if (session.peut(Espace.broderie))
           _Dest(_Cle.broderie, 'Broderie'.tr, 'Production broderie'.tr, 'Atelier'.tr, Icons.blur_on_outlined, Icons.blur_on_rounded),
         if (session.admin || session.peut(Espace.broderie) || session.peut(Espace.paie))
+          _Dest(_Cle.decoration, 'Appliqué · Akkach'.tr, 'Appliqué · akkach (presse)'.tr, 'Atelier'.tr, Icons.auto_awesome_outlined, Icons.auto_awesome_rounded),
+        if (session.admin || session.peut(Espace.broderie) || session.peut(Espace.paie))
           _Dest(_Cle.couture, 'Couture'.tr, 'Couture · ateliers externes'.tr, 'Atelier'.tr, Icons.design_services_outlined, Icons.design_services_rounded),
+        if (session.admin || session.peut(Espace.broderie) || session.peut(Espace.paie))
+          _Dest(_Cle.finition, 'Finition'.tr, 'Finition · repassage · emballage'.tr, 'Atelier'.tr, Icons.iron_outlined, Icons.iron_rounded),
         if (session.peut(Espace.paie))
           _Dest(_Cle.paie, 'Ouvriers'.tr, 'Ouvriers · salaires & avances'.tr, 'Atelier'.tr, Icons.groups_outlined, Icons.groups_rounded),
         if (session.peut(Espace.stock))
@@ -213,6 +218,8 @@ class _HomeShellState extends State<HomeShell> {
         ),
       _Cle.coupe => const CoupeModule(),
       _Cle.couture => const CoutureModule(),
+      _Cle.decoration => const AtelierInterneModule(etapes: ['applique', 'akkach']),
+      _Cle.finition => const AtelierInterneModule(etapes: ['finition']),
       _Cle.broderie => BroderieModule(onGoToOuvriers: session.peut(Espace.paie) ? () => _aller(_Cle.paie) : null),
       _Cle.paie => const OuvriersModule(),
       _Cle.stock => const ProduitsScreen(),

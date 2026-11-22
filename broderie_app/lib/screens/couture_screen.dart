@@ -46,7 +46,7 @@ Future<void> _pdfEnvoi(BuildContext context, EnvoiCouture e, {bool partage = fal
   final a = session.atelier, c = couture.atelier(e.couturierId), l = data.lot(e.lotId);
   if (a == null || c == null) return;
   try {
-    final bytes = await buildBonEnvoiCouture(atelier: a, couturier: c, numeroLot: _numero(e.lotId), modele: l?.modele, couleur: l?.couleur, envoi: e);
+    final bytes = await buildBonEnvoiCouture(atelier: a, couturier: c, numeroLot: _numero(e.lotId), modele: l?.modele, couleur: l?.couleur, dentelle: l?.dentelle ?? false, envoi: e);
     final nom = 'Envoi_couture_${_numero(e.lotId)}.pdf';
     partage ? await partager(bytes, nom) : await imprimer(bytes, nom);
   } catch (err) {
@@ -175,6 +175,7 @@ class CarteEnvoi extends StatelessWidget {
         ]),
         const SizedBox(height: 6),
         Text('Parti le {0} · {1} / pièce'.trf([fmtDate(e.date), fmtDA(e.prix)]), style: TextStyle(color: muted, fontSize: 13)),
+        if (data.lot(e.lotId)?.dentelle ?? false) Text('Avec dentelle (posée à la couture)'.tr, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
         LinearProgressIndicator(value: e.pieces == 0 ? 0 : e.rendues / e.pieces, minHeight: 6, borderRadius: BorderRadius.circular(4)),
         const SizedBox(height: 8),
@@ -268,6 +269,7 @@ class _EnvoiFormState extends State<_EnvoiForm> {
       onSave: _save,
       children: [
         if (l.modele != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text('{0} : {1}'.trf(['Modèle'.tr, l.modele!]))),
+        if (l.dentelle) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text('Avec dentelle (posée à la couture)'.tr, style: const TextStyle(fontWeight: FontWeight.w700))),
         DropdownButtonFormField<String>(
           initialValue: _couturier,
           decoration: InputDecoration(labelText: 'Atelier de couture'.tr, prefixIcon: const Icon(Icons.store_rounded)),

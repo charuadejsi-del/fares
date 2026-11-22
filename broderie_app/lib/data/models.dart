@@ -102,6 +102,7 @@ class Piece {
   final double montant;
   final String? note;
   final String? tacheId;
+  final String? lotId;
 
   const Piece({
     required this.id,
@@ -113,6 +114,7 @@ class Piece {
     required this.montant,
     this.note,
     this.tacheId,
+    this.lotId,
   });
 
   factory Piece.fromMap(Map<String, dynamic> m) => Piece(
@@ -125,6 +127,7 @@ class Piece {
         montant: _toD(m['montant']),
         note: m['note'] as String?,
         tacheId: m['tache_id'] as String?,
+        lotId: m['lot_id'] as String?,
       );
 
   static Map<String, dynamic> toRow({
@@ -135,6 +138,7 @@ class Piece {
     required double prixUnitaire,
     String? note,
     String? tacheId,
+    String? lotId,
   }) =>
       {
         'ouvrier_id': ouvrierId,
@@ -144,6 +148,7 @@ class Piece {
         'prix_unitaire': prixUnitaire,
         'note': _nullIfEmpty(note),
         if (tacheId != null) 'tache_id': tacheId,
+        if (lotId != null) 'lot_id': lotId,
       };
 }
 
@@ -469,6 +474,9 @@ class Lot {
   final String? modele;
   final String? couleur;
   final DateTime? dateCoupe;
+  final bool dentelle;
+  final int? piecesStock;
+  final DateTime? dateStock;
 
   const Lot({
     required this.id,
@@ -485,6 +493,9 @@ class Lot {
     this.modele,
     this.couleur,
     this.dateCoupe,
+    this.dentelle = false,
+    this.piecesStock,
+    this.dateStock,
   });
 
   bool get livre => dateLivraison != null;
@@ -513,6 +524,9 @@ class Lot {
         modele: m['modele'] as String?,
         couleur: m['couleur'] as String?,
         dateCoupe: m['date_coupe'] == null ? null : DateTime.parse(m['date_coupe'] as String),
+        dentelle: (m['dentelle'] ?? false) as bool,
+        piecesStock: (m['pieces_stock'] as num?)?.toInt(),
+        dateStock: m['date_stock'] == null ? null : DateTime.parse(m['date_stock'] as String),
       );
 
   static Map<String, dynamic> toRow({
@@ -564,10 +578,15 @@ int partPoints(int totalPoints, int pieces, int piecesSaisie, int nbLots) {
 // ====================================================================== circuit de production
 
 /// Étapes possibles d'un paquet, dans l'ordre de l'atelier.
-const etapesAtelier = ['coupe', 'broderie', 'applique', 'akkach', 'dentelle', 'couture', 'finition', 'stock'];
+const etapesAtelier = ['coupe', 'broderie', 'applique', 'akkach', 'couture', 'finition', 'stock'];
 
-/// Décorations possibles entre la coupe et la couture (ordre fixe).
-const decorations = ['broderie', 'applique', 'akkach', 'dentelle'];
+/// Ateliers internes dont on saisit le travail, avec leurs départements d'ouvriers.
+const departementsEtape = {
+  'coupe': ['Coupe'],
+  'applique': ['Appliqué'],
+  'akkach': ['Akkach'],
+  'finition': ['Finition', 'Repassage', 'Emballage'],
+};
 
 String etapeNom(String e) => switch (e) {
       'coupe' => 'Coupe'.tr,

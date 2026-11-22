@@ -1294,6 +1294,7 @@ Future<Uint8List> buildBonEnvoiCouture({
   required String numeroLot,
   String? modele,
   String? couleur,
+  bool dentelle = false,
   required EnvoiCouture envoi,
 }) async {
   final doc = await _nouveau(atelier, 'Bon d\'envoi couture'.tr);
@@ -1323,6 +1324,10 @@ Future<Uint8List> buildBonEnvoiCouture({
         widths: const {0: pw.FlexColumnWidth(), 1: pw.FlexColumnWidth(1.4), 2: pw.FlexColumnWidth(1.2), 3: pw.FlexColumnWidth(), 4: pw.FlexColumnWidth(), 5: pw.FlexColumnWidth(1.2)},
         droite: {3, 4, 5},
       ),
+      if (dentelle) ...[
+        pw.SizedBox(height: 8),
+        pw.Text('Avec dentelle (posée à la couture)'.tr, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+      ],
       pw.SizedBox(height: 10),
       pw.Text('Le paiement est calculé sur les pièces rendues en bon état.'.tr, style: const pw.TextStyle(fontSize: 9, color: _grey)),
       if (couturier.telephone != null) pw.Text('{0} : {1}'.trf(['Téléphone'.tr, couturier.telephone!]), style: const pw.TextStyle(fontSize: 9, color: _grey)),

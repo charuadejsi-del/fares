@@ -11,8 +11,12 @@ import 'paie_forms.dart';
 import 'refs_screens.dart' show FormDialog;
 import '../i18n.dart';
 
-/// Ouvriers dont on saisit le travail ici : tous sauf les brodeurs payés aux points.
-List<Ouvrier> _ouvriersTravail() => data.ouvriers.where((o) => o.actif && !o.brodeur).toList()
+/// Ouvriers dont on saisit le travail ici : tous sauf les brodeurs payés aux points
+/// (limités aux [departements] d'un atelier si précisé).
+List<Ouvrier> _ouvriersTravail([List<String>? departements]) => data.ouvriers
+    .where((o) => o.actif && !o.brodeur)
+    .where((o) => departements == null || departements.any((d) => d.toLowerCase() == o.departement.toLowerCase()))
+    .toList()
   ..sort((a, b) {
     final d = a.departement.compareTo(b.departement);
     return d != 0 ? d : a.nom.compareTo(b.nom);
@@ -22,8 +26,18 @@ String _q(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStrin
 
 // ====================================================================== saisie du travail
 
+class _LigneTravailLot {
+  String? lotId;
+  final pieces = TextEditingController();
+}
+
 class TravauxSaisieScreen extends StatefulWidget {
-  const TravauxSaisieScreen({super.key});
+  /// Départements des ouvriers proposés (null : tous).
+  final List<String>? departements;
+
+  /// Étapes dont on peut choisir les paquets (null : tous les paquets hors stock).
+  final List<String>? etapes;
+  const TravauxSaisieScreen({super.key, this.departements, this.etapes});
 
   @override
   State<TravauxSaisieScreen> createState() => _TravauxSaisieScreenState();
@@ -40,10 +54,14 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
   bool _busy = false;
   List<Piece> _jour = [];
   int _seen = -1;
+  final List<_LigneTravailLot> _lignes = [];
 
   Ouvrier? get _o => data.ouvrier(_ouvrierId);
   bool get _auMois => _o?.modePaie == ModePaie.mois;
-  double get _qteN => parseNum(_qte.text) ?? 0;
+  List<_LigneTravailLot> get _lignesValides => _lignes.where((l) => l.lotId != null && (parseInt(l.pieces.text) ?? 0) > 0).toList();
+  bool get _parPaquet => _lignes.any((l) => l.lotId != null);
+  double get _qteN => _parPaquet ? _lignesValides.fold<double>(0, (s, l) => s + parseInt(l.pieces.text)!) : (parseNum(_qte.text) ?? 0);
+  List<Lot> get _lotsPossibles => data.lots.where((l) => widget.etapes == null ? l.etape != 'stock' : widget.etapes!.contains(l.etape)).toList();
   double get _prixN => _auMois && !_extra ? 0 : (parseNum(_prix.text) ?? 0);
 
   @override
@@ -52,7 +70,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
     data.addListener(_onData);
     _qte.addListener(() => setState(() {}));
     _prix.addListener(() => setState(() {}));
-    final l = _ouvriersTravail();
+    final l = _ouvriersTravail(widget.departements);
     if (l.isNotEmpty) _choisirOuvrier(l.first);
     _chargerJour();
   }
@@ -63,6 +81,9 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
     _libelle.dispose();
     _qte.dispose();
     _prix.dispose();
+    for (final l in _lignes) {
+      l.pieces.dispose();
+    }
     super.dispose();
   }
 
@@ -119,18 +140,31 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
     }
     setState(() => _busy = true);
     try {
-      await data.savePiece(Piece.toRow(
-        ouvrierId: o.id,
-        dateKey: dateKey(_date),
-        libelle: _libelle.text,
-        quantite: _qteN,
-        prixUnitaire: _prixN,
-        tacheId: _tache != null && _tache!.nom.trim() == _libelle.text.trim() ? _tache!.id : null,
-        note: _auMois && _extra ? 'Extra'.tr : null,
-      ));
+      Map<String, dynamic> row(double qte, String? lotId) => Piece.toRow(
+            ouvrierId: o.id,
+            dateKey: dateKey(_date),
+            libelle: _libelle.text,
+            quantite: qte,
+            prixUnitaire: _prixN,
+            tacheId: _tache != null && _tache!.nom.trim() == _libelle.text.trim() ? _tache!.id : null,
+            note: _auMois && _extra ? 'Extra'.tr : null,
+            lotId: lotId,
+          );
+      final total = _qteN;
+      if (_parPaquet) {
+        await data.savePieces([for (final l in _lignesValides) row(parseInt(l.pieces.text)!.toDouble(), l.lotId)]);
+      } else {
+        await data.savePiece(row(total, null));
+      }
       if (!mounted) return;
-      showSnack(context, '✓ {0} · {1} × {2}{3}'.trf([o.nom, _libelle.text.trim(), _q(_qteN), _prixN > 0 ? ' = ${fmtDA(_qteN * _prixN)}' : ' (sans montant)'.tr]));
+      showSnack(context, '✓ {0} · {1} × {2}{3}'.trf([o.nom, _libelle.text.trim(), _q(total), _prixN > 0 ? ' = ${fmtDA(total * _prixN)}' : ' (sans montant)'.tr]));
       _qte.clear();
+      setState(() {
+        for (final l in _lignes) {
+          l.pieces.dispose();
+        }
+        _lignes.clear();
+      });
     } catch (e) {
       if (mounted) showSnack(context, errorMessage(e), error: true);
     }
@@ -139,7 +173,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ouvriers = _ouvriersTravail();
+    final ouvriers = _ouvriersTravail(widget.departements);
     if (ouvriers.isEmpty) {
       return EmptyState(
         'Aucun ouvrier hors broderie.\nAjoutez un ouvrier payé à la pièce ou au mois (Couture, Coupe, Repassage…) dans l\'onglet Équipe.'.tr,
@@ -198,7 +232,60 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
           ),
         ],
         const SizedBox(height: 12),
+        SectionTitle('Paquet(s)'.tr, subtitle: 'Facultatif : relie le travail aux paquets'.tr),
+        for (var i = 0; i < _lignes.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(children: [
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _lignes[i].lotId,
+                  isExpanded: true,
+                  decoration: InputDecoration(isDense: true, labelText: 'Paquet'.tr),
+                  items: [
+                    for (final l in _lotsPossibles.where((l) => l.id == _lignes[i].lotId || !_lignes.any((x) => x.lotId == l.id)))
+                      DropdownMenuItem(value: l.id, child: Text('#${l.numero} · ${l.nbPieces} ${'pièces'.tr}${l.modele == null ? '' : ' · ${l.modele}'}', overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (v) => setState(() {
+                    _lignes[i].lotId = v;
+                    if (_lignes[i].pieces.text.isEmpty) _lignes[i].pieces.text = '${data.lot(v)?.nbPieces ?? ''}';
+                  }),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: _lignes[i].pieces,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(isDense: true, labelText: 'pièces'.tr),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              IconButton(
+                onPressed: () => setState(() => _lignes.removeAt(i).pieces.dispose()),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ]),
+          ),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton.icon(
+            onPressed: _lotsPossibles.length > _lignes.length ? () => setState(() => _lignes.add(_LigneTravailLot())) : null,
+            icon: const Icon(Icons.add_rounded),
+            label: Text(_lignes.isEmpty ? 'Ajouter un paquet'.tr : 'Ajouter un autre paquet'.tr),
+          ),
+        ),
+        const SizedBox(height: 12),
         SectionTitle('3 · Quantité'.tr),
+        if (_parPaquet)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text('Total des paquets : {0} pièces'.trf([_q(_qteN)]), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+          )
+        else
         Row(children: [
           IconButton.filledTonal(
             onPressed: _qteN >= 1 ? () => _ajouter(-1) : null,
@@ -219,6 +306,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
           IconButton.filled(onPressed: () => _ajouter(1), icon: const Icon(Icons.add_rounded)),
         ]),
         const SizedBox(height: 8),
+        if (!_parPaquet)
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final n in const [5, 10, 20, 50, 100]) ActionChip(label: Text('+$n'), onPressed: () => _ajouter(n)),
         ]),
