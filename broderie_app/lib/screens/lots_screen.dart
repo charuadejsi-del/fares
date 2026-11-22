@@ -16,7 +16,7 @@ enum _Filtre { encours, termines, livres, tous }
 
 /// État d'un paquet : en broderie, terminé (toutes les pièces brodées) ou livré à la couture.
 String _etat(Lot l) {
-  if (l.livre) return 'Livré'.tr;
+  if (l.livre) return '{0} → {1}'.trf(['Livré'.tr, etapeNom(l.etape)]);
   return data.avancement(l.id).pieces >= l.nbPieces ? 'Terminé'.tr : 'En broderie'.tr;
 }
 
@@ -63,8 +63,9 @@ class _LotsScreenState extends State<LotsScreen> {
   Widget build(BuildContext context) => ListenableBuilder(
         listenable: data,
         builder: (context, _) {
-          final liste = data.lots.where(_garde).toList();
-          final enCours = data.lots.where((l) => !l.livre).toList();
+          final mesLots = data.lots.where((l) => l.passeBroderie && l.etape != 'coupe').toList();
+          final liste = mesLots.where(_garde).toList();
+          final enCours = mesLots.where((l) => !l.livre).toList();
           final aBroder = enCours.fold<int>(0, (s, l) => s + (l.nbPieces - data.avancement(l.id).pieces).clamp(0, l.nbPieces));
           final wide = MediaQuery.sizeOf(context).width >= 1000;
           return Scaffold(
@@ -114,7 +115,7 @@ class _LotsScreenState extends State<LotsScreen> {
                     Padding(
                       padding: const EdgeInsets.only(top: 30),
                       child: EmptyState(
-                        data.lots.isEmpty
+                        mesLots.isEmpty
                             ? 'Aucun paquet.\nAjoutez le paquet reçu de la coupe (ex. n° 53 · 128 pièces).'.tr
                             : 'Aucun paquet pour ce filtre.'.tr,
                         icon: Icons.inventory_2_outlined,
@@ -224,7 +225,7 @@ class _LotFormState extends State<_LotForm> {
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
     final num = _numero.text.trim().replaceFirst('#', '');
-    if (data.lots.any((l) => l.numero == num && l.id != widget.existing?.id && !l.livre)) {
+    if (data.lots.any((l) => l.numero == num && l.id != widget.existing?.id && l.etape != 'stock')) {
       showSnack(context, 'Le paquet {0} existe déjà (non livré).'.trf(['#$num']), error: true);
       return;
     }
@@ -408,7 +409,7 @@ class _LotDetailScreenState extends State<LotDetailScreen> {
     }
     final d = await showDatePicker(
       context: context,
-      helpText: 'Date de livraison à la couture'.tr,
+      helpText: 'Date de livraison'.tr,
       initialDate: DateTime.now(),
       firstDate: a.debut ?? DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 30)),
@@ -516,7 +517,7 @@ class _LotDetailScreenState extends State<LotDetailScreen> {
             FilledButton.tonalIcon(
               onPressed: () => _livrer(l),
               icon: const Icon(Icons.local_shipping_rounded),
-              label: Text('Livrer à la couture'.tr),
+              label: Text('Livrer à : {0}'.trf([etapeNom(l.suivante ?? 'couture')])),
             ),
           OutlinedButton.icon(onPressed: () => _fiche(l), icon: const Icon(Icons.print_rounded), label: Text('Fiche PDF'.tr)),
           OutlinedButton.icon(onPressed: () => _fiche(l, partage: true), icon: const Icon(Icons.share_rounded), label: Text('Partager'.tr)),
@@ -679,7 +680,7 @@ class EditeurLots extends StatelessWidget {
                   isExpanded: true,
                   decoration: InputDecoration(isDense: true, labelText: 'Paquet'.tr),
                   items: [
-                    for (final l in data.lots.where((l) => (!l.livre && !choisis.contains(l.id)) || l.id == lignes[i].lotId))
+                    for (final l in data.lots.where((l) => (l.enBroderie && !l.livre && !choisis.contains(l.id)) || l.id == lignes[i].lotId))
                       DropdownMenuItem<String?>(value: l.id, child: Text('{0} · reste {1}'.trf(['#${l.numero}', _reste(l)]))),
                   ],
                   onChanged: (v) {
@@ -726,7 +727,7 @@ class EditeurLots extends StatelessWidget {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: TextButton.icon(
-            onPressed: data.lots.any((l) => !l.livre && !choisis.contains(l.id))
+            onPressed: data.lots.any((l) => l.enBroderie && !l.livre && !choisis.contains(l.id))
                 ? () {
                     lignes.add(LigneLot());
                     onChanged();

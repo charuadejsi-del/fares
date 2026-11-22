@@ -199,9 +199,44 @@ class AppData extends ChangeNotifier {
     return rid;
   }
 
+  /// Livraison d'un paquet par la broderie : il part à l'étape suivante de son parcours.
+  /// [date] nulle : annule la livraison et ramène le paquet en broderie.
   Future<void> livrerLot(String id, DateTime? date) async {
-    await _db.from('broderie_lots').update({'date_livraison': date == null ? null : dateKey(date)}).eq('id', id);
+    final l = lot(id);
+    if (l == null) return;
+    if (date == null) {
+      await _db.from('broderie_lots').update({'date_livraison': null, 'etape': 'broderie'}).eq('id', id);
+      await _db.from('lot_mouvements').delete().eq('lot_id', id).eq('de', 'broderie');
+    } else {
+      final vers = l.enBroderie ? (l.suivante ?? 'couture') : l.etape;
+      await _db.from('broderie_lots').update({'date_livraison': dateKey(date), 'etape': vers}).eq('id', id);
+      if (l.enBroderie) {
+        await _db.from('lot_mouvements').insert({'lot_id': id, 'de': 'broderie', 'vers': vers, 'pieces': l.nbPieces, 'date_mvt': dateKey(date)});
+      }
+    }
     await loadLots();
+  }
+
+  /// Fait passer un paquet à une autre étape et garde la trace du mouvement.
+  Future<void> deplacerLot(Lot l, String vers, DateTime date, {String? note}) async {
+    final row = <String, dynamic>{'etape': vers};
+    final iB = l.circuit.indexOf('broderie'), iV = l.circuit.indexOf(vers);
+    if (l.passeBroderie) row['date_livraison'] = iV > iB ? (l.dateLivraison == null ? dateKey(date) : dateKey(l.dateLivraison!)) : null;
+    await _db.from('broderie_lots').update(row).eq('id', l.id);
+    await _db.from('lot_mouvements').insert({
+      'lot_id': l.id,
+      'de': l.etape,
+      'vers': vers,
+      'pieces': l.nbPieces,
+      'date_mvt': dateKey(date),
+      if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+    });
+    await loadLots();
+  }
+
+  Future<List<MouvementLot>> fetchMouvements(String lotId) async {
+    final rows = await _db.from('lot_mouvements').select().eq('lot_id', lotId).order('date_mvt').order('created_at');
+    return rows.map(MouvementLot.fromMap).toList();
   }
 
   Future<void> deleteLot(String id) async {

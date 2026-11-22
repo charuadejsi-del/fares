@@ -277,9 +277,9 @@ class _QuickEntryScreenState extends State<QuickEntryScreen> {
                     tilePadding: EdgeInsets.zero,
                     title: Text('Détails facultatifs'.tr, style: TextStyle(color: context.pal.muted, fontSize: 14)),
                     subtitle: Text('Paquet, dessin, nombre de robes, remarque'.tr, style: TextStyle(color: context.pal.muted, fontSize: 12)),
-                    initiallyExpanded: data.lots.any((l) => !l.livre),
+                    initiallyExpanded: data.lots.any((l) => l.enBroderie && !l.livre),
                     children: [
-                      if (data.lots.any((l) => !l.livre)) ...[
+                      if (data.lots.any((l) => l.enBroderie && !l.livre)) ...[
                         EditeurLots(
                           lignes: _lots,
                           onChanged: () => setState(() {}),

@@ -10,6 +10,7 @@ import '../utils.dart';
 import '../widgets.dart';
 import 'admin_screens.dart';
 import 'gestion_screens.dart';
+import 'coupe_screen.dart';
 import 'modules.dart';
 import 'ouvrier_detail_screen.dart';
 import 'quick_entry_screen.dart';
@@ -27,7 +28,7 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-enum _Cle { accueil, broderie, paie, stock, ventes, achats }
+enum _Cle { accueil, coupe, broderie, paie, stock, ventes, achats }
 
 class _Dest {
   final _Cle cle;
@@ -62,6 +63,8 @@ class _HomeShellState extends State<HomeShell> {
   List<_Dest> get _dests => [
         if (session.admin)
           _Dest(_Cle.accueil, 'Accueil'.tr, 'Vue d\'ensemble'.tr, 'Pilotage'.tr, Icons.space_dashboard_outlined, Icons.space_dashboard_rounded),
+        if (session.admin || session.peut(Espace.broderie))
+          _Dest(_Cle.coupe, 'Coupe'.tr, 'Coupe · suivi des paquets'.tr, 'Atelier'.tr, Icons.content_cut_outlined, Icons.content_cut_rounded),
         if (session.peut(Espace.broderie))
           _Dest(_Cle.broderie, 'Broderie'.tr, 'Production broderie'.tr, 'Atelier'.tr, Icons.blur_on_outlined, Icons.blur_on_rounded),
         if (session.peut(Espace.paie))
@@ -203,6 +206,7 @@ class _HomeShellState extends State<HomeShell> {
             _ => _Cle.ventes,
           }),
         ),
+      _Cle.coupe => const CoupeModule(),
       _Cle.broderie => BroderieModule(onGoToOuvriers: session.peut(Espace.paie) ? () => _aller(_Cle.paie) : null),
       _Cle.paie => const OuvriersModule(),
       _Cle.stock => const ProduitsScreen(),

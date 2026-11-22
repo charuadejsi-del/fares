@@ -464,6 +464,11 @@ class Lot {
   final String? note;
   final DateTime? dateLivraison;
   final DateTime createdAt;
+  final String etape;
+  final List<String> parcours;
+  final String? modele;
+  final String? couleur;
+  final DateTime? dateCoupe;
 
   const Lot({
     required this.id,
@@ -475,9 +480,23 @@ class Lot {
     this.note,
     this.dateLivraison,
     required this.createdAt,
+    this.etape = 'broderie',
+    this.parcours = const ['broderie', 'couture', 'finition'],
+    this.modele,
+    this.couleur,
+    this.dateCoupe,
   });
 
   bool get livre => dateLivraison != null;
+  bool get passeBroderie => parcours.contains('broderie');
+  bool get enBroderie => etape == 'broderie';
+
+  /// Toutes les étapes du paquet, de la coupe au stock.
+  List<String> get circuit => ['coupe', ...parcours, 'stock'];
+  String? get suivante {
+    final c = circuit, i = c.indexOf(etape);
+    return i < 0 || i >= c.length - 1 ? null : c[i + 1];
+  }
 
   factory Lot.fromMap(Map<String, dynamic> m) => Lot(
         id: m['id'] as String,
@@ -489,6 +508,11 @@ class Lot {
         note: m['note'] as String?,
         dateLivraison: m['date_livraison'] == null ? null : DateTime.parse(m['date_livraison'] as String),
         createdAt: DateTime.tryParse((m['created_at'] ?? '') as String) ?? DateTime.now(),
+        etape: (m['etape'] ?? 'broderie') as String,
+        parcours: [for (final e in (m['parcours'] as List?) ?? const ['broderie', 'couture', 'finition']) e as String],
+        modele: m['modele'] as String?,
+        couleur: m['couleur'] as String?,
+        dateCoupe: m['date_coupe'] == null ? null : DateTime.parse(m['date_coupe'] as String),
       );
 
   static Map<String, dynamic> toRow({
@@ -534,4 +558,47 @@ class JourneeLot {
 int partPoints(int totalPoints, int pieces, int piecesSaisie, int nbLots) {
   if (piecesSaisie > 0) return (totalPoints * pieces / piecesSaisie).round();
   return nbLots == 0 ? 0 : (totalPoints / nbLots).round();
+}
+
+
+// ====================================================================== circuit de production
+
+/// Étapes possibles d'un paquet, dans l'ordre de l'atelier.
+const etapesAtelier = ['coupe', 'broderie', 'applique', 'akkach', 'dentelle', 'couture', 'finition', 'stock'];
+
+/// Décorations possibles entre la coupe et la couture (ordre fixe).
+const decorations = ['broderie', 'applique', 'akkach', 'dentelle'];
+
+String etapeNom(String e) => switch (e) {
+      'coupe' => 'Coupe'.tr,
+      'broderie' => 'Broderie'.tr,
+      'applique' => 'Appliqué'.tr,
+      'akkach' => 'Akkach'.tr,
+      'dentelle' => 'Dentelle'.tr,
+      'couture' => 'Couture'.tr,
+      'finition' => 'Finition'.tr,
+      'stock' => 'Stock'.tr,
+      _ => e,
+    };
+
+/// Un passage d'un paquet d'un atelier à un autre.
+class MouvementLot {
+  final String id;
+  final String de;
+  final String vers;
+  final int pieces;
+  final DateTime date;
+  final String? note;
+  final DateTime createdAt;
+  const MouvementLot({required this.id, required this.de, required this.vers, required this.pieces, required this.date, this.note, required this.createdAt});
+
+  factory MouvementLot.fromMap(Map<String, dynamic> m) => MouvementLot(
+        id: m['id'] as String,
+        de: m['de'] as String,
+        vers: m['vers'] as String,
+        pieces: _toI(m['pieces']),
+        date: DateTime.parse(m['date_mvt'] as String),
+        note: m['note'] as String?,
+        createdAt: DateTime.tryParse((m['created_at'] ?? '') as String) ?? DateTime.now(),
+      );
 }
