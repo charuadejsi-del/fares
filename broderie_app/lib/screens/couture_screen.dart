@@ -54,12 +54,27 @@ Future<void> _pdfEnvoi(BuildContext context, EnvoiCouture e, {bool partage = fal
   }
 }
 
-Future<void> _pdfReception(BuildContext context, EnvoiCouture e, RetourCouture r, {bool partage = false}) async {
+/// Pièces payées le jour d'un retour (paiements liés à l'envoi à cette date).
+int _payeesLe(EnvoiCouture e, DateTime d) =>
+    couture.paiements.where((p) => p.envoiId == e.id && dayOnly(p.date) == dayOnly(d)).fold(0, (s, p) => s + (p.pieces ?? 0));
+
+/// [pourCouture] : exemplaire de l'atelier de couture (avec paiement) ; sinon exemplaire de la finition (sans prix).
+Future<void> _pdfReception(BuildContext context, EnvoiCouture e, RetourCouture r, {bool pourCouture = true, bool partage = false}) async {
   final a = session.atelier, c = couture.atelier(e.couturierId), l = data.lot(e.lotId);
   if (a == null || c == null) return;
   try {
-    final bytes = await buildBonReceptionCouture(atelier: a, couturier: c, numeroLot: _numero(e.lotId), modele: l?.modele, couleur: l?.couleur, envoi: e, retour: r);
-    final nom = 'Reception_couture_${_numero(e.lotId)}.pdf';
+    final bytes = await buildBonReceptionCouture(
+      atelier: a,
+      couturier: c,
+      numeroLot: _numero(e.lotId),
+      modele: l?.modele,
+      couleur: l?.couleur,
+      envoi: e,
+      retour: r,
+      pourCouture: pourCouture,
+      payeesMaintenant: _payeesLe(e, r.date),
+    );
+    final nom = '${pourCouture ? 'Reception_couture' : 'Reception_finition'}_${_numero(e.lotId)}.pdf';
     partage ? await partager(bytes, nom) : await imprimer(bytes, nom);
   } catch (err) {
     if (context.mounted) showSnack(context, errorMessage(err), error: true);
@@ -197,6 +212,7 @@ class CarteEnvoi extends StatelessWidget {
           if (e.abimees > 0) _chiffre('Abîmées'.tr, e.abimees, AppColors.rose),
           if (e.retouche > 0) _chiffre('Retouches'.tr, e.retouche, AppColors.gold),
           _chiffre('Chez l\'atelier'.tr, e.restant, AppColors.sky),
+          if (e.bonnes > 0) _chiffre('À payer'.tr, e.aPayer, e.aPayer > 0 ? AppColors.rose : AppColors.green),
         ]),
         if (!e.termine) ...[
           const SizedBox(height: 10),
@@ -322,13 +338,25 @@ class _RetourFormState extends State<_RetourForm> {
   late final _bonnes = TextEditingController(text: '${widget.e.restant}');
   final _retouche = TextEditingController();
   final _abimees = TextEditingController();
+  late final _payer = TextEditingController(text: '${widget.e.restant}');
   final _note = TextEditingController();
   DateTime _date = DateTime.now();
   bool _busy = false;
+  bool _payerModifie = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _bonnes.addListener(() {
+      if (!_payerModifie) _payer.text = _bonnes.text;
+      setState(() {});
+    });
+    _payer.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
-    for (final c in [_bonnes, _retouche, _abimees, _note]) {
+    for (final c in [_bonnes, _retouche, _abimees, _payer, _note]) {
       c.dispose();
     }
     super.dispose();
@@ -344,15 +372,23 @@ class _RetourFormState extends State<_RetourForm> {
       showSnack(context, 'Seulement {0} pièces sont chez l\'atelier.'.trf([widget.e.restant]), error: true);
       return;
     }
+    final p = parseInt(_payer.text) ?? 0, maxPayer = widget.e.aPayer + b;
+    if (p > maxPayer) {
+      showSnack(context, 'Vous ne pouvez payer que {0} pièces bonnes non payées.'.trf([maxPayer]), error: true);
+      return;
+    }
     setState(() => _busy = true);
     try {
-      final vers = await couture.retour(widget.e, date: _date, bonnes: b, retouche: r, abimees: a, note: _note.text);
+      final vers = await couture.retour(widget.e, date: _date, bonnes: b, retouche: r, abimees: a, payer: p, note: _note.text);
       if (!mounted) return;
       final env = couture.envois.where((x) => x.id == widget.e.id).firstOrNull;
       final ret = env?.retours.lastOrNull;
       Navigator.pop(context);
       showSnack(context, vers == null ? 'Retour enregistré.'.tr : 'Paquet complet : envoyé à {0}.'.trf([etapeNom(vers)]));
-      if (env != null && ret != null) await _pdfReception(context, env, ret);
+      if (env != null && ret != null) {
+        await _pdfReception(context, env, ret);
+        if (context.mounted) await _pdfReception(context, env, ret, pourCouture: false);
+      }
     } catch (err) {
       if (mounted) {
         setState(() => _busy = false);
@@ -375,6 +411,18 @@ class _RetourFormState extends State<_RetourForm> {
           _champNombre(_retouche, 'À retoucher (rendues à l\'atelier)'.tr, icon: Icons.build_circle_rounded),
           const SizedBox(height: 10),
           _champNombre(_abimees, 'Abîmées'.tr, icon: Icons.cancel_rounded),
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _payer,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            onChanged: (_) => _payerModifie = true,
+            decoration: InputDecoration(
+              labelText: 'Pièces payées maintenant'.tr,
+              prefixIcon: const Icon(Icons.payments_rounded),
+              helperText: '{0} × {1} = {2} · 0 = payer plus tard'.trf([fmtInt(parseInt(_payer.text) ?? 0), fmtDA(widget.e.prix), fmtDA((parseInt(_payer.text) ?? 0) * widget.e.prix)]),
+            ),
+          ),
           const SizedBox(height: 6),
           Text('Les pièces à retoucher restent comptées chez l\'atelier jusqu\'à leur retour.'.tr, style: const TextStyle(fontSize: 12)),
           _ligneDate(context, 'Date du retour'.tr, _date, (d) => setState(() => _date = d)),
@@ -440,7 +488,8 @@ Future<void> _detailEnvoi(BuildContext context, EnvoiCouture e) => showModalBott
                       if (r.note != null) r.note!,
                     ].join(' · ')),
                     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                      IconButton(tooltip: 'Bon de réception PDF'.tr, icon: const Icon(Icons.print_rounded), onPressed: () => _pdfReception(ctx, x, r)),
+                      IconButton(tooltip: 'Bon de réception (couture)'.tr, icon: const Icon(Icons.receipt_long_rounded), onPressed: () => _pdfReception(ctx, x, r)),
+                      IconButton(tooltip: 'Bon pour la finition (sans prix)'.tr, icon: const Icon(Icons.print_rounded), onPressed: () => _pdfReception(ctx, x, r, pourCouture: false)),
                       IconButton(
                       tooltip: 'Supprimer'.tr,
                       icon: const Icon(Icons.delete_outline_rounded),
@@ -507,7 +556,7 @@ class _Ateliers extends StatelessWidget {
                           const SizedBox(height: 8),
                           Text('{0} pièces chez lui'.trf([fmtInt(couture.chezAtelier(a.id))])),
                           Text(
-                            'Reste à payer : {0}'.trf([fmtDA(couture.solde(a.id))]),
+                            'Reste à payer : {0} ({1} pièces)'.trf([fmtDA(couture.solde(a.id)), fmtInt(couture.piecesAPayer(a.id))]),
                             style: TextStyle(fontWeight: FontWeight.w800, color: couture.solde(a.id) > 0 ? AppColors.rose : AppColors.green),
                           ),
                         ]),
@@ -677,35 +726,71 @@ class CouturierScreen extends StatelessWidget {
   const CouturierScreen({super.key, required this.id});
 
   Future<void> _payer(BuildContext context, Couturier c) async {
-    final montant = TextEditingController(text: couture.solde(c.id) > 0 ? couture.solde(c.id).toStringAsFixed(0) : '');
+    final dus = couture.envoisDe(c.id).where((e) => e.aPayer > 0).toList();
+    if (dus.isEmpty) {
+      showSnack(context, 'Aucune pièce à payer pour cet atelier.'.tr);
+      return;
+    }
+    final ctrls = {for (final e in dus) e.id: TextEditingController()};
     final note = TextEditingController();
     var date = DateTime.now();
+    int n(EnvoiCouture e) => (parseInt(ctrls[e.id]!.text) ?? 0).clamp(0, e.aPayer);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, set) => AlertDialog(
-          title: Text('Paiement à {0}'.trf([c.nom])),
-          content: SizedBox(
-            width: 400,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text('Reste à payer : {0}'.trf([fmtDA(couture.solde(c.id))])),
-              const SizedBox(height: 8),
-              _champNombre(montant, 'Montant (DA)'.tr, decimal: true, icon: Icons.payments_rounded),
-              _ligneDate(ctx, 'Date'.tr, date, (d) => set(() => date = d)),
-              TextField(controller: note, decoration: InputDecoration(labelText: 'Note (facultatif)'.tr)),
-            ]),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Enregistrer'.tr)),
-          ],
-        ),
+        builder: (ctx, set) {
+          final total = dus.fold<double>(0, (s, e) => s + n(e) * e.prix);
+          return AlertDialog(
+            title: Text('Paiement à {0}'.trf([c.nom])),
+            content: SizedBox(
+              width: 460,
+              child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Text('Choisissez le nombre de pièces payées pour chaque paquet.'.tr, style: const TextStyle(fontSize: 12)),
+                  const SizedBox(height: 8),
+                  for (final e in dus)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(children: [
+                        Expanded(
+                          child: Text('{0} · {1} à payer × {2}'.trf(['#${_numero(e.lotId)}', fmtInt(e.aPayer), fmtDA(e.prix)]),
+                              style: const TextStyle(fontWeight: FontWeight.w600)),
+                        ),
+                        SizedBox(
+                          width: 90,
+                          child: TextField(
+                            controller: ctrls[e.id],
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            onChanged: (_) => set(() {}),
+                            decoration: InputDecoration(isDense: true, hintText: '0', suffixText: 'pcs'.tr),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Tout'.tr,
+                          icon: const Icon(Icons.done_all_rounded),
+                          onPressed: () => set(() => ctrls[e.id]!.text = '${e.aPayer}'),
+                        ),
+                      ]),
+                    ),
+                  const Divider(),
+                  Text('Total : {0}'.trf([fmtDA(total)]), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  _ligneDate(ctx, 'Date'.tr, date, (d) => set(() => date = d)),
+                  TextField(controller: note, decoration: InputDecoration(labelText: 'Note (facultatif)'.tr)),
+                ]),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
+              FilledButton(onPressed: total > 0 ? () => Navigator.pop(ctx, true) : null, child: Text('Enregistrer'.tr)),
+            ],
+          );
+        },
       ),
     );
-    final m = parseNum(montant.text) ?? 0;
-    if (ok != true || m <= 0) return;
+    if (ok != true) return;
     try {
-      await couture.payer(c.id, montant: m, date: date, note: note.text);
+      await couture.payerPieces(c.id, [for (final e in dus) (e, n(e))], date: date, note: note.text);
       if (context.mounted) showSnack(context, 'Paiement enregistré.'.tr);
     } catch (e) {
       if (context.mounted) showSnack(context, errorMessage(e), error: true);
@@ -760,7 +845,13 @@ class CouturierScreen extends StatelessWidget {
                 StatTile(label: 'Pièces chez lui'.tr, value: fmtInt(couture.chezAtelier(c.id)), icon: Icons.design_services_rounded, color: AppColors.sky),
                 StatTile(label: 'Dû (pièces bonnes)'.tr, value: fmtDA(couture.du(c.id)), icon: Icons.receipt_long_rounded, color: AppColors.gold),
                 StatTile(label: 'Payé'.tr, value: fmtDA(couture.paye(c.id)), icon: Icons.payments_rounded, color: AppColors.green),
-                StatTile(label: 'Reste à payer'.tr, value: fmtDA(couture.solde(c.id)), icon: Icons.account_balance_wallet_rounded, color: AppColors.rose),
+                StatTile(
+                  label: 'Reste à payer'.tr,
+                  value: fmtDA(couture.solde(c.id)),
+                  icon: Icons.account_balance_wallet_rounded,
+                  color: AppColors.rose,
+                  sub: '{0} pièces à payer'.trf([fmtInt(couture.piecesAPayer(c.id))]),
+                ),
               ]),
               const SizedBox(height: 12),
               Wrap(spacing: 8, runSpacing: 8, children: [
@@ -783,7 +874,12 @@ class CouturierScreen extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.payments_rounded, color: AppColors.green),
                   title: Text(fmtDA(p.montant), style: const TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: Text([fmtDate(p.date), if (p.note != null) p.note!].join(' · ')),
+                  subtitle: Text([
+                    fmtDate(p.date),
+                    if (p.envoiId != null) '#${_numero(couture.envois.where((e) => e.id == p.envoiId).firstOrNull?.lotId ?? '')}',
+                    if (p.pieces != null) '{0} pièces'.trf([fmtInt(p.pieces!)]),
+                    if (p.note != null) p.note!,
+                  ].join(' · ')),
                   trailing: IconButton(
                     tooltip: 'Supprimer'.tr,
                     icon: const Icon(Icons.delete_outline_rounded),

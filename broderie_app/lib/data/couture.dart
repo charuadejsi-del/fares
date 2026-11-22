@@ -65,6 +65,9 @@ class EnvoiCouture {
   final DateTime date;
   final String? note;
   final List<RetourCouture> retours;
+
+  /// Pièces bonnes déjà payées (paiements liés à cet envoi).
+  int payees = 0;
   EnvoiCouture({required this.id, required this.lotId, required this.couturierId, required this.pieces, required this.prix, required this.date, this.note, List<RetourCouture>? retours})
       : retours = retours ?? [];
 
@@ -77,6 +80,8 @@ class EnvoiCouture {
 
   /// Payé uniquement sur les pièces bonnes.
   double get montant => bonnes * prix;
+  int get aPayer => (bonnes - payees).clamp(0, bonnes);
+  double get montantAPayer => aPayer * prix;
   DateTime? get dernierRetour => retours.isEmpty ? null : retours.map((r) => r.date).reduce((a, b) => a.isAfter(b) ? a : b);
   int get jours => dayOnly(termine ? (dernierRetour ?? DateTime.now()) : DateTime.now()).difference(dayOnly(date)).inDays;
 
@@ -93,14 +98,18 @@ class EnvoiCouture {
 
 class PaiementCouture {
   final String id, couturierId;
+  final String? envoiId;
+  final int? pieces;
   final DateTime date;
   final double montant;
   final String? note;
-  const PaiementCouture({required this.id, required this.couturierId, required this.date, required this.montant, this.note});
+  const PaiementCouture({required this.id, required this.couturierId, this.envoiId, this.pieces, required this.date, required this.montant, this.note});
 
   factory PaiementCouture.fromMap(Map<String, dynamic> m) => PaiementCouture(
         id: m['id'] as String,
         couturierId: m['couturier_id'] as String,
+        envoiId: m['envoi_id'] as String?,
+        pieces: (m['pieces'] as num?)?.toInt(),
         date: _date(m['date_paie']),
         montant: _d(m['montant']),
         note: m['note'] as String?,
@@ -144,6 +153,7 @@ class Couture extends ChangeNotifier {
   double du(String couturierId) => envoisDe(couturierId).fold(0.0, (s, e) => s + e.montant);
   double paye(String couturierId) => paiementsDe(couturierId).fold(0.0, (s, p) => s + p.montant);
   double solde(String couturierId) => du(couturierId) - paye(couturierId);
+  int piecesAPayer(String couturierId) => envoisDe(couturierId).fold(0, (s, e) => s + e.aPayer);
 
   bool _complet = true;
 
@@ -168,6 +178,9 @@ class Couture extends ChangeNotifier {
         parEnvoi[r.envoiId]?.retours.add(r);
       }
       paiements = res[4].map(PaiementCouture.fromMap).toList();
+      for (final p in paiements) {
+        if (p.envoiId != null && p.pieces != null) parEnvoi[p.envoiId!]?.payees += p.pieces!;
+      }
       loaded = true;
     } catch (e) {
       debugPrint('couture.load: $e');
@@ -228,7 +241,17 @@ class Couture extends ChangeNotifier {
   /// Enregistre un retour. Quand toutes les pièces du paquet sont revenues,
   /// le paquet passe automatiquement à l'étape suivante (finition).
   /// Renvoie l'étape vers laquelle le paquet est parti, le cas échéant.
-  Future<String?> retour(EnvoiCouture e, {required DateTime date, int bonnes = 0, int retouche = 0, int abimees = 0, String? note}) async {
+  Future<String?> retour(EnvoiCouture e, {required DateTime date, int bonnes = 0, int retouche = 0, int abimees = 0, int payer = 0, String? note}) async {
+    if (payer > 0) {
+      await _db.from('couture_paiements').insert({
+        'couturier_id': e.couturierId,
+        'envoi_id': e.id,
+        'pieces': payer,
+        'montant': payer * e.prix,
+        'date_paie': dateKey(date),
+        'note': 'Payé à la réception'.tr,
+      });
+    }
     await _db.from('couture_retours').insert({
       'envoi_id': e.id,
       'date_retour': dateKey(date),
@@ -255,8 +278,22 @@ class Couture extends ChangeNotifier {
     await load();
   }
 
-  Future<void> payer(String couturierId, {required double montant, required DateTime date, String? note}) async {
-    await _db.from('couture_paiements').insert({'couturier_id': couturierId, 'montant': montant, 'date_paie': dateKey(date), 'note': _vide(note)});
+  /// Paiement par pièces : une ligne par envoi payé (pièces × prix de l'envoi).
+  Future<void> payerPieces(String couturierId, List<(EnvoiCouture, int)> lignes, {required DateTime date, String? note}) async {
+    final rows = [
+      for (final l in lignes)
+        if (l.$2 > 0 && l.$1.prix > 0)
+          {
+            'couturier_id': couturierId,
+            'envoi_id': l.$1.id,
+            'pieces': l.$2,
+            'montant': l.$2 * l.$1.prix,
+            'date_paie': dateKey(date),
+            'note': _vide(note),
+          },
+    ];
+    if (rows.isEmpty) return;
+    await _db.from('couture_paiements').insert(rows);
     await load();
   }
 

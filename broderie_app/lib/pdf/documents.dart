@@ -1364,33 +1364,48 @@ Future<Uint8List> buildReleveCouturier({
       pw.Text('Envois et retours'.tr, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 6),
       _tableau(
-        ['Départ'.tr, 'Paquet'.tr, 'Envoyées'.tr, 'Bonnes'.tr, 'Abîmées'.tr, 'Chez l\'atelier'.tr, 'Prix / pièce'.tr, 'Montant'.tr],
+        ['Départ'.tr, 'Paquet'.tr, 'Envoyées'.tr, 'Bonnes'.tr, 'Abîmées'.tr, 'Chez l\'atelier'.tr, 'Payées'.tr, 'Prix / pièce'.tr, 'Montant'.tr],
         [
           for (final e in envois)
-            [fmtDate(e.date), '#${numeroLot(e.lotId)}', fmtInt(e.pieces), fmtInt(e.bonnes), e.abimees == 0 ? '' : fmtInt(e.abimees), e.restant == 0 ? '' : fmtInt(e.restant), fmtDA(e.prix), fmtDA(e.montant)],
+            [fmtDate(e.date), '#${numeroLot(e.lotId)}', fmtInt(e.pieces), fmtInt(e.bonnes), e.abimees == 0 ? '' : fmtInt(e.abimees), e.restant == 0 ? '' : fmtInt(e.restant), fmtInt(e.payees), fmtDA(e.prix), fmtDA(e.montant)],
         ],
-        widths: const {0: pw.FlexColumnWidth(1.1), 1: pw.FlexColumnWidth(), 2: pw.FlexColumnWidth(), 3: pw.FlexColumnWidth(), 4: pw.FlexColumnWidth(), 5: pw.FlexColumnWidth(), 6: pw.FlexColumnWidth(), 7: pw.FlexColumnWidth(1.2)},
-        droite: {2, 3, 4, 5, 6, 7},
+        widths: const {0: pw.FlexColumnWidth(1.1), 1: pw.FlexColumnWidth(), 2: pw.FlexColumnWidth(), 3: pw.FlexColumnWidth(), 4: pw.FlexColumnWidth(), 5: pw.FlexColumnWidth(), 6: pw.FlexColumnWidth(), 7: pw.FlexColumnWidth(), 8: pw.FlexColumnWidth(1.2)},
+        droite: {2, 3, 4, 5, 6, 7, 8},
       ),
       if (paiements.isNotEmpty) ...[
         pw.SizedBox(height: 14),
         pw.Text('Paiements'.tr, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 6),
         _tableau(
-          ['Date'.tr, 'Note'.tr, 'Montant'.tr],
-          [for (final p in paiements) [fmtDate(p.date), p.note ?? '', fmtDA(p.montant)]],
-          widths: const {0: pw.FlexColumnWidth(), 1: pw.FlexColumnWidth(2.5), 2: pw.FlexColumnWidth(1.2)},
-          droite: {2},
+          ['Date'.tr, 'Paquet'.tr, 'Pièces'.tr, 'Note'.tr, 'Montant'.tr],
+          [
+            for (final p in paiements)
+              [
+                fmtDate(p.date),
+                p.envoiId == null ? '—' : '#${numeroLot(envois.where((e) => e.id == p.envoiId).firstOrNull?.lotId ?? '')}',
+                p.pieces == null ? '—' : fmtInt(p.pieces!),
+                p.note ?? '',
+                fmtDA(p.montant),
+              ],
+          ],
+          widths: const {0: pw.FlexColumnWidth(), 1: pw.FlexColumnWidth(), 2: pw.FlexColumnWidth(), 3: pw.FlexColumnWidth(2), 4: pw.FlexColumnWidth(1.2)},
+          droite: {2, 4},
         ),
       ],
       pw.SizedBox(height: 14),
       pw.Row(children: [
         pw.Spacer(),
         _totaux(
-          [('Total dû (pièces bonnes)'.tr, du, false), ('Total payé'.tr, paye, false)],
+          [
+            ('Total dû (pièces bonnes)'.tr, du, false),
+            ('Total payé'.tr, paye, false),
+          ],
           net: ('Reste à payer'.tr, du - paye),
         ),
       ]),
+      pw.SizedBox(height: 8),
+      pw.Text('Pièces bonnes encore à payer : {0}'.trf([fmtInt(envois.fold<int>(0, (s, e) => s + e.aPayer))]),
+          style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold)),
       pw.SizedBox(height: 24),
       _signatures(['Établi par'.tr, 'Atelier de couture'.tr]),
     ],
@@ -1398,7 +1413,9 @@ Future<Uint8List> buildReleveCouturier({
   return doc.save();
 }
 
-/// Bon de réception d'un retour de couture, sans prix, à remettre à la finition.
+/// Bon de réception d'un retour de couture.
+/// [pourCouture] : exemplaire pour l'atelier de couture (paiement, reste à payer) ;
+/// sinon exemplaire pour la finition, sans aucun prix.
 Future<Uint8List> buildBonReceptionCouture({
   required Atelier atelier,
   required Couturier couturier,
@@ -1407,14 +1424,28 @@ Future<Uint8List> buildBonReceptionCouture({
   String? couleur,
   required EnvoiCouture envoi,
   required RetourCouture retour,
+  bool pourCouture = false,
+  int payeesMaintenant = 0,
 }) async {
-  final doc = await _nouveau(atelier, 'Bon de réception couture'.tr);
+  final titre = pourCouture ? 'BON DE RÉCEPTION COUTURE'.tr : 'BON DE RÉCEPTION · FINITION'.tr;
+  final doc = await _nouveau(atelier, titre);
   final theme = await _pdfTheme();
+  pw.Widget ligne(String t, String v, {bool gras = false, PdfColor? c}) => pw.Container(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: _line, width: 0.6))),
+        child: pw.Row(children: [
+          pw.Expanded(child: pw.Text(t, style: pw.TextStyle(fontSize: 10.5, fontWeight: gras ? pw.FontWeight.bold : null))),
+          pw.Directionality(
+            textDirection: pw.TextDirection.ltr,
+            child: pw.Text(v, style: pw.TextStyle(fontSize: 10.5, fontWeight: pw.FontWeight.bold, color: c)),
+          ),
+        ]),
+      );
   doc.addPage(pw.MultiPage(
     pageTheme: _page(theme),
     footer: (ctx) => _footer(ctx, atelier),
     build: (ctx) => [
-      _entete(atelier, 'BON DE RÉCEPTION COUTURE'.tr, [
+      _entete(atelier, titre, [
         ['Paquet'.tr, '#$numeroLot'],
         ['Date du retour'.tr, fmtDate(retour.date)],
         ['Atelier de couture'.tr, couturier.nom],
@@ -1428,12 +1459,24 @@ Future<Uint8List> buildBonReceptionCouture({
         widths: const {0: pw.FlexColumnWidth(), 1: pw.FlexColumnWidth(1.4), 2: pw.FlexColumnWidth(1.2), 3: pw.FlexColumnWidth(), 4: pw.FlexColumnWidth(), 5: pw.FlexColumnWidth()},
         droite: {3, 4, 5},
       ),
-      pw.SizedBox(height: 10),
-      pw.Text('Envoyées le {0} : {1} pièces · encore chez l\'atelier : {2}'.trf([fmtDate(envoi.date), fmtInt(envoi.pieces), fmtInt(envoi.restant)]),
-          style: const pw.TextStyle(fontSize: 10, color: _grey)),
-      if (retour.note != null) ...[pw.SizedBox(height: 6), pw.Text(retour.note!, style: const pw.TextStyle(fontSize: 10))],
+      pw.SizedBox(height: 14),
+      pw.Container(
+        decoration: pw.BoxDecoration(border: pw.Border.all(color: _line), borderRadius: pw.BorderRadius.circular(6)),
+        child: pw.Column(children: [
+          ligne('Envoyées le {0}'.trf([fmtDate(envoi.date)]), '${fmtInt(envoi.pieces)}'),
+          ligne('Reçues ce jour (bonnes)'.tr, fmtInt(retour.bonnes), gras: true),
+          ligne('Total reçu à ce jour'.tr, fmtInt(envoi.rendues)),
+          ligne('Encore chez l\'atelier (à recevoir)'.tr, fmtInt(envoi.restant), gras: true, c: envoi.restant > 0 ? _red : _green),
+          if (pourCouture) ...[
+            ligne('Prix par pièce'.tr, fmtDA(envoi.prix)),
+            ligne('Payé maintenant : {0} pièces'.trf([fmtInt(payeesMaintenant)]), fmtDA(payeesMaintenant * envoi.prix), gras: true, c: _green),
+            ligne('Reste à payer : {0} pièces'.trf([fmtInt(envoi.aPayer)]), fmtDA(envoi.montantAPayer), gras: true, c: envoi.aPayer > 0 ? _red : _green),
+          ],
+        ]),
+      ),
+      if (retour.note != null) ...[pw.SizedBox(height: 8), pw.Text(retour.note!, style: const pw.TextStyle(fontSize: 10))],
       pw.SizedBox(height: 30),
-      _signatures(['Reçu par (comptabilité)'.tr, 'Remis à la finition'.tr]),
+      _signatures(pourCouture ? ['Reçu par (comptabilité)'.tr, 'Atelier de couture'.tr] : ['Remis par (comptabilité)'.tr, 'Reçu par (finition)'.tr]),
     ],
   ));
   return doc.save();
