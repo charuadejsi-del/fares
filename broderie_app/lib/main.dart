@@ -8,6 +8,7 @@ import 'screens/home_shell.dart';
 import 'screens/login_screen.dart';
 import 'data/session.dart';
 import 'screens/activation_screen.dart';
+import 'screens/plateforme_screen.dart' show ProprietaireShell;
 import 'theme.dart';
 import 'utils.dart';
 import 'i18n.dart';
@@ -126,6 +127,7 @@ class _SessionGateState extends State<SessionGate> {
           if (snap.connectionState != ConnectionState.done) {
             return const Scaffold(body: Center(child: CircularProgressIndicator()));
           }
+          if (!snap.hasError && session.sansAtelier && session.proprietaire) return const ProprietaireShell();
           if (!snap.hasError && session.sansAtelier) {
             return ActivationScreen(onActive: () => setState(() => _f = Future.value().then((_) => verrou.demarrer())));
           }

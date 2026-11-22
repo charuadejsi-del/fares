@@ -19,6 +19,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _email = TextEditingController();
   final _pass = TextEditingController();
   final _code = TextEditingController();
+  final _nomAtelier = TextEditingController();
+  final _activation = TextEditingController();
   bool _signup = false;
 
   @override
@@ -34,6 +36,8 @@ class _LoginScreenState extends State<LoginScreen> {
     _email.dispose();
     _pass.dispose();
     _code.dispose();
+    _nomAtelier.dispose();
+    _activation.dispose();
     super.dispose();
   }
 
@@ -43,11 +47,22 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = Supabase.instance.client.auth;
     try {
       if (_signup) {
-        final res = await auth.signUp(email: _email.text.trim().toLowerCase(), password: _pass.text);
-        if (res.session == null && mounted) {
-          showSnack(context, 'Compte créé. Confirmez votre adresse via l\'email reçu, puis connectez-vous.'.tr);
-          setState(() => _signup = false);
+        // Inscription en une étape : compte + atelier, l'email devient l'administrateur
+        final email = _email.text.trim().toLowerCase();
+        try {
+          final res = await Supabase.instance.client.functions.invoke('inscription', body: {
+            'email': email,
+            'mot_de_passe': _pass.text,
+            'nom': _nomAtelier.text.trim(),
+            'activation': _activation.text.trim().toUpperCase(),
+          });
+          final d = res.data;
+          if (d is Map && d['error'] != null) throw Exception(d['error']);
+        } on FunctionException catch (e) {
+          final d = e.details;
+          throw Exception(d is Map && d['error'] != null ? d['error'] : (e.reasonPhrase ?? 'Erreur du serveur (${e.status})'));
         }
+        await auth.signInWithPassword(email: email, password: _pass.text);
       } else {
         final saisie = _email.text.trim();
         final code = _code.text.trim().toLowerCase();
@@ -114,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     Text(_signup ? 'Nouvel atelier'.tr : 'Bienvenue'.tr, style: t.textTheme.headlineSmall),
                     const SizedBox(height: 4),
-                    Text(_signup ? 'Créez votre compte, puis activez votre atelier avec le code reçu de Warchati'.tr : 'Connectez-vous pour ouvrir votre atelier'.tr,
+                    Text(_signup ? 'Votre email deviendra l\'administrateur de votre atelier'.tr : 'Connectez-vous pour ouvrir votre atelier'.tr,
                         style: t.textTheme.bodyMedium?.copyWith(color: t.extension<AppPalette>()?.muted)),
                     const SizedBox(height: 24),
                     TextFormField(
@@ -140,6 +155,21 @@ class _LoginScreenState extends State<LoginScreen> {
                           helperText: 'Laissez vide si vous vous connectez avec votre email'.tr,
                           prefixIcon: const Icon(Icons.tag_rounded),
                         ),
+                      ),
+                    ],
+                    if (_signup) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _nomAtelier,
+                        decoration: InputDecoration(labelText: 'Nom de votre atelier'.tr, prefixIcon: const Icon(Icons.store_rounded)),
+                        validator: (v) => (v ?? '').trim().isEmpty ? 'Obligatoire'.tr : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _activation,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: InputDecoration(labelText: 'Code d\'activation'.tr, hintText: 'WAR-XXXXXX', prefixIcon: const Icon(Icons.vpn_key_rounded)),
+                        validator: (v) => (v ?? '').trim().length < 6 ? 'Obligatoire'.tr : null,
                       ),
                     ],
                     const SizedBox(height: 12),

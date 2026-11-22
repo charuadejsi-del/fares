@@ -1569,4 +1569,8 @@ const arabe = <String, String>{
   'Warchati · ateliers clients et abonnements': 'ورشتي · الورشات الزبونة والاشتراكات',
   '{0} comptes': '{0} حساب',
   '{0} mois': '{0} شهر',
+  'Changer mon mot de passe': 'تغيير كلمة السر',
+  'Nouveau mot de passe (6 caractères minimum)': 'كلمة السر الجديدة (6 أحرف على الأقل)',
+  'Mot de passe modifié': 'تم تغيير كلمة السر',
+  'Votre email deviendra l\'administrateur de votre atelier': 'بريدك الإلكتروني سيصبح مدير ورشتك',
 };

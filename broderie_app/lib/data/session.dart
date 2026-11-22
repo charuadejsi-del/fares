@@ -248,7 +248,7 @@ class AtelierSession extends ChangeNotifier {
     }
     masquerMontants = !voitPrix;
     try {
-      proprietaire = membre != null && (await _db.rpc('est_proprietaire')) == true;
+      proprietaire = (await _db.rpc('est_proprietaire')) == true;
     } catch (_) {
       proprietaire = false;
     }

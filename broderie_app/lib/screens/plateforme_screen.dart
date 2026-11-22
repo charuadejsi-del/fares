@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/session.dart';
 import '../i18n.dart';
 import '../theme.dart';
 import '../utils.dart';
@@ -16,6 +17,57 @@ String _abonnementNom(String a) => switch (a) {
       'illimite' => 'Illimité'.tr,
       _ => a,
     };
+
+/// Application du propriétaire de Warchati : séparée de tout atelier.
+class ProprietaireShell extends StatelessWidget {
+  const ProprietaireShell({super.key});
+
+  Future<void> _motDePasse(BuildContext context) async {
+    final c = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Changer mon mot de passe'.tr),
+        content: TextField(controller: c, obscureText: true, decoration: InputDecoration(labelText: 'Nouveau mot de passe (6 caractères minimum)'.tr)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Annuler'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Enregistrer'.tr)),
+        ],
+      ),
+    );
+    if (ok != true || c.text.length < 6) return;
+    try {
+      await _db.auth.updateUser(UserAttributes(password: c.text));
+      if (context.mounted) showSnack(context, 'Mot de passe modifié'.tr);
+    } catch (e) {
+      if (context.mounted) showSnack(context, errorMessage(e), error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('ورشتي · Warchati'),
+          actions: [
+            IconButton(
+              tooltip: langue.ar ? 'Français' : 'العربية',
+              icon: const Icon(Icons.translate_rounded),
+              onPressed: () => langue.set(langue.ar ? 'fr' : 'ar'),
+            ),
+            IconButton(tooltip: 'Changer mon mot de passe'.tr, icon: const Icon(Icons.password_rounded), onPressed: () => _motDePasse(context)),
+            IconButton(
+              tooltip: 'Se déconnecter'.tr,
+              icon: const Icon(Icons.logout_rounded),
+              onPressed: () async {
+                session.clear();
+                await _db.auth.signOut();
+              },
+            ),
+          ],
+        ),
+        body: const PlateformeScreen(),
+      );
+}
 
 /// Espace du propriétaire de Warchati : ateliers clients, abonnements, codes d'activation.
 /// Aucune donnée interne des clients n'est visible ici.

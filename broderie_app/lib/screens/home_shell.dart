@@ -11,7 +11,6 @@ import '../widgets.dart';
 import 'admin_screens.dart';
 import 'gestion_screens.dart';
 import 'atelier_screen.dart';
-import 'plateforme_screen.dart';
 import 'suivi_screen.dart';
 import 'coupe_screen.dart';
 import 'couture_screen.dart';
@@ -33,7 +32,7 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-enum _Cle { plateforme, accueil, suivi, coupe, broderie, decoration, couture, finition, paie, stock, ventes, achats }
+enum _Cle { accueil, suivi, coupe, broderie, decoration, couture, finition, paie, stock, ventes, achats }
 
 class _Dest {
   final _Cle cle;
@@ -66,8 +65,6 @@ class _HomeShellState extends State<HomeShell> {
   List<Alerte> _alertes = [];
 
   List<_Dest> get _dests => [
-        if (session.proprietaire)
-          _Dest(_Cle.plateforme, 'Warchati'.tr, 'Warchati · ateliers clients et abonnements'.tr, 'Plateforme'.tr, Icons.hub_outlined, Icons.hub_rounded),
         if (session.admin)
           _Dest(_Cle.accueil, 'Accueil'.tr, 'Vue d\'ensemble'.tr, 'Pilotage'.tr, Icons.space_dashboard_outlined, Icons.space_dashboard_rounded),
         if (session.admin)
@@ -244,7 +241,6 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _pageModule(_Dest d) {
     return switch (d.cle) {
-      _Cle.plateforme => const PlateformeScreen(),
       _Cle.accueil => VueEnsembleScreen(
           onAller: (i) => _aller(switch (i) {
             1 => _Cle.broderie,
