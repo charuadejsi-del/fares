@@ -577,7 +577,9 @@ async function charger(){
   skeleton();
   $('#loaderTxt').textContent = t('loading');
   try{
-    const r = await fetch(`${CONFIG.supabaseUrl}/rest/v1/rpc/vitrine_catalogue`,{method:'POST',headers:{'apikey':CONFIG.supabaseKey,'Authorization':'Bearer '+CONFIG.supabaseKey,'Content-Type':'application/json'},body:JSON.stringify({p_atelier:ATELIER})});
+    // ?a= peut contenir l'identifiant de l'atelier ou son code Warchati (ex. ?a=ghania)
+    const parCode = !/^[0-9a-f-]{36}$/i.test(ATELIER);
+    const r = await fetch(`${CONFIG.supabaseUrl}/rest/v1/rpc/${parCode?'vitrine_catalogue_code':'vitrine_catalogue'}`,{method:'POST',headers:{'apikey':CONFIG.supabaseKey,'Authorization':'Bearer '+CONFIG.supabaseKey,'Content-Type':'application/json'},body:JSON.stringify(parCode?{p_code:ATELIER}:{p_atelier:ATELIER})});
     if(!r.ok) throw new Error(r.status);
     const d = await r.json();
     if(!d){ $('#grid').innerHTML = `<div class="empty" style="grid-column:1/-1"><b>${t('soon_t')}</b>${t('soon_d')}</div>`; return; }
