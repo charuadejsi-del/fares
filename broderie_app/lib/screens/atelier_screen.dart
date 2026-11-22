@@ -35,7 +35,7 @@ class AtelierInterneModule extends StatelessWidget {
   final List<String> etapes;
   const AtelierInterneModule({super.key, required this.etapes});
 
-  List<String> get _deps => [for (final e in etapes) ...?departementsEtape[e]];
+  List<String> get _deps => {for (final e in etapes) ...?departementsEtape[e]}.toList();
 
   @override
   Widget build(BuildContext context) => OngletsAtelier([
@@ -143,7 +143,7 @@ class EquipeAtelier extends StatelessWidget {
                 AutoGrid(minItemWidth: 300, children: [
                   for (final o in liste)
                     AppCard(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OuvrierDetailScreen(ouvrierId: o.id))),
+                      onTap: masquerMontants ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => OuvrierDetailScreen(ouvrierId: o.id))),
                       child: Opacity(
                         opacity: o.actif ? 1 : .5,
                         child: Row(children: [

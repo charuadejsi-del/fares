@@ -54,6 +54,18 @@ Future<void> _pdfEnvoi(BuildContext context, EnvoiCouture e, {bool partage = fal
   }
 }
 
+Future<void> _pdfReception(BuildContext context, EnvoiCouture e, RetourCouture r, {bool partage = false}) async {
+  final a = session.atelier, c = couture.atelier(e.couturierId), l = data.lot(e.lotId);
+  if (a == null || c == null) return;
+  try {
+    final bytes = await buildBonReceptionCouture(atelier: a, couturier: c, numeroLot: _numero(e.lotId), modele: l?.modele, couleur: l?.couleur, envoi: e, retour: r);
+    final nom = 'Reception_couture_${_numero(e.lotId)}.pdf';
+    partage ? await partager(bytes, nom) : await imprimer(bytes, nom);
+  } catch (err) {
+    if (context.mounted) showSnack(context, errorMessage(err), error: true);
+  }
+}
+
 // ====================================================================== module
 
 class CoutureModule extends StatelessWidget {
@@ -336,8 +348,11 @@ class _RetourFormState extends State<_RetourForm> {
     try {
       final vers = await couture.retour(widget.e, date: _date, bonnes: b, retouche: r, abimees: a, note: _note.text);
       if (!mounted) return;
+      final env = couture.envois.where((x) => x.id == widget.e.id).firstOrNull;
+      final ret = env?.retours.lastOrNull;
       Navigator.pop(context);
       showSnack(context, vers == null ? 'Retour enregistré.'.tr : 'Paquet complet : envoyé à {0}.'.trf([etapeNom(vers)]));
+      if (env != null && ret != null) await _pdfReception(context, env, ret);
     } catch (err) {
       if (mounted) {
         setState(() => _busy = false);
@@ -424,7 +439,9 @@ Future<void> _detailEnvoi(BuildContext context, EnvoiCouture e) => showModalBott
                       if (r.abimees > 0) '{0} : {1}'.trf(['Abîmées'.tr, r.abimees]),
                       if (r.note != null) r.note!,
                     ].join(' · ')),
-                    trailing: IconButton(
+                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                      IconButton(tooltip: 'Bon de réception PDF'.tr, icon: const Icon(Icons.print_rounded), onPressed: () => _pdfReception(ctx, x, r)),
+                      IconButton(
                       tooltip: 'Supprimer'.tr,
                       icon: const Icon(Icons.delete_outline_rounded),
                       onPressed: () async {
@@ -432,6 +449,7 @@ Future<void> _detailEnvoi(BuildContext context, EnvoiCouture e) => showModalBott
                         if (ok) await couture.deleteRetour(r.id);
                       },
                     ),
+                    ]),
                   ),
               ]),
             ),

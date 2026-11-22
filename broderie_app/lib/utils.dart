@@ -28,7 +28,10 @@ String _latin(String s) {
 String fmtInt(num n) => _int.format(n.round());
 final _dec = NumberFormat('#,##0.##', 'fr_FR');
 String fmtNum(num n) => n == n.roundToDouble() ? fmtInt(n) : _dec.format(n);
-String fmtDA(num n) => '{0} DA'.trf([_money.format(n)]);
+/// Vrai pour un responsable d'atelier : les prix et montants ne sont pas affichés.
+bool masquerMontants = false;
+
+String fmtDA(num n) => masquerMontants ? '••• DA'.tr : '{0} DA'.trf([_money.format(n)]);
 String dateKey(DateTime d) => _dateKey.format(d);
 String fmtDate(DateTime d) => _latin(_dateFr.format(d));
 String fmtDateLong(DateTime d) => _latin(_dateLong.format(d));

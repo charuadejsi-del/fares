@@ -584,7 +584,8 @@ const etapesAtelier = ['coupe', 'broderie', 'applique', 'akkach', 'couture', 'fi
 const departementsEtape = {
   'coupe': ['Coupe'],
   'applique': ['Appliqué'],
-  'akkach': ['Akkach'],
+  // l'akkach se fait à la presse à chaud de la finition
+  'akkach': ['Finition', 'Repassage', 'Emballage'],
   'finition': ['Finition', 'Repassage', 'Emballage'],
 };
 

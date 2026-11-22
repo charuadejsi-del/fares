@@ -359,7 +359,13 @@ class _OuvrierFormState extends State<OuvrierForm> {
           if (_mode == ModePaie.points)
             Text('Payé selon les points du compteur et le type de broderie (Réglages → tarifs).'.tr,
                 style: context.tt.bodySmall?.copyWith(color: context.pal.muted)),
-          if (_mode == ModePaie.mois)
+          if (masquerMontants)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('Le salaire et le prix sont fixés par l\'administrateur ou le comptable.'.tr,
+                  style: TextStyle(fontSize: 12, color: context.cs.primary)),
+            ),
+          if (_mode == ModePaie.mois && !masquerMontants)
             TextFormField(
               controller: _salaire,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -375,7 +381,7 @@ class _OuvrierFormState extends State<OuvrierForm> {
               child: Text('Département Broderie : vous pourrez saisir ses points (production suivie), sans montant ajouté à sa paie.'.tr,
                   style: TextStyle(fontSize: 12, color: context.cs.primary)),
             ),
-          if (_mode == ModePaie.piece)
+          if (_mode == ModePaie.piece && !masquerMontants)
             TextFormField(
               controller: _prix,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),

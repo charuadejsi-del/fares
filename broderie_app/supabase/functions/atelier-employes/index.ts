@@ -23,6 +23,9 @@ function droits(body: Record<string, unknown>) {
     perm_broderie: body.perm_broderie === true,
     perm_paie: body.perm_paie === true,
     perm_stock: body.perm_stock === true,
+    perm_coupe: body.perm_coupe === true,
+    perm_applique: body.perm_applique === true,
+    perm_finition: body.perm_finition === true,
   };
 }
 

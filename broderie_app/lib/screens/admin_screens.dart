@@ -385,6 +385,9 @@ class _EmployeFormState extends State<EmployeForm> {
   late bool _broderie = widget.membre?.broderie ?? false;
   late bool _paie = widget.membre?.paie ?? false;
   late bool _stock = widget.membre?.stock ?? false;
+  late bool _coupe = widget.membre?.coupe ?? false;
+  late bool _applique = widget.membre?.applique ?? false;
+  late bool _finition = widget.membre?.finition ?? false;
   late bool _actif = widget.membre?.actif ?? true;
   bool _busy = false;
   bool _voir = false;
@@ -401,7 +404,7 @@ class _EmployeFormState extends State<EmployeForm> {
 
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
-    if (!_admin && !_broderie && !_paie && !_stock) {
+    if (!_admin && !_broderie && !_paie && !_stock && !_coupe && !_applique && !_finition) {
       showSnack(context, 'Cochez au moins un espace'.tr, error: true);
       return;
     }
@@ -412,6 +415,9 @@ class _EmployeFormState extends State<EmployeForm> {
         'perm_broderie': _broderie,
         'perm_paie': _paie,
         'perm_stock': _stock,
+        'perm_coupe': _coupe,
+        'perm_applique': _applique,
+        'perm_finition': _finition,
       };
       if (widget.membre == null) {
         await session.employe({
@@ -504,8 +510,11 @@ class _EmployeFormState extends State<EmployeForm> {
             value: _admin,
             onChanged: _soi ? null : (v) => setState(() => _admin = v),
           ),
-          _espace('Broderie'.tr, 'Saisie des points, historique, dessins'.tr, Icons.blur_on_rounded, _broderie, (v) => setState(() => _broderie = v)),
-          _espace('Paie & avances'.tr, 'Ouvriers, avances, paiements, fiches de paie'.tr, Icons.account_balance_wallet_rounded, _paie, (v) => setState(() => _paie = v)),
+          _espace('Coupe'.tr, 'Fiches de coupe, suivi des paquets, ouvriers et travail du jour (sans prix)'.tr, Icons.content_cut_rounded, _coupe, (v) => setState(() => _coupe = v)),
+          _espace('Broderie'.tr, 'Saisie des points, paquets, dessins (sans prix)'.tr, Icons.blur_on_rounded, _broderie, (v) => setState(() => _broderie = v)),
+          _espace('Appliqué'.tr, 'Paquets reçus, ouvriers et travail du jour (sans prix)'.tr, Icons.auto_awesome_rounded, _applique, (v) => setState(() => _applique = v)),
+          _espace('Finition'.tr, 'Repassage, presse à chaud, emballage, entrée au stock (sans prix)'.tr, Icons.iron_rounded, _finition, (v) => setState(() => _finition = v)),
+          _espace('Comptabilité'.tr, 'Prix et montants, salaires, avances, paiements, couture externe'.tr, Icons.account_balance_wallet_rounded, _paie, (v) => setState(() => _paie = v)),
           _espace('Stock & ventes'.tr, 'Produits, QR, scan, ventes, clients, factures'.tr, Icons.inventory_2_rounded, _stock, (v) => setState(() => _stock = v)),
           if (widget.membre != null && !_soi)
             SwitchListTile(

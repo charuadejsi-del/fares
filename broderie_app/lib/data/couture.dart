@@ -145,14 +145,19 @@ class Couture extends ChangeNotifier {
   double paye(String couturierId) => paiementsDe(couturierId).fold(0.0, (s, p) => s + p.montant);
   double solde(String couturierId) => du(couturierId) - paye(couturierId);
 
-  Future<void> load() async {
+  bool _complet = true;
+
+  /// [complet] : tarifs et paiements (réservés au comptable et à l'administrateur).
+  Future<void> load({bool? complet}) async {
+    if (complet != null) _complet = complet;
     try {
+      final vide = Future.value(<Map<String, dynamic>>[]);
       final res = await Future.wait([
         _db.from('couture_ateliers').select().order('nom'),
-        _db.from('couture_tarifs').select().order('modele'),
+        _complet ? _db.from('couture_tarifs').select().order('modele') : vide,
         _db.from('couture_envois').select().order('date_envoi', ascending: false).order('created_at', ascending: false).limit(3000),
         _db.from('couture_retours').select().order('date_retour').order('created_at').limit(6000),
-        _db.from('couture_paiements').select().order('date_paie', ascending: false).limit(3000),
+        _complet ? _db.from('couture_paiements').select().order('date_paie', ascending: false).limit(3000) : vide,
       ]);
       ateliers = res[0].map(Couturier.fromMap).toList();
       tarifs = [for (final m in res[1]) TarifCouture(m['id'] as String, m['modele'] as String, _d(m['prix']))];

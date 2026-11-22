@@ -24,7 +24,7 @@ class AppData extends ChangeNotifier {
   Map<String, Solde> soldes = {};
   bool refsLoaded = false;
 
-  static const departementsParDefaut = ['Broderie', 'Couture', 'Coupe', 'Appliqué', 'Akkach', 'Repassage', 'Finition', 'Emballage'];
+  static const departementsParDefaut = ['Broderie', 'Couture', 'Coupe', 'Appliqué', 'Repassage', 'Finition', 'Emballage'];
 
   /// Départements utilisés + ceux par défaut.
   List<String> get departements {
@@ -245,6 +245,16 @@ class AppData extends ChangeNotifier {
   Future<void> entrerStock(Lot l, int pieces, DateTime date) async {
     await _db.from('broderie_lots').update({'pieces_stock': pieces, 'date_stock': dateKey(date)}).eq('id', l.id);
     await deplacerLot(l, 'stock', date, note: '{0} pièces au stock'.trf([pieces]));
+  }
+
+  /// Derniers mouvements de tous les paquets (lot_id -> mouvements), pour le suivi.
+  Future<Map<String, List<(MouvementLot, String)>>> fetchTousMouvements() async {
+    final rows = await _db.from('lot_mouvements').select().order('date_mvt').order('created_at').limit(10000);
+    final out = <String, List<(MouvementLot, String)>>{};
+    for (final r in rows) {
+      out.putIfAbsent(r['lot_id'] as String, () => []).add((MouvementLot.fromMap(r), r['lot_id'] as String));
+    }
+    return out;
   }
 
   Future<List<MouvementLot>> fetchMouvementsLot(String lotId) async {

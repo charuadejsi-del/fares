@@ -11,6 +11,7 @@ import '../widgets.dart';
 import 'admin_screens.dart';
 import 'gestion_screens.dart';
 import 'atelier_screen.dart';
+import 'suivi_screen.dart';
 import 'coupe_screen.dart';
 import 'couture_screen.dart';
 import '../data/couture.dart';
@@ -31,7 +32,7 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-enum _Cle { accueil, coupe, broderie, decoration, couture, finition, paie, stock, ventes, achats }
+enum _Cle { accueil, suivi, coupe, broderie, decoration, couture, finition, paie, stock, ventes, achats }
 
 class _Dest {
   final _Cle cle;
@@ -66,16 +67,18 @@ class _HomeShellState extends State<HomeShell> {
   List<_Dest> get _dests => [
         if (session.admin)
           _Dest(_Cle.accueil, 'Accueil'.tr, 'Vue d\'ensemble'.tr, 'Pilotage'.tr, Icons.space_dashboard_outlined, Icons.space_dashboard_rounded),
-        if (session.admin || session.peut(Espace.broderie))
+        if (session.admin)
+          _Dest(_Cle.suivi, 'Suivi'.tr, 'Suivi de la production'.tr, 'Pilotage'.tr, Icons.timeline_outlined, Icons.timeline_rounded),
+        if (session.peut(Espace.coupe))
           _Dest(_Cle.coupe, 'Coupe'.tr, 'Coupe · suivi des paquets'.tr, 'Atelier'.tr, Icons.content_cut_outlined, Icons.content_cut_rounded),
         if (session.peut(Espace.broderie))
           _Dest(_Cle.broderie, 'Broderie'.tr, 'Production broderie'.tr, 'Atelier'.tr, Icons.blur_on_outlined, Icons.blur_on_rounded),
-        if (session.admin || session.peut(Espace.broderie) || session.peut(Espace.paie))
-          _Dest(_Cle.decoration, 'Appliqué · Akkach'.tr, 'Appliqué · akkach (presse)'.tr, 'Atelier'.tr, Icons.auto_awesome_outlined, Icons.auto_awesome_rounded),
-        if (session.admin || session.peut(Espace.broderie) || session.peut(Espace.paie))
+        if (session.peut(Espace.applique))
+          _Dest(_Cle.decoration, 'Appliqué'.tr, 'Appliqué'.tr, 'Atelier'.tr, Icons.auto_awesome_outlined, Icons.auto_awesome_rounded),
+        if (session.peut(Espace.paie))
           _Dest(_Cle.couture, 'Couture'.tr, 'Couture · ateliers externes'.tr, 'Atelier'.tr, Icons.design_services_outlined, Icons.design_services_rounded),
-        if (session.admin || session.peut(Espace.broderie) || session.peut(Espace.paie))
-          _Dest(_Cle.finition, 'Finition'.tr, 'Finition · repassage · emballage'.tr, 'Atelier'.tr, Icons.iron_outlined, Icons.iron_rounded),
+        if (session.peut(Espace.finition))
+          _Dest(_Cle.finition, 'Finition'.tr, 'Finition · repassage · presse · emballage'.tr, 'Atelier'.tr, Icons.iron_outlined, Icons.iron_rounded),
         if (session.peut(Espace.paie))
           _Dest(_Cle.paie, 'Ouvriers'.tr, 'Ouvriers · salaires & avances'.tr, 'Atelier'.tr, Icons.groups_outlined, Icons.groups_rounded),
         if (session.peut(Espace.stock))
@@ -99,10 +102,10 @@ class _HomeShellState extends State<HomeShell> {
     });
     try {
       await Future.wait<void>([
-        if (session.peut(Espace.broderie) || session.peut(Espace.paie)) data.loadRefs(),
+        if (session.production) data.loadRefs(),
         if (session.peut(Espace.stock)) stock.load(),
         if (session.peut(Espace.stock)) commerce.load().catchError((_) {}),
-        if (session.admin || session.peut(Espace.broderie) || session.peut(Espace.paie)) couture.load(),
+        if (session.production) couture.load(complet: session.voitPrix),
       ]);
     } catch (e) {
       _error = errorMessage(e);
@@ -218,8 +221,9 @@ class _HomeShellState extends State<HomeShell> {
         ),
       _Cle.coupe => const CoupeModule(),
       _Cle.couture => const CoutureModule(),
-      _Cle.decoration => const AtelierInterneModule(etapes: ['applique', 'akkach']),
-      _Cle.finition => const AtelierInterneModule(etapes: ['finition']),
+      _Cle.suivi => const SuiviScreen(),
+      _Cle.decoration => const AtelierInterneModule(etapes: ['applique']),
+      _Cle.finition => const AtelierInterneModule(etapes: ['akkach', 'finition']),
       _Cle.broderie => BroderieModule(onGoToOuvriers: session.peut(Espace.paie) ? () => _aller(_Cle.paie) : null),
       _Cle.paie => const OuvriersModule(),
       _Cle.stock => const ProduitsScreen(),

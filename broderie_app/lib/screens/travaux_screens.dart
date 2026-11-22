@@ -157,7 +157,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
         await data.savePiece(row(total, null));
       }
       if (!mounted) return;
-      showSnack(context, '✓ {0} · {1} × {2}{3}'.trf([o.nom, _libelle.text.trim(), _q(total), _prixN > 0 ? ' = ${fmtDA(total * _prixN)}' : ' (sans montant)'.tr]));
+      showSnack(context, '✓ {0} · {1} × {2}{3}'.trf([o.nom, _libelle.text.trim(), _q(total), masquerMontants ? '' : _prixN > 0 ? ' = ${fmtDA(total * _prixN)}' : ' (sans montant)'.tr]));
       _qte.clear();
       setState(() {
         for (final l in _lignes) {
@@ -216,7 +216,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(labelText: 'Travail (modifiable)'.tr, prefixIcon: Icon(Icons.checkroom_rounded)),
         ),
-        if (_auMois) ...[
+        if (_auMois && !masquerMontants) ...[
           const SizedBox(height: 6),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -312,7 +312,7 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
         ]),
         const SizedBox(height: 14),
         Row(children: [
-          if (!_auMois || _extra) ...[
+          if ((!_auMois || _extra) && !masquerMontants) ...[
             Expanded(
               child: TextField(
                 controller: _prix,
@@ -344,12 +344,13 @@ class _TravauxSaisieScreenState extends State<TravauxSaisieScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(gradient: AppColors.heroGradient, borderRadius: BorderRadius.circular(16)),
           child: Column(children: [
-            Text(_prixN > 0 ? '{0} × {1}'.trf([_q(_qteN), fmtDA(_prixN)]) : '{0} pièce(s)'.trf([_q(_qteN)]), style: const TextStyle(color: Colors.white70)),
+            if (!masquerMontants) Text(_prixN > 0 ? '{0} × {1}'.trf([_q(_qteN), fmtDA(_prixN)]) : '{0} pièce(s)'.trf([_q(_qteN)]), style: const TextStyle(color: Colors.white70)),
             FittedBox(
               fit: BoxFit.scaleDown,
-              child: Text(_prixN > 0 ? fmtDA(_qteN * _prixN) : 'Sans montant'.tr,
+              child: Text(masquerMontants ? '{0} pièce(s)'.trf([_q(_qteN)]) : _prixN > 0 ? fmtDA(_qteN * _prixN) : 'Sans montant'.tr,
                   style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900)),
             ),
+            if (!masquerMontants)
             Text(_prixN > 0 ? 'ajouté à la paie de {0}'.trf([o?.nom ?? '']) : 'travail suivi, payé par le salaire mensuel'.tr,
                 style: const TextStyle(color: Colors.white70, fontSize: 12)),
           ]),

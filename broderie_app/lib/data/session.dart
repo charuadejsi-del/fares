@@ -1,18 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../i18n.dart';
+import '../utils.dart' show masquerMontants;
 
 double _d(dynamic v) => v == null ? 0 : (v is num ? v.toDouble() : double.tryParse(v.toString()) ?? 0);
 String? _s(dynamic v) => (v == null || v.toString().trim().isEmpty) ? null : v.toString().trim();
 
 /// Les espaces de l'application.
-enum Espace { broderie, paie, stock }
+enum Espace { broderie, paie, stock, coupe, applique, finition }
 
 extension EspaceX on Espace {
   String get label => switch (this) {
         Espace.broderie => 'Broderie'.tr,
         Espace.paie => 'Paie & avances'.tr,
         Espace.stock => 'Stock & ventes'.tr,
+        Espace.coupe => 'Coupe'.tr,
+        Espace.applique => 'Appliqué'.tr,
+        Espace.finition => 'Finition'.tr,
       };
 }
 
@@ -41,6 +45,11 @@ class Atelier {
   final String? logoPublic;
   final String? whatsapp;
 
+  /// Délai normal (jours) passé dans chaque atelier avant d'être signalé en retard.
+  final Map<String, int> delais;
+
+  static const delaisParDefaut = {'coupe': 3, 'broderie': 10, 'applique': 5, 'akkach': 5, 'couture': 15, 'finition': 5};
+
   const Atelier({
     required this.id,
     required this.nom,
@@ -64,6 +73,7 @@ class Atelier {
     this.vitrineSlogan,
     this.logoPublic,
     this.whatsapp,
+    this.delais = delaisParDefaut,
   });
 
   factory Atelier.fromMap(Map<String, dynamic> m) => Atelier(
@@ -89,6 +99,10 @@ class Atelier {
         vitrineSlogan: _s(m['vitrine_slogan']),
         logoPublic: _s(m['logo_public']),
         whatsapp: _s(m['whatsapp']),
+        delais: {
+          ...delaisParDefaut,
+          for (final e in ((m['delais'] as Map?) ?? const {}).entries) e.key as String: (e.value as num).toInt(),
+        },
       );
 }
 
@@ -102,6 +116,9 @@ class Membre {
   final bool broderie;
   final bool paie;
   final bool stock;
+  final bool coupe;
+  final bool applique;
+  final bool finition;
   final bool actif;
 
   const Membre({
@@ -113,6 +130,9 @@ class Membre {
     this.broderie = false,
     this.paie = false,
     this.stock = false,
+    this.coupe = false,
+    this.applique = false,
+    this.finition = false,
     this.actif = true,
   });
 
@@ -125,6 +145,9 @@ class Membre {
         broderie: (m['perm_broderie'] ?? false) as bool,
         paie: (m['perm_paie'] ?? false) as bool,
         stock: (m['perm_stock'] ?? false) as bool,
+        coupe: (m['perm_coupe'] ?? false) as bool,
+        applique: (m['perm_applique'] ?? false) as bool,
+        finition: (m['perm_finition'] ?? false) as bool,
         actif: (m['actif'] ?? true) as bool,
       );
 
@@ -134,11 +157,24 @@ class Membre {
         Espace.broderie => broderie,
         Espace.paie => paie,
         Espace.stock => stock,
+        Espace.coupe => coupe,
+        Espace.applique => applique,
+        Espace.finition => finition,
       };
+
+  /// Seuls l'administrateur et le comptable (paie) voient les prix et montants.
+  bool get voitPrix => admin || paie;
 
   String get droitsTexte {
     if (admin) return 'Administrateur · accès complet';
-    final l = [if (broderie) 'Broderie', if (paie) 'Paie & avances', if (stock) 'Stock & ventes'];
+    final l = [
+      if (coupe) 'Coupe'.tr,
+      if (broderie) 'Broderie'.tr,
+      if (applique) 'Appliqué'.tr,
+      if (finition) 'Finition'.tr,
+      if (paie) 'Comptabilité'.tr,
+      if (stock) 'Stock & ventes'.tr,
+    ];
     return l.isEmpty ? 'Aucun accès' : l.join(' · ');
   }
 
@@ -167,6 +203,10 @@ class AtelierSession extends ChangeNotifier {
 
   bool get admin => membre?.admin ?? false;
   bool peut(Espace e) => membre?.peut(e) ?? false;
+  bool get voitPrix => membre?.voitPrix ?? false;
+
+  /// Responsable d'au moins un atelier de production.
+  bool get production => admin || [Espace.coupe, Espace.broderie, Espace.applique, Espace.finition, Espace.paie].any(peut);
   String? get atelierId => membre?.atelierId;
 
   Future<void> load() async {
@@ -183,6 +223,7 @@ class AtelierSession extends ChangeNotifier {
       final a = await _db.from('ateliers').select().eq('id', membre!.atelierId).maybeSingle();
       atelier = a == null ? Atelier(id: membre!.atelierId, nom: 'Mon atelier') : Atelier.fromMap(a);
     }
+    masquerMontants = !voitPrix;
     loaded = true;
     notifyListeners();
   }

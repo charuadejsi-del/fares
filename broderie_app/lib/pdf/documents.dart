@@ -1397,3 +1397,44 @@ Future<Uint8List> buildReleveCouturier({
   ));
   return doc.save();
 }
+
+/// Bon de réception d'un retour de couture, sans prix, à remettre à la finition.
+Future<Uint8List> buildBonReceptionCouture({
+  required Atelier atelier,
+  required Couturier couturier,
+  required String numeroLot,
+  String? modele,
+  String? couleur,
+  required EnvoiCouture envoi,
+  required RetourCouture retour,
+}) async {
+  final doc = await _nouveau(atelier, 'Bon de réception couture'.tr);
+  final theme = await _pdfTheme();
+  doc.addPage(pw.MultiPage(
+    pageTheme: _page(theme),
+    footer: (ctx) => _footer(ctx, atelier),
+    build: (ctx) => [
+      _entete(atelier, 'BON DE RÉCEPTION COUTURE'.tr, [
+        ['Paquet'.tr, '#$numeroLot'],
+        ['Date du retour'.tr, fmtDate(retour.date)],
+        ['Atelier de couture'.tr, couturier.nom],
+      ]),
+      pw.SizedBox(height: 18),
+      _tableau(
+        ['Paquet'.tr, 'Modèle'.tr, 'Tissu / couleur'.tr, 'Bonnes'.tr, 'À retoucher'.tr, 'Abîmées'.tr],
+        [
+          ['#$numeroLot', modele ?? '—', couleur ?? '—', fmtInt(retour.bonnes), retour.retouche == 0 ? '—' : fmtInt(retour.retouche), retour.abimees == 0 ? '—' : fmtInt(retour.abimees)],
+        ],
+        widths: const {0: pw.FlexColumnWidth(), 1: pw.FlexColumnWidth(1.4), 2: pw.FlexColumnWidth(1.2), 3: pw.FlexColumnWidth(), 4: pw.FlexColumnWidth(), 5: pw.FlexColumnWidth()},
+        droite: {3, 4, 5},
+      ),
+      pw.SizedBox(height: 10),
+      pw.Text('Envoyées le {0} : {1} pièces · encore chez l\'atelier : {2}'.trf([fmtDate(envoi.date), fmtInt(envoi.pieces), fmtInt(envoi.restant)]),
+          style: const pw.TextStyle(fontSize: 10, color: _grey)),
+      if (retour.note != null) ...[pw.SizedBox(height: 6), pw.Text(retour.note!, style: const pw.TextStyle(fontSize: 10))],
+      pw.SizedBox(height: 30),
+      _signatures(['Reçu par (comptabilité)'.tr, 'Remis à la finition'.tr]),
+    ],
+  ));
+  return doc.save();
+}
