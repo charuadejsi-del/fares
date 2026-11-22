@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/app_data.dart';
+import '../data/couture.dart';
 import '../data/models.dart';
 import '../i18n.dart';
 import '../theme.dart';
 import '../utils.dart';
 import '../widgets.dart';
 import 'lots_screen.dart' show LotDetailScreen;
+import 'couture_screen.dart' show CarteEnvoi, ouvrirEnvoi;
 import 'refs_screens.dart' show FormDialog;
 
 /// Couleur d'une étape du circuit.
@@ -434,7 +436,7 @@ class _PaquetDetailScreenState extends State<PaquetDetailScreen> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-        listenable: data,
+        listenable: Listenable.merge([data, couture]),
         builder: (context, _) {
           final l = data.lot(widget.lotId);
           if (l == null) return Scaffold(appBar: AppBar(), body: EmptyState('Paquet introuvable.'.tr));
@@ -484,6 +486,12 @@ class _PaquetDetailScreenState extends State<PaquetDetailScreen> {
                         icon: Icon(iconeEtape(suivante)),
                         label: Text('Envoyer à : {0}'.trf([etapeNom(suivante)])),
                       ),
+                    if (l.etape == 'couture' && couture.aEnvoyer(l) > 0 && couture.ateliers.any((a) => a.actif))
+                      FilledButton.tonalIcon(
+                        onPressed: () => ouvrirEnvoi(context, l),
+                        icon: const Icon(Icons.store_rounded),
+                        label: Text('Envoyer chez un atelier de couture'.tr),
+                      ),
                     if (l.passeBroderie && l.etape != 'coupe')
                       OutlinedButton.icon(
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LotDetailScreen(lotId: l.id))).then((_) => _recharger()),
@@ -498,6 +506,12 @@ class _PaquetDetailScreenState extends State<PaquetDetailScreen> {
                   ],
                 ]),
               ),
+              if (couture.envoisDuLot(l.id).isNotEmpty) ...[
+                const SizedBox(height: 16),
+                SectionTitle('Couture'.tr),
+                const SizedBox(height: 8),
+                AutoGrid(minItemWidth: 340, children: [for (final e in couture.envoisDuLot(l.id)) CarteEnvoi(e)]),
+              ],
               const SizedBox(height: 16),
               SectionTitle('Historique des mouvements'.tr),
               const SizedBox(height: 8),

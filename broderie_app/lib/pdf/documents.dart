@@ -5,6 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/couture.dart';
 import '../data/gestion.dart' show LignePaie;
 import '../data/session.dart';
 import '../data/stock.dart';
@@ -1280,6 +1281,114 @@ Future<Uint8List> buildFicheLot({
       pw.SizedBox(height: 6),
       _footer(ctx, atelier),
     ]),
+  ));
+  return doc.save();
+}
+
+// ============================================================== couture externe
+
+/// Bon d'envoi d'un paquet chez un atelier de couture.
+Future<Uint8List> buildBonEnvoiCouture({
+  required Atelier atelier,
+  required Couturier couturier,
+  required String numeroLot,
+  String? modele,
+  String? couleur,
+  required EnvoiCouture envoi,
+}) async {
+  final doc = await _nouveau(atelier, 'Bon d\'envoi couture'.tr);
+  final theme = await _pdfTheme();
+  doc.addPage(pw.MultiPage(
+    pageTheme: _page(theme),
+    footer: (ctx) => _footer(ctx, atelier),
+    build: (ctx) => [
+      _entete(atelier, 'BON D\'ENVOI COUTURE'.tr, [
+        ['Paquet'.tr, '#$numeroLot'],
+        ['Date de départ'.tr, fmtDate(envoi.date)],
+        ['Atelier de couture'.tr, couturier.nom],
+      ]),
+      pw.SizedBox(height: 18),
+      _tableau(
+        ['Paquet'.tr, 'Modèle'.tr, 'Tissu / couleur'.tr, 'Pièces'.tr, 'Prix / pièce'.tr, 'Montant'.tr],
+        [
+          [
+            '#$numeroLot',
+            modele ?? '—',
+            couleur ?? '—',
+            fmtInt(envoi.pieces),
+            fmtDA(envoi.prix),
+            fmtDA(envoi.pieces * envoi.prix),
+          ],
+        ],
+        widths: const {0: pw.FlexColumnWidth(), 1: pw.FlexColumnWidth(1.4), 2: pw.FlexColumnWidth(1.2), 3: pw.FlexColumnWidth(), 4: pw.FlexColumnWidth(), 5: pw.FlexColumnWidth(1.2)},
+        droite: {3, 4, 5},
+      ),
+      pw.SizedBox(height: 10),
+      pw.Text('Le paiement est calculé sur les pièces rendues en bon état.'.tr, style: const pw.TextStyle(fontSize: 9, color: _grey)),
+      if (couturier.telephone != null) pw.Text('{0} : {1}'.trf(['Téléphone'.tr, couturier.telephone!]), style: const pw.TextStyle(fontSize: 9, color: _grey)),
+      if (envoi.note != null) ...[pw.SizedBox(height: 6), pw.Text(envoi.note!, style: const pw.TextStyle(fontSize: 10))],
+      pw.SizedBox(height: 30),
+      _signatures(['Remis par'.tr, 'Reçu par (atelier de couture)'.tr]),
+    ],
+  ));
+  return doc.save();
+}
+
+/// Relevé de compte d'un atelier de couture.
+Future<Uint8List> buildReleveCouturier({
+  required Atelier atelier,
+  required Couturier couturier,
+  required List<EnvoiCouture> envois,
+  required List<PaiementCouture> paiements,
+  required String Function(String lotId) numeroLot,
+}) async {
+  final doc = await _nouveau(atelier, 'Relevé {0}'.trf([couturier.nom]));
+  final theme = await _pdfTheme();
+  final du = envois.fold<double>(0, (s, e) => s + e.montant);
+  final paye = paiements.fold<double>(0, (s, p) => s + p.montant);
+  doc.addPage(pw.MultiPage(
+    pageTheme: _page(theme),
+    footer: (ctx) => _footer(ctx, atelier),
+    build: (ctx) => [
+      _entete(atelier, 'RELEVÉ ATELIER DE COUTURE'.tr, [
+        ['Atelier de couture'.tr, couturier.nom],
+        if (couturier.telephone != null) ['Téléphone'.tr, couturier.telephone!],
+        ['Édité le'.tr, fmtDate(DateTime.now())],
+      ]),
+      pw.SizedBox(height: 18),
+      pw.Text('Envois et retours'.tr, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+      pw.SizedBox(height: 6),
+      _tableau(
+        ['Départ'.tr, 'Paquet'.tr, 'Envoyées'.tr, 'Bonnes'.tr, 'Abîmées'.tr, 'Chez l\'atelier'.tr, 'Prix / pièce'.tr, 'Montant'.tr],
+        [
+          for (final e in envois)
+            [fmtDate(e.date), '#${numeroLot(e.lotId)}', fmtInt(e.pieces), fmtInt(e.bonnes), e.abimees == 0 ? '' : fmtInt(e.abimees), e.restant == 0 ? '' : fmtInt(e.restant), fmtDA(e.prix), fmtDA(e.montant)],
+        ],
+        widths: const {0: pw.FlexColumnWidth(1.1), 1: pw.FlexColumnWidth(), 2: pw.FlexColumnWidth(), 3: pw.FlexColumnWidth(), 4: pw.FlexColumnWidth(), 5: pw.FlexColumnWidth(), 6: pw.FlexColumnWidth(), 7: pw.FlexColumnWidth(1.2)},
+        droite: {2, 3, 4, 5, 6, 7},
+      ),
+      if (paiements.isNotEmpty) ...[
+        pw.SizedBox(height: 14),
+        pw.Text('Paiements'.tr, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 6),
+        _tableau(
+          ['Date'.tr, 'Note'.tr, 'Montant'.tr],
+          [for (final p in paiements) [fmtDate(p.date), p.note ?? '', fmtDA(p.montant)]],
+          widths: const {0: pw.FlexColumnWidth(), 1: pw.FlexColumnWidth(2.5), 2: pw.FlexColumnWidth(1.2)},
+          droite: {2},
+        ),
+      ],
+      pw.SizedBox(height: 14),
+      pw.Row(children: [
+        pw.Spacer(),
+        _totaux(
+          [('Total dû (pièces bonnes)'.tr, du, false), ('Total payé'.tr, paye, false)],
+          net: ('Reste à payer'.tr, du - paye),
+        ),
+      ]),
+      pw.SizedBox(height: 24),
+      _signatures(['Établi par'.tr, 'Atelier de couture'.tr]),
+    ],
   ));
   return doc.save();
 }
