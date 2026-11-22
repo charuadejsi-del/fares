@@ -50,7 +50,7 @@ jobs:
           M=android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.INTERNET' $M || sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' $M
           grep -q 'android.permission.CAMERA' $M || sed -i 's|<application|<uses-permission android:name="android.permission.CAMERA"/>\n    <application|' $M
-          sed -i 's|android:label="[^"]*"|android:label="Atelier Broderie"|' $M
+          sed -i 's|android:label="[^"]*"|android:label="Warchati"|' $M
       - name: Désactiver lintVital (plante sur les plugins tiers, ex. url_launcher)
         run: |
           F=android/build.gradle.kts; [ -f $F ] || F=android/build.gradle
@@ -82,7 +82,7 @@ jobs:
         shell: pwsh
         run: |
           $f = "windows/runner/main.cpp"
-          (Get-Content $f) -replace 'L"atelier_broderie"', 'L"Atelier Broderie"' | Set-Content $f
+          (Get-Content $f) -replace 'L"atelier_broderie"', 'L"Warchati"' | Set-Content $f
       - run: flutter pub get
       - run: flutter build windows --release
       - uses: actions/upload-artifact@v4

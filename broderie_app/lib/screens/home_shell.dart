@@ -11,6 +11,7 @@ import '../widgets.dart';
 import 'admin_screens.dart';
 import 'gestion_screens.dart';
 import 'atelier_screen.dart';
+import 'plateforme_screen.dart';
 import 'suivi_screen.dart';
 import 'coupe_screen.dart';
 import 'couture_screen.dart';
@@ -32,7 +33,7 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-enum _Cle { accueil, suivi, coupe, broderie, decoration, couture, finition, paie, stock, ventes, achats }
+enum _Cle { plateforme, accueil, suivi, coupe, broderie, decoration, couture, finition, paie, stock, ventes, achats }
 
 class _Dest {
   final _Cle cle;
@@ -65,6 +66,8 @@ class _HomeShellState extends State<HomeShell> {
   List<Alerte> _alertes = [];
 
   List<_Dest> get _dests => [
+        if (session.proprietaire)
+          _Dest(_Cle.plateforme, 'Warchati'.tr, 'Warchati · ateliers clients et abonnements'.tr, 'Plateforme'.tr, Icons.hub_outlined, Icons.hub_rounded),
         if (session.admin)
           _Dest(_Cle.accueil, 'Accueil'.tr, 'Vue d\'ensemble'.tr, 'Pilotage'.tr, Icons.space_dashboard_outlined, Icons.space_dashboard_rounded),
         if (session.admin)
@@ -211,7 +214,37 @@ class _HomeShellState extends State<HomeShell> {
   // ------------------------------------------------------------------ pages
 
   Widget _page(_Dest d) {
+    final banniere = _banniereAbonnement();
+    final page = _contenu(d);
+    return banniere == null ? page : Column(children: [banniere, Expanded(child: page)]);
+  }
+
+  /// Bandeau d'abonnement : expire bientôt, expiré ou suspendu (lecture seule).
+  Widget? _banniereAbonnement() {
+    final a = session.atelier;
+    if (a == null || a.illimite) return a != null && a.suspendu ? _bandeau('Atelier suspendu : lecture seule. Contactez Warchati.'.tr, AppColors.rose) : null;
+    final j = a.joursRestants!;
+    if (a.suspendu) return _bandeau('Atelier suspendu : lecture seule. Contactez Warchati.'.tr, AppColors.rose);
+    if (j < 0) return _bandeau('Abonnement expiré le {0} : lecture seule. Renouvelez auprès de Warchati.'.trf([fmtDate(a.abonnementFin!)]), AppColors.rose);
+    if (j <= 7) return _bandeau('Votre abonnement se termine dans {0} jour(s) ({1}).'.trf([j, fmtDate(a.abonnementFin!)]), AppColors.gold);
+    return null;
+  }
+
+  Widget _bandeau(String t, Color c) => Material(
+        color: c.withValues(alpha: .16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(children: [
+            Icon(Icons.info_rounded, color: c),
+            const SizedBox(width: 10),
+            Expanded(child: Text(t, style: TextStyle(color: c, fontWeight: FontWeight.w700))),
+          ]),
+        ),
+      );
+
+  Widget _contenu(_Dest d) {
     return switch (d.cle) {
+      _Cle.plateforme => const PlateformeScreen(),
       _Cle.accueil => VueEnsembleScreen(
           onAller: (i) => _aller(switch (i) {
             1 => _Cle.broderie,

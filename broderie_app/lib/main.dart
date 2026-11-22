@@ -7,6 +7,7 @@ import 'config.dart';
 import 'screens/home_shell.dart';
 import 'screens/login_screen.dart';
 import 'data/session.dart';
+import 'screens/activation_screen.dart';
 import 'theme.dart';
 import 'utils.dart';
 import 'i18n.dart';
@@ -61,7 +62,7 @@ class AtelierApp extends StatelessWidget {
         // Changer de langue reconstruit toute l'application dans la nouvelle langue
         key: ValueKey(langue.value),
         navigatorKey: navigateurPrincipal,
-        title: 'Atelier'.tr,
+        title: 'Warchati · ورشتي',
         debugShowCheckedModeBanner: false,
         locale: langue.ar ? const Locale('ar') : const Locale('fr', 'FR'),
         supportedLocales: const [Locale('fr', 'FR'), Locale('ar')],
@@ -124,6 +125,9 @@ class _SessionGateState extends State<SessionGate> {
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          }
+          if (!snap.hasError && session.sansAtelier) {
+            return ActivationScreen(onActive: () => setState(() => _f = Future.value().then((_) => verrou.demarrer())));
           }
           final m = session.membre;
           if (snap.hasError || m == null || !m.actif) {

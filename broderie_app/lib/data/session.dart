@@ -48,6 +48,17 @@ class Atelier {
   /// Délai normal (jours) passé dans chaque atelier avant d'être signalé en retard.
   final Map<String, int> delais;
 
+  /// Plateforme Warchati : code de connexion, abonnement.
+  final String? code;
+  final String abonnement;
+  final DateTime? abonnementFin;
+  final bool suspendu;
+
+  bool get illimite => abonnement == 'illimite' || abonnementFin == null;
+  int? get joursRestants => illimite ? null : DateTime(abonnementFin!.year, abonnementFin!.month, abonnementFin!.day).difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)).inDays;
+  /// Abonnement valide : sinon l'atelier est en lecture seule.
+  bool get actif => !suspendu && (illimite || joursRestants! >= 0);
+
   static const delaisParDefaut = {'coupe': 3, 'broderie': 10, 'applique': 5, 'akkach': 5, 'couture': 15, 'finition': 5};
 
   const Atelier({
@@ -74,6 +85,10 @@ class Atelier {
     this.logoPublic,
     this.whatsapp,
     this.delais = delaisParDefaut,
+    this.code,
+    this.abonnement = 'illimite',
+    this.abonnementFin,
+    this.suspendu = false,
   });
 
   factory Atelier.fromMap(Map<String, dynamic> m) => Atelier(
@@ -99,6 +114,10 @@ class Atelier {
         vitrineSlogan: _s(m['vitrine_slogan']),
         logoPublic: _s(m['logo_public']),
         whatsapp: _s(m['whatsapp']),
+        code: _s(m['code']),
+        abonnement: (m['abonnement'] ?? 'illimite') as String,
+        abonnementFin: m['abonnement_fin'] == null ? null : DateTime.parse(m['abonnement_fin'] as String),
+        suspendu: (m['suspendu'] ?? false) as bool,
         delais: {
           ...delaisParDefaut,
           for (final e in ((m['delais'] as Map?) ?? const {}).entries) e.key as String: (e.value as num).toInt(),
@@ -184,10 +203,12 @@ class Membre {
 
 const domaineEmployes = 'atelier-broderie.app';
 
-/// Transforme un identifiant d'employé en adresse de connexion.
-String emailDeConnexion(String saisie) {
+/// Transforme un identifiant d'employé (et le code de son atelier) en adresse de connexion.
+String emailDeConnexion(String saisie, [String? codeAtelier]) {
   final s = saisie.trim().toLowerCase();
-  return s.contains('@') ? s : '$s@$domaineEmployes';
+  if (s.contains('@')) return s;
+  final c = (codeAtelier ?? '').trim().toLowerCase();
+  return c.isEmpty ? '$s@$domaineEmployes' : '$s.$c@$domaineEmployes';
 }
 
 /// Session : compte connecté, son atelier et ses droits.
@@ -201,6 +222,12 @@ class AtelierSession extends ChangeNotifier {
   Atelier? atelier;
   bool loaded = false;
 
+  /// Propriétaire de la plateforme Warchati (gère les ateliers clients et les abonnements).
+  bool proprietaire = false;
+
+  /// Compte connecté sans atelier : il doit l'activer avec un code.
+  bool sansAtelier = false;
+
   bool get admin => membre?.admin ?? false;
   bool peut(Espace e) => membre?.peut(e) ?? false;
   bool get voitPrix => membre?.voitPrix ?? false;
@@ -212,23 +239,32 @@ class AtelierSession extends ChangeNotifier {
   Future<void> load() async {
     final uid = _db.auth.currentUser?.id;
     if (uid == null) return;
-    var row = await _db.from('atelier_membres').select().eq('user_id', uid).maybeSingle();
-    if (row == null) {
-      // Nouveau compte : il crée son atelier et en devient l'administrateur
-      await _db.rpc('atelier_initialiser');
-      row = await _db.from('atelier_membres').select().eq('user_id', uid).maybeSingle();
-    }
+    final row = await _db.from('atelier_membres').select().eq('user_id', uid).maybeSingle();
+    sansAtelier = row == null;
     membre = row == null ? null : Membre.fromMap(row);
     if (membre != null && membre!.actif) {
       final a = await _db.from('ateliers').select().eq('id', membre!.atelierId).maybeSingle();
       atelier = a == null ? Atelier(id: membre!.atelierId, nom: 'Mon atelier') : Atelier.fromMap(a);
     }
     masquerMontants = !voitPrix;
+    try {
+      proprietaire = membre != null && (await _db.rpc('est_proprietaire')) == true;
+    } catch (_) {
+      proprietaire = false;
+    }
     loaded = true;
     notifyListeners();
   }
 
+  /// Crée l'atelier du compte connecté avec un code d'activation fourni par Warchati.
+  Future<void> activer({required String nom, required String code, required String activation}) async {
+    await _db.rpc('atelier_activer', params: {'p_nom': nom, 'p_code': code, 'p_activation': activation});
+    await load();
+  }
+
   void clear() {
+    proprietaire = false;
+    sansAtelier = false;
     membre = null;
     atelier = null;
     loaded = false;

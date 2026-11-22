@@ -32,7 +32,7 @@ Future<Uint8List> buildFichePaie({
   final mvts = [...mouvements]..sort((a, b) => a.date.compareTo(b.date));
   final totPts = prod.fold<int>(0, (s, p) => s + p.totalPoints);
 
-  final doc = pw.Document(title: 'Fiche de paie {0}'.trf([ouvrier.nom]), author: 'Atelier Broderie'.tr, theme: theme);
+  final doc = pw.Document(title: 'Fiche de paie {0}'.trf([ouvrier.nom]), author: 'Warchati', theme: theme);
 
   pw.Widget title(String t) => pw.Padding(
         padding: const pw.EdgeInsets.only(top: 16, bottom: 6),

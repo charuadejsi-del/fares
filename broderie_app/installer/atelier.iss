@@ -5,11 +5,11 @@
 
 [Setup]
 AppId={{8C1F4E2A-5B7D-4A63-9E21-A7B3C0D4F516}
-AppName=Atelier Broderie
+AppName=Warchati
 AppVersion={#AppVersion}
-AppPublisher=Atelier Broderie
-DefaultDirName={autopf}\Atelier Broderie
-DefaultGroupName=Atelier Broderie
+AppPublisher=Warchati
+DefaultDirName={autopf}\Warchati
+DefaultGroupName=Warchati
 DisableProgramGroupPage=yes
 OutputDir=..\build\installer
 OutputBaseFilename=AtelierBroderie-Setup-{#AppVersion}
@@ -31,8 +31,8 @@ Name: "desktopicon"; Description: "Créer une icône sur le bureau"; GroupDescri
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Atelier Broderie"; Filename: "{app}\atelier_broderie.exe"
-Name: "{autodesktop}\Atelier Broderie"; Filename: "{app}\atelier_broderie.exe"; Tasks: desktopicon
+Name: "{group}\Warchati"; Filename: "{app}\atelier_broderie.exe"
+Name: "{autodesktop}\Warchati"; Filename: "{app}\atelier_broderie.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\atelier_broderie.exe"; Description: "Lancer Atelier Broderie"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\atelier_broderie.exe"; Description: "Lancer Warchati"; Flags: nowait postinstall skipifsilent

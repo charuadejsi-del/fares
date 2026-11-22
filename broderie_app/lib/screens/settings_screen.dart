@@ -79,6 +79,17 @@ class SettingsScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
               child: Column(children: [
                 ListTile(
+                  leading: const Icon(Icons.tag_rounded, color: AppColors.gold),
+                  title: Text('Code de votre atelier : {0}'.trf([session.atelier?.code ?? '—']), style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text([
+                    'Vos employés se connectent avec ce code + leur identifiant'.tr,
+                    if (session.atelier != null && !session.atelier!.illimite) 'Abonnement jusqu\'au {0}'.trf([fmtDate(session.atelier!.abonnementFin!)]),
+                    if (session.atelier?.code != null) 'Vitrine : https://ghania-collection.netlify.app/?a=${session.atelier!.code}',
+                  ].join('\n')),
+                  isThreeLine: true,
+                ),
+                const Divider(height: 1),
+                ListTile(
                   leading: const Icon(Icons.manage_accounts_rounded, color: AppColors.gold),
                   title: Text('Comptes et accès au logiciel'.tr, style: TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: Text('Pour ceux qui utilisent l\'application (pas les ouvriers)'.tr),

@@ -13,9 +13,12 @@ const json = (body: unknown, status = 200) =>
 
 const DOMAINE = "atelier-broderie.app";
 
-function emailDepuisIdentifiant(identifiant: string): string {
+// Connexion employé : identifiant + code de l'atelier (un même identifiant peut exister dans deux ateliers)
+function emailDepuisIdentifiant(identifiant: string, code?: string | null): string {
   const id = identifiant.trim().toLowerCase();
-  return id.includes("@") ? id : `${id}@${DOMAINE}`;
+  if (id.includes("@")) return id;
+  const c = (code ?? "").trim().toLowerCase();
+  return c ? `${id}.${c}@${DOMAINE}` : `${id}@${DOMAINE}`;
 }
 
 function droits(body: Record<string, unknown>) {
@@ -65,8 +68,9 @@ Deno.serve(async (req: Request) => {
       }
       if (motDePasse.length < 6) return json({ error: "Mot de passe : 6 caractères minimum" }, 400);
 
+      const { data: at } = await admin.from("ateliers").select("code").eq("id", me.atelier_id).maybeSingle();
       const { data: created, error: errCreate } = await admin.auth.admin.createUser({
-        email: emailDepuisIdentifiant(identifiant),
+        email: emailDepuisIdentifiant(identifiant, at?.code),
         password: motDePasse,
         email_confirm: true,
         user_metadata: { nom, atelier_id: me.atelier_id },

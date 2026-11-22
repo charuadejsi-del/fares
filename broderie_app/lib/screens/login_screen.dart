@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/session.dart';
@@ -17,7 +18,14 @@ class _LoginScreenState extends State<LoginScreen> {
   final _form = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _pass = TextEditingController();
+  final _code = TextEditingController();
   bool _signup = false;
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((p) => _code.text = p.getString('code_atelier') ?? '');
+  }
   bool _busy = false;
   bool _hide = true;
 
@@ -25,6 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _email.dispose();
     _pass.dispose();
+    _code.dispose();
     super.dispose();
   }
 
@@ -40,7 +49,16 @@ class _LoginScreenState extends State<LoginScreen> {
           setState(() => _signup = false);
         }
       } else {
-        await auth.signInWithPassword(email: emailDeConnexion(_email.text), password: _pass.text);
+        final saisie = _email.text.trim();
+        final code = _code.text.trim().toLowerCase();
+        try {
+          await auth.signInWithPassword(email: emailDeConnexion(saisie, code), password: _pass.text);
+        } on AuthException {
+          // anciens comptes employés (sans code d'atelier)
+          if (saisie.contains('@') || code.isEmpty) rethrow;
+          await auth.signInWithPassword(email: emailDeConnexion(saisie), password: _pass.text);
+        }
+        if (!saisie.contains('@')) (await SharedPreferences.getInstance()).setString('code_atelier', code);
       }
     } catch (e) {
       if (mounted) {
@@ -65,8 +83,8 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Icon(Icons.diamond_rounded, size: grand ? 46 : 36, color: AppColors.ink),
         ),
         SizedBox(height: grand ? 26 : 14),
-        Text('Atelier'.tr, style: TextStyle(color: Colors.white, fontSize: grand ? 44 : 30, fontWeight: FontWeight.w900, letterSpacing: -1, height: 1)),
-        Text('Broderie · Couture · Gros'.tr,
+        Text('ورشتي · Warchati', style: TextStyle(color: Colors.white, fontSize: grand ? 40 : 28, fontWeight: FontWeight.w900, height: 1.1)),
+        Text('Gestion d\'atelier · Broderie · Couture · Gros'.tr,
             style: TextStyle(color: AppColors.gold, fontSize: grand ? 15 : 12.5, fontWeight: FontWeight.w800, letterSpacing: 2.4)),
       ]);
 
@@ -96,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     Text(_signup ? 'Nouvel atelier'.tr : 'Bienvenue'.tr, style: t.textTheme.headlineSmall),
                     const SizedBox(height: 4),
-                    Text(_signup ? 'Créer le compte administrateur de l\'atelier'.tr : 'Connectez-vous pour ouvrir votre atelier'.tr,
+                    Text(_signup ? 'Créez votre compte, puis activez votre atelier avec le code reçu de Warchati'.tr : 'Connectez-vous pour ouvrir votre atelier'.tr,
                         style: t.textTheme.bodyMedium?.copyWith(color: t.extension<AppPalette>()?.muted)),
                     const SizedBox(height: 24),
                     TextFormField(
@@ -113,6 +131,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         return s.length < 3 ? 'Identifiant trop court'.tr : null;
                       },
                     ),
+                    if (!_signup) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _code,
+                        decoration: InputDecoration(
+                          labelText: 'Code de l\'atelier (employés)'.tr,
+                          helperText: 'Laissez vide si vous vous connectez avec votre email'.tr,
+                          prefixIcon: const Icon(Icons.tag_rounded),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _pass,
