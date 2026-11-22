@@ -20,7 +20,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _pass = TextEditingController();
   final _code = TextEditingController();
   final _nomAtelier = TextEditingController();
-  final _activation = TextEditingController();
   bool _signup = false;
 
   @override
@@ -37,7 +36,6 @@ class _LoginScreenState extends State<LoginScreen> {
     _pass.dispose();
     _code.dispose();
     _nomAtelier.dispose();
-    _activation.dispose();
     super.dispose();
   }
 
@@ -54,7 +52,6 @@ class _LoginScreenState extends State<LoginScreen> {
             'email': email,
             'mot_de_passe': _pass.text,
             'nom': _nomAtelier.text.trim(),
-            'activation': _activation.text.trim().toUpperCase(),
           });
           final d = res.data;
           if (d is Map && d['error'] != null) throw Exception(d['error']);
@@ -129,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     Text(_signup ? 'Nouvel atelier'.tr : 'Bienvenue'.tr, style: t.textTheme.headlineSmall),
                     const SizedBox(height: 4),
-                    Text(_signup ? 'Votre email deviendra l\'administrateur de votre atelier'.tr : 'Connectez-vous pour ouvrir votre atelier'.tr,
+                    Text(_signup ? 'Essai gratuit · votre email deviendra l\'administrateur de votre atelier'.tr : 'Connectez-vous pour ouvrir votre atelier'.tr,
                         style: t.textTheme.bodyMedium?.copyWith(color: t.extension<AppPalette>()?.muted)),
                     const SizedBox(height: 24),
                     TextFormField(
@@ -163,13 +160,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         controller: _nomAtelier,
                         decoration: InputDecoration(labelText: 'Nom de votre atelier'.tr, prefixIcon: const Icon(Icons.store_rounded)),
                         validator: (v) => (v ?? '').trim().isEmpty ? 'Obligatoire'.tr : null,
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _activation,
-                        textCapitalization: TextCapitalization.characters,
-                        decoration: InputDecoration(labelText: 'Code d\'activation'.tr, hintText: 'WAR-XXXXXX', prefixIcon: const Icon(Icons.vpn_key_rounded)),
-                        validator: (v) => (v ?? '').trim().length < 6 ? 'Obligatoire'.tr : null,
                       ),
                     ],
                     const SizedBox(height: 12),

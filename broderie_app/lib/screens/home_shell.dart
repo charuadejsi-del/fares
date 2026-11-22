@@ -10,6 +10,7 @@ import '../utils.dart';
 import '../widgets.dart';
 import 'admin_screens.dart';
 import 'gestion_screens.dart';
+import 'abonnement_screen.dart';
 import 'atelier_screen.dart';
 import 'suivi_screen.dart';
 import 'coupe_screen.dart';
@@ -223,6 +224,7 @@ class _HomeShellState extends State<HomeShell> {
     final j = a.joursRestants!;
     if (a.suspendu) return _bandeau('Atelier suspendu : lecture seule. Contactez Warchati.'.tr, AppColors.rose);
     if (j < 0) return _bandeau('Abonnement expiré le {0} : lecture seule. Renouvelez auprès de Warchati.'.trf([fmtDate(a.abonnementFin!)]), AppColors.rose);
+    if (a.essai) return _bandeau('Essai gratuit : {0} jour(s) restant(s). Choisissez un pack pour continuer.'.trf([j]), AppColors.gold);
     if (j <= 7) return _bandeau('Votre abonnement se termine dans {0} jour(s) ({1}).'.trf([j, fmtDate(a.abonnementFin!)]), AppColors.gold);
     return null;
   }
@@ -230,11 +232,16 @@ class _HomeShellState extends State<HomeShell> {
   Widget _bandeau(String t, Color c) => Material(
         color: c.withValues(alpha: .16),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(children: [
             Icon(Icons.info_rounded, color: c),
             const SizedBox(width: 10),
             Expanded(child: Text(t, style: TextStyle(color: c, fontWeight: FontWeight.w700))),
+            if (session.admin)
+              TextButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AbonnementScreen())).then((_) => setState(() {})),
+                child: Text('Mon abonnement'.tr),
+              ),
           ]),
         ),
       );

@@ -641,7 +641,7 @@ class _SocieteScreenState extends State<SocieteScreen> {
               ]),
             ),
             const SizedBox(height: 12),
-            AppCard(
+            if (session.atelier?.vitrineAutorisee ?? false) AppCard(
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 SectionTitle('Site vitrine de la collection'.tr,
                     subtitle: 'Vos modèles en stock et leurs photos sont publiés automatiquement. Les clients voient les couleurs et tailles, jamais les quantités.'.tr),

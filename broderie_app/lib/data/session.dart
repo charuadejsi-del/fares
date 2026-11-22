@@ -53,6 +53,9 @@ class Atelier {
   final String abonnement;
   final DateTime? abonnementFin;
   final bool suspendu;
+  final bool vitrineAutorisee;
+  final int? maxEmployes;
+  bool get essai => abonnement == 'essai';
 
   bool get illimite => abonnement == 'illimite' || abonnementFin == null;
   int? get joursRestants => illimite ? null : DateTime(abonnementFin!.year, abonnementFin!.month, abonnementFin!.day).difference(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)).inDays;
@@ -89,6 +92,8 @@ class Atelier {
     this.abonnement = 'illimite',
     this.abonnementFin,
     this.suspendu = false,
+    this.vitrineAutorisee = false,
+    this.maxEmployes,
   });
 
   factory Atelier.fromMap(Map<String, dynamic> m) => Atelier(
@@ -118,6 +123,8 @@ class Atelier {
         abonnement: (m['abonnement'] ?? 'illimite') as String,
         abonnementFin: m['abonnement_fin'] == null ? null : DateTime.parse(m['abonnement_fin'] as String),
         suspendu: (m['suspendu'] ?? false) as bool,
+        vitrineAutorisee: (m['vitrine_autorisee'] ?? false) as bool,
+        maxEmployes: (m['max_employes'] as num?)?.toInt(),
         delais: {
           ...delaisParDefaut,
           for (final e in ((m['delais'] as Map?) ?? const {}).entries) e.key as String: (e.value as num).toInt(),
@@ -256,9 +263,9 @@ class AtelierSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Crée l'atelier du compte connecté avec un code d'activation fourni par Warchati.
-  Future<void> activer({required String nom, required String code, required String activation}) async {
-    await _db.rpc('atelier_activer', params: {'p_nom': nom, 'p_code': code, 'p_activation': activation});
+  /// Crée l'atelier (période d'essai) du compte connecté qui n'en a pas encore.
+  Future<void> creerAtelier(String nom) async {
+    await _db.rpc('atelier_creer', params: {'p_nom': nom});
     await load();
   }
 

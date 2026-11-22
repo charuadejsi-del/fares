@@ -1,6 +1,5 @@
 // Fonction serveur « inscription » (Warchati) : un nouveau client crée en une seule étape
-// son compte et son atelier avec un code d'activation. L'email inscrit devient l'administrateur.
-// Rien n'est créé si le code d'activation est invalide ou déjà utilisé.
+// son compte et son atelier (période d'essai gratuite). L'email inscrit devient l'administrateur.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const cors = {
@@ -26,15 +25,13 @@ Deno.serve(async (req: Request) => {
     const email = String(body.email ?? "").trim().toLowerCase();
     const motDePasse = String(body.mot_de_passe ?? "");
     const nom = String(body.nom ?? "").trim();
-    const activation = String(body.activation ?? "").trim().toUpperCase();
 
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Email invalide" }, 400);
     if (motDePasse.length < 6) return json({ error: "Mot de passe : 6 caractères minimum" }, 400);
     if (!nom) return json({ error: "Le nom de l'atelier est obligatoire" }, 400);
-    if (!activation) return json({ error: "Le code d'activation est obligatoire" }, 400);
 
-    const { data: c } = await admin.from("codes_activation").select("*").eq("code", activation).is("utilise_par", null).maybeSingle();
-    if (!c) return json({ error: "Code d'activation invalide ou déjà utilisé" }, 400);
+    const { data: reg } = await admin.from("plateforme_reglages").select("jours_essai").eq("id", 1).maybeSingle();
+    const joursEssai = Number(reg?.jours_essai ?? 7);
 
     // code de connexion de l'atelier, fabriqué à partir du nom et rendu unique
     const base = slug(nom);
@@ -60,15 +57,11 @@ Deno.serve(async (req: Request) => {
     };
 
     const fin = new Date();
-    fin.setMonth(fin.getMonth() + Number(c.duree_mois));
-    const { error: e1 } = await admin.from("ateliers").insert({ id: uid, nom, code, abonnement: c.abonnement, abonnement_fin: fin.toISOString().slice(0, 10) });
+    fin.setDate(fin.getDate() + joursEssai);
+    const { error: e1 } = await admin.from("ateliers").insert({ id: uid, nom, code, abonnement: "essai", abonnement_fin: fin.toISOString().slice(0, 10) });
     if (e1) { await annuler(); return json({ error: e1.message }, 400); }
     const { error: e2 } = await admin.from("atelier_membres").insert({ user_id: uid, atelier_id: uid, nom: email.split("@")[0], identifiant: email, role: "admin", actif: true });
     if (e2) { await annuler(); return json({ error: e2.message }, 400); }
-    const { data: pris } = await admin.from("codes_activation").update({ utilise_par: uid, utilise_le: new Date().toISOString() })
-      .eq("code", activation).is("utilise_par", null).select("code");
-    if (!pris || pris.length === 0) { await annuler(); return json({ error: "Code d'activation déjà utilisé" }, 409); }
-
     return json({ ok: true, code });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);

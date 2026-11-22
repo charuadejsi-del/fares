@@ -10,6 +10,7 @@ import '../pdf/documents.dart' show oublierLogo;
 import '../utils.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'abonnement_screen.dart';
 import 'admin_screens.dart';
 import 'gestion_screens.dart';
 import 'refs_screens.dart';
@@ -84,10 +85,20 @@ class SettingsScreen extends StatelessWidget {
                   subtitle: Text([
                     'Vos employés se connectent avec ce code + leur identifiant'.tr,
                     if (session.atelier != null && !session.atelier!.illimite) 'Abonnement jusqu\'au {0}'.trf([fmtDate(session.atelier!.abonnementFin!)]),
-                    if (session.atelier?.code != null) 'Vitrine : https://ghania-collection.netlify.app/?a=${session.atelier!.code}',
+                    if (session.atelier?.vitrineAutorisee ?? false) 'Vitrine : https://ghania-collection.netlify.app/?a=${session.atelier!.code}',
                   ].join('\n')),
                   isThreeLine: true,
                 ),
+                if (session.atelier != null && !(session.atelier!.illimite && !session.atelier!.essai)) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.workspace_premium_rounded, color: AppColors.gold),
+                    title: Text('Mon abonnement'.tr, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text('Packs, paiement BaridiMob, preuve de paiement'.tr),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AbonnementScreen())),
+                  ),
+                ],
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.manage_accounts_rounded, color: AppColors.gold),

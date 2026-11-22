@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../data/session.dart';
 import '../../data/stock.dart';
 import '../../theme.dart';
 import '../../utils.dart';
@@ -676,7 +677,7 @@ class ModeleDetailScreen extends StatelessWidget {
               const SizedBox(height: 12),
               SeriesModeleCard(m: m),
               const SizedBox(height: 12),
-              VitrineModeleCard(m: m),
+              if (session.atelier?.vitrineAutorisee ?? false) VitrineModeleCard(m: m),
               const SizedBox(height: 12),
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

@@ -68,7 +68,14 @@ Deno.serve(async (req: Request) => {
       }
       if (motDePasse.length < 6) return json({ error: "Mot de passe : 6 caractères minimum" }, 400);
 
-      const { data: at } = await admin.from("ateliers").select("code").eq("id", me.atelier_id).maybeSingle();
+      const { data: at } = await admin.from("ateliers").select("code, max_employes").eq("id", me.atelier_id).maybeSingle();
+      if (at?.max_employes != null) {
+        const { count } = await admin.from("atelier_membres").select("user_id", { count: "exact", head: true })
+          .eq("atelier_id", me.atelier_id).eq("role", "employe");
+        if ((count ?? 0) >= at.max_employes) {
+          return json({ error: `Votre abonnement permet ${at.max_employes} employé(s) au maximum. Passez à un pack supérieur.` }, 403);
+        }
+      }
       const { data: created, error: errCreate } = await admin.auth.admin.createUser({
         email: emailDepuisIdentifiant(identifiant, at?.code),
         password: motDePasse,
