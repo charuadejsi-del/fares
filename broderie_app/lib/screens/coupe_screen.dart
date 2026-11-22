@@ -375,9 +375,9 @@ class PaquetDetailScreen extends StatefulWidget {
 }
 
 class _PaquetDetailScreenState extends State<PaquetDetailScreen> {
-  late Future<List<MouvementLot>> _mvts = data.fetchMouvements(widget.lotId);
+  late Future<List<MouvementLot>> _mvts = data.fetchMouvementsLot(widget.lotId);
 
-  void _recharger() => setState(() => _mvts = data.fetchMouvements(widget.lotId));
+  void _recharger() => setState(() => _mvts = data.fetchMouvementsLot(widget.lotId));
 
   Future<void> _deplacer(Lot l, String vers) async {
     final note = TextEditingController();
@@ -499,7 +499,7 @@ class _PaquetDetailScreenState extends State<PaquetDetailScreen> {
                 ]),
               ),
               const SizedBox(height: 16),
-              SectionTitle(title: 'Historique des mouvements'.tr),
+              SectionTitle('Historique des mouvements'.tr),
               const SizedBox(height: 8),
               FutureBuilder<List<MouvementLot>>(
                 future: _mvts,

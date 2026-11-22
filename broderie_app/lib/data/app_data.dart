@@ -234,7 +234,7 @@ class AppData extends ChangeNotifier {
     await loadLots();
   }
 
-  Future<List<MouvementLot>> fetchMouvements(String lotId) async {
+  Future<List<MouvementLot>> fetchMouvementsLot(String lotId) async {
     final rows = await _db.from('lot_mouvements').select().eq('lot_id', lotId).order('date_mvt').order('created_at');
     return rows.map(MouvementLot.fromMap).toList();
   }
