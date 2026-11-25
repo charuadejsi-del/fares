@@ -141,7 +141,7 @@ jobs:
         run: |
           mv addons/godot_agora/bin/*.aar addons/godot_agora/bin/GodotAgora.aar
           ls -la addons/godot_agora/bin
-          (command -v unzip >/dev/null && command -v zip >/dev/null) || (apt-get update -qq && apt-get install -y -qq unzip zip >/dev/null)
+          (command -v unzip >/dev/null && command -v zip >/dev/null && command -v python3 >/dev/null) || (apt-get update -qq && apt-get install -y -qq unzip zip python3 >/dev/null)
           python3 windows_plugin/ci/deps.py addons/godot_agora_win 2>/dev/null || true; ls addons/godot_agora_win/bin
           mkdir -p android/build
           unzip -q -o ~/.local/share/godot/export_templates/4.3.stable/android_source.zip -d android/build
