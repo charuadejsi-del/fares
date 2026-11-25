@@ -118,6 +118,9 @@ jobs:
           fi
           ls -la build
           test -f build/khazna3d.apk
+          echo "--- فحص الصوت داخل الـ APK ---"
+          if unzip -l build/khazna3d.apk | grep -qi "libagora"; then echo "VOICE: Agora مضمّن ✅"; else echo "VOICE: غير مضمّن ⚠"; fi
+          unzip -l build/khazna3d.apk | grep -iE "agora" | head -5 || true
 
       - name: بناء ويندوز
         continue-on-error: true
