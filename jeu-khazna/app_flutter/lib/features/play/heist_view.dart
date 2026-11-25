@@ -479,7 +479,7 @@ class HeistPainter extends CustomPainter {
   }) : super(repaint: repaint);
 
   static const _floor = Color(0xFF16191C), _floor2 = Color(0xFF1A1D21), _wall = Color(0xFF353A40), _wallTop = Color(0xFF4A5057);
-  static const _crate = Color(0xFF4B3D2A), _guard = Color(0xFFC9CED3), _cone = Color(0xFFE5484D);
+  static const _crate = Color(0xFF4B3D2A), _guard = Color(0xFFC9CED3), _coneRed = Color(0xFFE5484D);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -597,12 +597,12 @@ class HeistPainter extends CustomPainter {
         canvas.drawPath(path, Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = max(1, scale * .07)
-          ..color = _cone.withAlpha(120));
+          ..color = _coneRed.withAlpha(120));
         continue;
       }
       final (gp, ga) = guardAt(g, t);
       final p = sc(gp);
-      _cone(canvas, p, ga, kGuardHalf, map.params.guardRange * scale, _cone);
+      _cone(canvas, p, ga, kGuardHalf, map.params.guardRange * scale, _coneRed);
       canvas.drawCircle(p, scale * .32, Paint()..color = const Color(0xFF2B3A55));
       canvas.drawCircle(p, scale * .32, Paint()
         ..style = PaintingStyle.stroke
