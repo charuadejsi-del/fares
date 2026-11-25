@@ -170,7 +170,7 @@ func _smoke() -> void:
 	await get_tree().create_timer(0.7).timeout
 	_spotted()
 	await get_tree().create_timer(0.2).timeout
-	if not vault_mode and not agent.locked and agent.cam.position.distance_to(Vector3(0, 1.62, 0)) < 0.01:
+	if not vault_mode and not agent.locked and agent.cam.position.distance_to(Vector3(0, 1.62, 0)) < 0.1:
 		print("SMOKE caught ok")
 	agent.global_position = VAULT_FRONT
 	_enter_vault()
