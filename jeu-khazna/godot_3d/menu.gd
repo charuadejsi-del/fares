@@ -12,6 +12,9 @@ var _box: VBoxContainer
 
 
 func _ready() -> void:
+	# نطلب إذن الميكروفون من الشاشة الأولى حتى يكون جاهزاً قبل بدء الصوت.
+	if OS.get_name() == "Android" and not OS.get_granted_permissions().has("android.permission.RECORD_AUDIO"):
+		OS.request_permission("android.permission.RECORD_AUDIO")
 	_root = ColorRect.new()
 	(_root as ColorRect).color = Color(0.02, 0.025, 0.03, 0.97)
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)

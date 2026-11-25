@@ -99,6 +99,12 @@ jobs:
           grep -q "SMOKE sync ok" run.log || { echo "مزامنة الحرّاس لا تعمل"; exit 1; }
           grep -q "SMOKE tools ok" run.log || { echo "أدوات المحلّل لا تعمل"; exit 1; }
           grep -q "SMOKE reach ok" run.log || { echo "العميل لا يستطيع الوصول إلى كل الأهداف"; exit 1; }
+          grep -q "SMOKE voice channel ok" run.log || { echo "اسم قناة الصوت لا يطابق السيرفر"; exit 1; }
+          CH=$(grep -o "SMOKE voice channel ok .*" run.log | awk '{print $5}')
+          KEY=$(grep -oE 'eyJ[A-Za-z0-9._-]+' net.gd | head -1)
+          RESP=$(curl -s -X POST "https://ubdamgzqqwgcxjvvegwk.supabase.co/functions/v1/agora-token" -H "Content-Type: application/json" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -d "{\"channel\":\"$CH\",\"appId\":\"9fd63619ac984e71b3c3eba6215b5a32\"}")
+          echo "$RESP" | grep -q '"mode":"secured"' || { echo "السيرفر لم يعطِ إذن صوت للقناة $CH: $RESP" | cut -c1-200; exit 1; }
+          echo "VOICE TOKEN: السيرفر يقبل القناة ✅"
           grep -q "SMOKE final stage: 3" run.log || { echo "اختبار الألغاز لم يصل إلى الهروب"; exit 1; }
           if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Invalid (call|get|set)" run.log; then exit 1; fi
 
@@ -118,6 +124,17 @@ jobs:
           fi
           ls -la build
           test -f build/khazna3d.apk
+          echo "--- فحص التوقيع وصلاحية الـ APK ---"
+          SDK=${ANDROID_HOME:-/usr/lib/android-sdk}
+          BT=$(ls -d $SDK/build-tools/* | sort -V | tail -1)
+          if ! $BT/apksigner verify build/khazna3d.apk >/dev/null 2>&1; then
+            echo "::warning::الـ APK غير موقَّع — توقيعه الآن"
+            $BT/zipalign -f -p 4 build/khazna3d.apk build/aligned.apk
+            $BT/apksigner sign --ks /tmp/debug.keystore --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey --out build/khazna3d.apk build/aligned.apk
+            rm -f build/aligned.apk build/khazna3d.apk.idsig
+          fi
+          $BT/apksigner verify --verbose build/khazna3d.apk | head -5 || { echo "التوقيع غير صالح"; exit 1; }
+          $BT/aapt dump badging build/khazna3d.apk | grep -E "^package|sdkVersion|RECORD_AUDIO" || { echo "أندرويد لا يستطيع قراءة الـ APK"; exit 1; }
           echo "--- فحص الصوت داخل الـ APK ---"
           if unzip -l build/khazna3d.apk | grep -qi "libagora"; then echo "VOICE: Agora مضمّن ✅"; else echo "VOICE: غير مضمّن ⚠"; fi
           unzip -l build/khazna3d.apk | grep -iE "agora" | head -5 || true

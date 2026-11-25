@@ -179,6 +179,10 @@ func _smoke() -> void:
 		print("SMOKE sync ok")
 	g0.remote = false
 	print("SMOKE tools ok ", st0)
+	var vch: String = preload("res://voice.gd").channel_for("1234")
+	var rx := RegEx.create_from_string("^khazna-\\d{4}(-[a-f0-9]{8})?$")
+	if rx.search(vch) and vch == preload("res://voice.gd").channel_for("1234") and vch != preload("res://voice.gd").channel_for("1235"):
+		print("SMOKE voice channel ok ", vch)
 	hud.close_panel()
 	_on_switch()
 	# الإمساك أمام القرص ثم إكمال المهمّة
