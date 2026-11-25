@@ -26,6 +26,8 @@ var _panel: Control
 var _vault: Control
 var _vault_num: Label
 var _vault_seq: Label
+var _compass: Polygon2D
+var _compass_d: Label
 
 const PAD_R := 70.0
 const AMBER := Color(0.91, 0.63, 0.23)
@@ -120,6 +122,17 @@ void fragment() {
 	_switch.visible = false
 	_switch.pressed.connect(func(): switch_pressed.emit())
 	_root.add_child(_switch)
+
+	# بوصلة الهدف: سهم يدور نحو الجهاز التالي، والمسافة بالأمتار
+	_compass = Polygon2D.new()
+	_compass.polygon = PackedVector2Array([Vector2(0, -26), Vector2(18, 14), Vector2(0, 5), Vector2(-18, 14)])
+	_compass.color = AMBER
+	_compass.visible = false
+	_root.add_child(_compass)
+	_compass_d = _label(20, AMBER)
+	_compass_d.text_direction = Control.TEXT_DIRECTION_LTR
+	_compass_d.visible = false
+	_root.add_child(_compass_d)
 
 	_pad = preload("res://pad.gd").new()
 	_pad.hud = self
@@ -240,6 +253,21 @@ func flash(t: String, c: Color) -> void:
 func show_interact(t: String) -> void:
 	_interact.visible = t != "" and _panel == null and _vault == null
 	_interact.text = "  " + t + "  "
+
+
+func set_compass(angle: float, dist: float, escape: bool) -> void:
+	var on := dist >= 0.0 and _panel == null and _vault == null
+	_compass.visible = on
+	_compass_d.visible = on
+	if not on:
+		return
+	var w := get_viewport().get_visible_rect().size.x
+	_compass.position = Vector2(w / 2.0, 120)
+	_compass.rotation = angle
+	_compass.color = OK if escape else AMBER
+	_compass_d.text = "%d م" % int(round(dist))
+	_compass_d.position = Vector2(w / 2.0 - 30, 146)
+	_compass_d.add_theme_color_override("font_color", OK if escape else AMBER)
 
 
 func set_switch_visible(v: bool) -> void:

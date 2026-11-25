@@ -107,6 +107,11 @@ func _smoke() -> void:
 	_submit_code(str(puzzle.code))
 	_cut_wire(str(WIRES[int(puzzle.answer)][0]))
 	print("SMOKE stage after puzzles: ", stage)
+	await get_tree().create_timer(2.4).timeout
+	var r := _reach_test()
+	print("SMOKE reach: ", r)
+	if r.spawn and r.t0 and r.t1 and r.vault:
+		print("SMOKE reach ok")
 	_on_switch()
 	analyst.set_meta("looking", drawer)
 	_analyst_interact()
@@ -121,6 +126,48 @@ func _smoke() -> void:
 	await get_tree().create_timer(2.0).timeout
 	print("SMOKE final stage: ", stage, " escape: ", escape_left)
 	get_tree().quit()
+
+
+## يتحقّق أن العميل يستطيع المشي من البداية إلى كل جهاز وإلى الخزنة (بعد فتح الأبواب).
+func _reach_test() -> Dictionary:
+	var space := get_world_3d().direct_space_state
+	var sh := SphereShape3D.new()
+	sh.radius = 0.28
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = sh
+	q.exclude = [agent.get_rid()]
+	var step := 0.25
+	var free := {}
+	for ix in int(30.0 / step):
+		for iz in int(10.0 / step):
+			var p := Vector3(ix * step + step / 2.0, 0, iz * step + step / 2.0)
+			var ok := true
+			for y in [0.45, 1.25]:
+				q.transform = Transform3D(Basis(), p + Vector3(0, y, 0))
+				if not space.intersect_shape(q, 1).is_empty():
+					ok = false
+					break
+			if ok:
+				free[Vector2i(ix, iz)] = true
+	var start := Vector2i(int(SPAWN.x / step), int(SPAWN.z / step))
+	var seen := {start: true}
+	var queue := [start]
+	var qi := 0
+	while qi < queue.size():
+		var c: Vector2i = queue[qi]
+		qi += 1
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n2: Vector2i = c + d
+			if free.has(n2) and not seen.has(n2):
+				seen[n2] = true
+				queue.append(n2)
+	var near := func(target: Vector3, rad: float) -> bool:
+		for k in seen:
+			var cell: Vector2i = k
+			if Vector2(cell.x * step + step / 2.0 - target.x, cell.y * step + step / 2.0 - target.z).length() < rad:
+				return true
+		return false
+	return {"spawn": free.has(start), "t0": near.call(terminals[0].pos, 1.5), "t1": near.call(terminals[1].pos, 1.5), "vault": near.call(VAULT_FRONT, 1.2), "cells": seen.size()}
 
 
 # ───────── الشبكة ─────────
@@ -489,11 +536,11 @@ func _props() -> void:
 	_prop("barrel_03", Vector3(26.6, 0, 9.2))
 	_prop("cardboard_box_01", Vector3(5.6, 0, 7.4))
 	_prop("cardboard_box_01", Vector3(6.3, 0, 7.5), 25)
-	_prop("cardboard_box_01", Vector3(17.6, 0, 9.4), -15)
-	_prop("steel_frame_shelves_01", Vector3(12.5, 0, 9.45))
-	_prop("steel_frame_shelves_01", Vector3(2.6, 0, 0.55), 180)
-	_prop("korean_fire_extinguisher_01", Vector3(7.6, 0, 7.6))
-	_prop("metal_trash_can", Vector3(9.0, 0, 0.6))
+	_prop("cardboard_box_01", Vector3(17.6, 0, 9.4), -15, false)
+	_prop("steel_frame_shelves_01", Vector3(12.5, 0, 9.45), 0, false)
+	_prop("steel_frame_shelves_01", Vector3(2.6, 0, 0.55), 180, false)
+	_prop("korean_fire_extinguisher_01", Vector3(7.6, 0, 7.6), 0, false)
+	_prop("metal_trash_can", Vector3(9.0, 0, 0.6), 0, false)
 	_prop("power_box_01", Vector3(19.75, 1.1, 2.6), -90, false)
 	for c in [Vector3(0.6, 2.7, 0.6), Vector3(8.6, 2.7, 9.4), Vector3(20.6, 2.7, 0.6)]:
 		_prop("security_camera_01", c, 0, false)
@@ -1261,6 +1308,11 @@ func _audio_update(delta: float) -> void:
 
 func _agent_logic(delta: float, t: float) -> void:
 	var goal: Vector3 = SPAWN if stage >= 3 else (VAULT_FRONT if stage == 2 else (terminals[stage].pos as Vector3))
+	if active == agent and not vault_mode:
+		var local: Vector3 = (agent.global_transform.basis.inverse() * (goal - agent.global_position))
+		hud.set_compass(atan2(local.x, -local.z), Vector2(local.x, local.z).length(), stage >= 3)
+	else:
+		hud.set_compass(0.0, -1.0, false)
 	marker.position = goal + Vector3(0, 2.1 + 0.08 * sin(t * 3.0), 0)
 	marker.rotation.y = t * 1.5
 	marker.visible = active == agent
@@ -1447,6 +1499,8 @@ func _update_objective() -> void:
 			txt = "٣. صِف لشريكك الرموز الثلاثة على باب الخزنة، ثم أدِر القرص على الأرقام التي يقولها" if agent_side else "٣. أدخل في الحاسوب المضيء الرموز التي يصفها العميل، وأمْلِه التركيبة"
 		_:
 			txt = "🚨 اهرب إلى نقطة البداية!" if agent_side else "🚨 وجّه العميل إلى المخرج عبر الكاميرات!"
+	if role == "solo" and agent_side and stage < 3:
+		txt += "\n(وضع التجربة: اضغط «بدّل الدور» لتصبح المحلّل وتجد الجواب)"
 	hud.set_objective(txt)
 
 
