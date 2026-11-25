@@ -4,6 +4,7 @@ extends CanvasLayer
 
 signal interact_pressed
 signal switch_pressed
+signal tool_pressed(kind: String)
 
 var player
 var look_only := false # وضع القرص: كل سحب = دوران
@@ -13,6 +14,8 @@ var _on_step: Callable
 var _hold := 0 # زرّ مضغوط باستمرار: ‎-1 أو 1
 var _hold_t := 0.0
 var _drag_acc := 0.0
+var _tools: VBoxContainer
+var _tool_btns := {}
 var _loading: Control
 var _load_bar: ProgressBar
 var _load_txt: Label
@@ -143,6 +146,23 @@ void fragment() {
 	_compass_d.visible = false
 	_root.add_child(_compass_d)
 
+	# أدوات المحلّل
+	_tools = VBoxContainer.new()
+	_tools.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	_tools.offset_left = 20
+	_tools.offset_top = -150
+	_tools.offset_right = 290
+	_tools.add_theme_constant_override("separation", 10)
+	_tools.visible = false
+	_root.add_child(_tools)
+	for t in [["mark", "📍 علامة على الحرّاس"], ["distract", "🔊 شتّت الحارس"], ["warn", "⚠ حذّر العميل"]]:
+		var b := _button(t[1], Color(0.1, 0.16, 0.12, 0.92), Color(0.75, 1.0, 0.8), 20)
+		b.custom_minimum_size = Vector2(260, 64)
+		var k: String = t[0]
+		b.pressed.connect(func(): tool_pressed.emit(k))
+		_tools.add_child(b)
+		_tool_btns[k] = [b, t[1]]
+
 	_pad = preload("res://pad.gd").new()
 	_pad.hud = self
 	_pad.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -185,6 +205,9 @@ func _input(event) -> void:
 	var vp := get_viewport().get_visible_rect().size
 	if event is InputEventScreenTouch:
 		if event.pressed:
+			for c2 in _tools.get_children():
+				if _tools.visible and (c2 as Control).get_global_rect().has_point(event.position):
+					return
 			for b in [_interact, _switch]:
 				if b.visible and b.get_global_rect().has_point(event.position):
 					return
@@ -292,6 +315,17 @@ func set_compass(angle: float, dist: float, escape: bool) -> void:
 	_compass_d.text = "%d م" % int(round(dist))
 	_compass_d.position = Vector2(w / 2.0 - 30, 146)
 	_compass_d.add_theme_color_override("font_color", OK if escape else AMBER)
+
+
+func set_tools(on: bool, cooldowns: Dictionary) -> void:
+	_tools.visible = on and _panel == null
+	if not on:
+		return
+	for k in _tool_btns:
+		var b: Button = _tool_btns[k][0]
+		var cd: float = cooldowns.get(k, 0.0)
+		b.disabled = cd > 0.0
+		b.text = (str(_tool_btns[k][1]) + "  (%d)" % int(ceil(cd))) if cd > 0.0 else str(_tool_btns[k][1])
 
 
 func set_switch_visible(v: bool) -> void:

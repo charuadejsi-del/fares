@@ -22,6 +22,13 @@ var saw := false # يضبطها المشهد كل إطار: هل يرى العم
 var _target: Node3D
 var _lost := 0.0
 var _turn_t := 18.0
+# المزامنة: عند المحلّل يُحرَّك الحارس بما يرسله هاتف العميل (المرجع)
+var remote := false
+var _r_pos := Vector3.ZERO
+var _r_rot := 0.0
+var _r_state := "walk"
+var _beacon: MeshInstance3D
+var _beacon_t := 0.0
 var _look_rot := 0.0
 const CHASE_SPEED := 2.75
 
@@ -65,6 +72,25 @@ func _ready() -> void:
 	_light.spot_angle = HALF_ANGLE
 	_light.shadow_enabled = true
 	add_child(_light)
+
+	# علامة حمراء فوق الحارس تُرى عبر الجدران (أداة المحلّل)
+	_beacon = MeshInstance3D.new()
+	var pm := PrismMesh.new()
+	pm.size = Vector3(0.35, 0.45, 0.35)
+	_beacon.mesh = pm
+	var bm := StandardMaterial3D.new()
+	bm.albedo_color = Color(1.0, 0.15, 0.1)
+	bm.emission_enabled = true
+	bm.emission = Color(1.0, 0.15, 0.1)
+	bm.emission_energy_multiplier = 4.0
+	bm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bm.no_depth_test = true
+	bm.render_priority = 10
+	_beacon.material_override = bm
+	_beacon.rotation_degrees.x = 180
+	_beacon.position.y = 2.4
+	_beacon.visible = false
+	add_child(_beacon)
 
 	_steps = _sound("guard_steps", true, -4.0)
 	_radio = _sound("radio", false, -2.0)
@@ -264,7 +290,37 @@ func attack() -> void:
 	_play("attack", 0.15)
 
 
+## اسم الحالة للإرسال عبر الشبكة.
+func state_name() -> String:
+	return _state
+
+
+func apply_remote(p: Vector3, ry: float, st: String) -> void:
+	_r_pos = p
+	_r_rot = ry
+	_r_state = st
+
+
+func mark(seconds: float) -> void:
+	_beacon_t = seconds
+
+
+## تشتيت: يلتفت بعيداً ويبحث (أداة المحلّل). لا أثر أثناء المطاردة أو الهجوم.
+func distract() -> void:
+	if _state == "chase" or _state == "attack":
+		return
+	_state = "search"
+	_wait = 5.0
+
+
 func _process(delta: float) -> void:
+	_beacon_t = maxf(0.0, _beacon_t - delta)
+	_beacon.visible = _beacon_t > 0.0
+	if _beacon.visible:
+		_beacon.rotation.y += delta * 3.0
+	if remote:
+		_remote_update(delta)
+		return
 	if path.size() < 2:
 		return
 	if alarm:
@@ -341,6 +397,27 @@ func _walk(delta: float) -> void:
 	rotation.y = lerp_angle(rotation.y, atan2(-to.x, -to.z), minf(1.0, delta * 5.0))
 	if _anim:
 		_anim.speed_scale = clampf(speed / 1.25, 0.7, 1.8)
+
+
+func _remote_update(delta: float) -> void:
+	var k := minf(1.0, delta * 10.0)
+	var moving := position.distance_to(_r_pos) > 0.02
+	position = position.lerp(_r_pos, k)
+	rotation.y = lerp_angle(rotation.y, _r_rot, k)
+	_state = _r_state
+	match _r_state:
+		"idle":
+			_play("idle_sweat")
+		"alert", "look", "search":
+			_play("alert")
+		"attack":
+			_play("attack", 0.15)
+		_:
+			_play("walk")
+	if _anim:
+		_anim.speed_scale = 2.1 if _r_state == "chase" else 1.0
+	_steps_on(moving and (_r_state == "walk" or _r_state == "chase"))
+	_light.light_color = Color(1.0, 0.45, 0.35) if _r_state == "chase" or alarm else Color(1.0, 0.92, 0.7)
 
 
 func _chase(delta: float) -> void:

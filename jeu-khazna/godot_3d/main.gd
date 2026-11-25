@@ -82,6 +82,9 @@ var _glitch_t := 30.0
 var blackout := 0.0
 var shutters_closed: Array = [false, false]
 var s_creep: AudioStreamPlayer3D
+var s_music: AudioStreamPlayer
+var tool_cd := {"mark": 0.0, "distract": 0.0, "warn": 0.0}
+const TOOL_CD := {"mark": 20.0, "distract": 25.0, "warn": 5.0}
 var steam: CPUParticles3D
 var _prop_log: Array = []
 # الأصوات
@@ -162,6 +165,18 @@ func _smoke() -> void:
 	_analyst_interact()
 	_analyst_interact()
 	print("SMOKE symbols: ", _check_symbols(puzzle.symbols.duplicate()))
+	_on_tool("mark")
+	_on_tool("distract")
+	_on_tool("warn")
+	var st0: String = guards[0].state_name()
+	var g0 = guards[0]
+	g0.remote = true
+	g0.apply_remote(Vector3(12, 0, 5), 1.0, "alert")
+	await get_tree().create_timer(0.6).timeout
+	if (g0.global_position as Vector3).distance_to(Vector3(12, 0, 5)) < 0.2 and g0.state_name() == "alert":
+		print("SMOKE sync ok")
+	g0.remote = false
+	print("SMOKE tools ok ", st0)
 	hud.close_panel()
 	_on_switch()
 	# الإمساك أمام القرص ثم إكمال المهمّة
@@ -272,6 +287,14 @@ func _on_msg(m: Dictionary) -> void:
 	elif t == "pos" and avatar:
 		avatar.set_meta("target", Vector3(float(m.get("x", 0)), 0, float(m.get("z", 0))))
 		avatar.set_meta("yaw", float(m.get("y", 0)))
+		var gl = m.get("g", [])
+		if typeof(gl) == TYPE_ARRAY and ready_world:
+			for i in mini(gl.size(), guards.size()):
+				var e = gl[i]
+				if typeof(e) == TYPE_ARRAY and e.size() >= 4:
+					guards[i].apply_remote(Vector3(float(e[0]), 0, float(e[1])), float(e[2]), str(e[3]))
+	elif t == "tool" and role == "agent" and ready_world:
+		_do_tool(str(m.get("k", "")))
 	elif t == "prog" and role == "analyst" and ready_world:
 		stage = int(m.get("stage", 0))
 		escape_left = float(m.get("esc", -1))
@@ -309,6 +332,7 @@ func _start(r: String, s: int) -> void:
 		await get_tree().process_frame
 		(steps[i][1] as Callable).call()
 	hud.interact_pressed.connect(_on_interact)
+	hud.tool_pressed.connect(_on_tool)
 	hud.switch_pressed.connect(_on_switch)
 	hud.set_switch_visible(role == "solo")
 	if role != "analyst":
@@ -675,6 +699,7 @@ func _sounds() -> void:
 	s_clunk.pitch_scale = 0.45
 	s_door = _snd3d("door", Vector3(8, 1.5, 4.5), 2.0)
 	s_creep = _snd3d("door", Vector3.ZERO, -2.0)
+	s_music = _snd("chase", true, -40.0)
 	s_vault = _snd3d("vault_open", Vector3(29.6, 1.5, 5), 4.0)
 
 
@@ -1172,6 +1197,9 @@ func _spawn_guards() -> void:
 	add_child(g2)
 	g2.setup([Vector3(22, 0, 8.2), Vector3(27.2, 0, 8.2), Vector3(27.2, 0, 1.6), Vector3(22, 0, 1.6)], 1.0, Rect2(20.5, 0.5, 8.6, 9.0))
 	guards.append(g2)
+	for gg in guards:
+		gg.remote = role == "analyst"
+		gg.apply_remote(gg.position, gg.rotation.y, "walk")
 
 
 func _make_avatar() -> Node3D:
@@ -1373,7 +1401,11 @@ func _process(delta: float) -> void:
 			_send_t -= delta
 			if _send_t <= 0.0:
 				_send_t = 0.1
-				net.send({"t": "pos", "x": snappedf(agent.global_position.x, 0.01), "z": snappedf(agent.global_position.z, 0.01), "y": snappedf(agent.yaw, 0.01)})
+				var gl := []
+				for g in guards:
+					var gp: Vector3 = g.global_position
+					gl.append([snappedf(gp.x, 0.01), snappedf(gp.z, 0.01), snappedf(g.rotation.y, 0.01), g.state_name()])
+				net.send({"t": "pos", "x": snappedf(agent.global_position.x, 0.01), "z": snappedf(agent.global_position.z, 0.01), "y": snappedf(agent.yaw, 0.01), "g": gl})
 			_prog_t -= delta
 			if _prog_t <= 0.0:
 				_prog_t = 1.0
@@ -1408,6 +1440,10 @@ func _process(delta: float) -> void:
 	_hint_update(t)
 	_audio_update(delta)
 	_fear_update(delta, t)
+	for k in tool_cd:
+		tool_cd[k] = maxf(0.0, float(tool_cd[k]) - delta)
+	hud.set_tools(analyst != null and active == analyst and result == "", tool_cd)
+	_music_update(delta)
 	if agent:
 		var cam: Camera3D = agent.cam
 		if shake > 0.0 and active == agent:
@@ -1501,6 +1537,46 @@ func _close_shutter(i: int) -> void:
 		_end(false)
 
 
+## أدوات المحلّل: تُرسَل إلى هاتف العميل (مرجع الحرّاس)، أو تُنفَّذ محلياً في الوضع الفردي.
+func _on_tool(kind: String) -> void:
+	if float(tool_cd.get(kind, 0.0)) > 0.0:
+		return
+	tool_cd[kind] = TOOL_CD[kind]
+	if kind == "mark":
+		for g in guards:
+			g.mark(6.0)
+	if role == "analyst" and net:
+		net.send({"t": "tool", "k": kind})
+		hud.flash({"mark": "📍 حُدِّد الحرّاس للعميل", "distract": "🔊 شُتِّت أقرب حارس", "warn": "⚠ وصل التحذير"}[kind], Color(0.6, 0.95, 0.7))
+	else:
+		_do_tool(kind)
+
+
+func _do_tool(kind: String) -> void:
+	match kind:
+		"mark":
+			for g in guards:
+				g.mark(6.0)
+			hud.flash("📍 المحلّل حدّد الحرّاس — تراهم عبر الجدران", Color(1.0, 0.45, 0.35))
+		"distract":
+			var best = null
+			var bd := 1e9
+			for g in guards:
+				var d: float = (g.global_position as Vector3).distance_to(agent.global_position) if agent else 0.0
+				if d < bd:
+					bd = d
+					best = g
+			if best:
+				best.distract()
+			hud.flash("🔊 المحلّل شتّت الحارس — تحرّك الآن!", Color(0.6, 0.95, 0.7))
+		"warn":
+			hud.flash("⚠ المحلّل: حارس قريب منك!", Color(1.0, 0.63, 0.23))
+			hud.hit()
+			if s_clunk.stream:
+				s_clunk.play()
+			Input.vibrate_handheld(300)
+
+
 func _hint_update(t: float) -> void:
 	var target: Node3D = null
 	if stage == 0:
@@ -1518,6 +1594,26 @@ func _hint_update(t: float) -> void:
 		hint_light.light_energy = 1.2 + 0.8 * sin(t * 5.0)
 		hint_arrow.global_position = p + Vector3(0, 0.6 + 0.08 * sin(t * 4.0), 0)
 		hint_arrow.rotation.y = t * 2.0
+
+
+## موسيقى التوتر: تعلو مع المطاردة والإنذار، وتهدأ عند الاختباء.
+func _music_update(delta: float) -> void:
+	if s_music == null or s_music.stream == null:
+		return
+	var chasing := false
+	for g in guards:
+		if g.is_chasing():
+			chasing = true
+	var target := -40.0
+	if chasing or (stage >= 3 and result == ""):
+		target = -3.0
+	elif seen_time > 0.0:
+		target = -14.0
+	s_music.volume_db = move_toward(s_music.volume_db, target, delta * (40.0 if target > s_music.volume_db else 10.0))
+	if s_music.volume_db > -39.0 and not s_music.playing:
+		s_music.play()
+	elif s_music.volume_db <= -39.5 and s_music.playing:
+		s_music.stop()
 
 
 func _audio_update(delta: float) -> void:
