@@ -1144,15 +1144,15 @@ func _build_vault() -> void:
 	add_child(bar)
 	vault_barrier = bar
 	# دائرة مضيئة على الأرض: «قف هنا»
-	var ring := MeshInstance3D.new()
+	var stand := MeshInstance3D.new()
 	var rt := TorusMesh.new()
 	rt.inner_radius = 0.62
 	rt.outer_radius = 0.72
-	ring.mesh = rt
-	ring.material_override = _glow(Color(1.0, 0.63, 0.23), 2.5)
-	ring.position = VAULT_FRONT + Vector3(0, 0.02, 0)
-	add_child(ring)
-	vault_ring = ring
+	stand.mesh = rt
+	stand.material_override = _glow(Color(1.0, 0.63, 0.23), 2.5)
+	stand.position = VAULT_FRONT + Vector3(0, 0.02, 0)
+	add_child(stand)
+	vault_ring = stand
 	var light := SpotLight3D.new()
 	add_child(light)
 	light.look_at_from_position(Vector3(26.5, 3.0, 5), Vector3(29.8, 1.3, 5))
