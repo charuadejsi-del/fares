@@ -124,6 +124,13 @@ jobs:
           name: godot-agora
           path: jeu-khazna/godot_3d/addons/godot_agora/bin
 
+      - name: ذاكرة Gradle (تقلّل التحميل من Maven)
+        uses: actions/cache@v4
+        with:
+          path: /github/home/.gradle/caches
+          key: godot-gradle-${{ hashFiles('jeu-khazna/godot_3d/addons/godot_agora/*.gd') }}
+          restore-keys: godot-gradle-
+
       - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
@@ -199,13 +206,13 @@ jobs:
           GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           mkdir -p build
-          godot --headless --path . --export-debug "Android" build/khazna3d.apk 2>&1 | tail -60
-          if [ ! -f build/khazna3d.apk ]; then
-            echo "::warning::فشل البناء مع الصوت — بناء بديل بلا صوت داخل اللعبة"
-            sed -i 's/gradle_build\/use_gradle_build=true/gradle_build\/use_gradle_build=false/' export_presets.cfg
-            godot --headless --path . --export-debug "Android" build/khazna3d.apk 2>&1 | tail -20
-            echo "novoice" > build/NOVOICE
-          fi
+          # Gradle يحمّل مكتبات من Maven؛ عند الضغط (429) نعيد المحاولة بدل نسخة ناقصة
+          for try in 1 2 3; do
+            godot --headless --path . --export-debug "Android" build/khazna3d.apk 2>&1 | tail -40
+            [ -f build/khazna3d.apk ] && break
+            echo "::warning::محاولة البناء $try فشلت — إعادة بعد 60 ثانية"
+            sleep 60
+          done
           ls -la build
           test -f build/khazna3d.apk
           echo "--- فحص التوقيع وصلاحية الـ APK ---"
@@ -219,6 +226,7 @@ jobs:
           fi
           $BT/apksigner verify --verbose build/khazna3d.apk | head -5 || { echo "التوقيع غير صالح"; exit 1; }
           $BT/aapt dump badging build/khazna3d.apk | grep -E "^package|sdkVersion|RECORD_AUDIO" || { echo "أندرويد لا يستطيع قراءة الـ APK"; exit 1; }
+          if $BT/aapt dump xmltree build/khazna3d.apk AndroidManifest.xml | grep -q 'khazna3d'; then echo "DEEPLINK: khazna3d:// مسجّل ✅"; else echo "::warning::رابط khazna3d:// غير مسجّل"; fi
           echo "--- حجم الـ APK وأكبر محتوياته ---"
           ls -la build/khazna3d.apk | awk '{printf "APK SIZE: %.1f MB\n", $5/1048576}'
           unzip -lv build/khazna3d.apk | sort -k3 -n -r | head -12 | awk '{printf "  %8.1f MB  %s\n", $3/1048576, $8}'
@@ -244,6 +252,18 @@ jobs:
           prerelease: true
           target_commitish: ${{ github.sha }}
           body: "نموذج تجريبي ثلاثي الأبعاد (Godot). khazna3d.apk للهاتف، khazna3d-windows.zip للحاسوب (فكّه وشغّل khazna3d.exe)."
+          files: |
+            jeu-khazna/godot_3d/build/khazna3d.apk
+            jeu-khazna/godot_3d/build/khazna3d-windows.zip
+
+      - name: آخر نسخة (رابط ثابت لزرّ التحميل في تطبيق الخزنة)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: khazna3d-latest
+          name: الخزنة 3D — آخر نسخة
+          prerelease: true
+          make_latest: false
+          body: "رابط ثابت لآخر نسخة من الخزنة 3D (يُحدَّث مع كل بناء)."
           files: |
             jeu-khazna/godot_3d/build/khazna3d.apk
             jeu-khazna/godot_3d/build/khazna3d-windows.zip

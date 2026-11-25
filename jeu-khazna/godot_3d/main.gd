@@ -148,11 +148,29 @@ func _ready() -> void:
 		level_i = Levels.index_of(lid if lid != "" else "port")
 		_start("solo", 1234)
 		_smoke.call_deferred()
+	elif _deep_link_code() != "":
+		# فُتحت من تطبيق الخزنة الأصلي مع كود غرفة: انضمام مباشر
+		_join(_deep_link_code())
 	elif Levels.pending >= 0:
 		# «المرحلة التالية» من شاشة الفوز
 		level_i = Levels.pending
 		Levels.pending = -1
 		_start("solo", randi() % 1000000)
+
+
+## كود الغرفة من رابط khazna3d://join?code=1234 (أندرويد فقط).
+func _deep_link_code() -> String:
+	if not Engine.has_singleton("GodotAgora"):
+		return ""
+	var a = Engine.get_singleton("GodotAgora")
+	if not a.has_method("intent_data"):
+		return ""
+	var d := str(a.intent_data())
+	var i := d.find("code=")
+	if i < 0:
+		return ""
+	var c := d.substr(i + 5, 4)
+	return c if c.is_valid_int() and c.length() == 4 else ""
 
 
 func _smoke() -> void:

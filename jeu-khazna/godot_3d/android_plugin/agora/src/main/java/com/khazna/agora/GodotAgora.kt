@@ -74,6 +74,12 @@ class GodotAgora(godot: Godot) : GodotPlugin(godot) {
         }
     }
 
+    /** رابط الفتح (مثل khazna3d://join?code=1234) القادم من تطبيق الخزنة الأصلي. */
+    @UsedByGodot
+    fun intent_data(): String {
+        return activity?.intent?.dataString ?: ""
+    }
+
     @UsedByGodot
     fun mute(m: Boolean) {
         engine?.muteLocalAudioStream(m)

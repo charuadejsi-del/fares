@@ -19,6 +19,7 @@ import '../../widgets/online_launch.dart';
 import '../../widgets/title_frame.dart';
 import '../shop/shop_screen.dart';
 import 'challenges_card.dart';
+import 'khazna3d_card.dart';
 
 /// تبويب «المقرّ»: البطاقة الرئيسية للّعب مع صديق، المكافأة اليومية، والتقدّم.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -310,6 +311,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ]),
           ),
         ),
+        const SizedBox(height: 20),
+        const SectionTitle('الخزنة 3D', tag: 'NEW'),
+        const Khazna3dCard(),
         const SizedBox(height: 20),
         const SectionTitle('مهامّ اليوم', tag: 'DAILY'),
         const DailyRewardCard(),
