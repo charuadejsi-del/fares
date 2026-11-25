@@ -94,4 +94,98 @@ void main() {
     expect(back.heist, true);
     expect(back.camOff['0'], s.camOff['0']);
   });
+
+  test('الهروب ممكن دائماً: كل باب يُغلق بعد أن يصله العميل بهامش', () {
+    for (int seed = 1; seed <= 80; seed++) {
+      for (final stage in [10, 25, 45]) {
+        final m = heistMap(seed * 104729, stage, 3 + seed % 5);
+        final plan = m.escape;
+        expect(plan.doorClose.length, m.doors.length);
+        for (int k = 0; k < m.doors.length; k++) {
+          // أقصر مسافة مستقيمة من الخزنة إلى الباب (حدّ أدنى للمشي)
+          final straight = (m.doorCenter(k) - m.rooms.last.terminal).distance / kAgentSpeed;
+          expect(plan.doorClose[k] > straight + 3, true, reason: 'seed=$seed stage=$stage door=$k');
+        }
+        expect(plan.seconds > plan.doorClose.fold<double>(0, max), true);
+      }
+    }
+  });
+
+  test('الليزر لا يصيب أيّ جهاز أبداً، والبطاقات في غرف الحرّاس', () {
+    for (int seed = 1; seed <= 80; seed++) {
+      for (final stage in [18, 33, 50]) {
+        final m = heistMap(seed * 15485863, stage, 4 + seed % 4);
+        expect(m.lasers.isNotEmpty, true);
+        for (final l in m.lasers) {
+          expect(l.room > 0, true);
+          for (double t = 0; t < 20; t += .25) {
+            for (final r in m.rooms) {
+              expect(l.hits(r.terminal, t), false, reason: 'seed=$seed stage=$stage');
+            }
+          }
+        }
+        if (m.guards.isNotEmpty) expect(m.cardGuards, isNotEmpty);
+        for (final g in m.cardGuards) {
+          expect(m.cardRooms.contains(m.guards[g].room), true);
+        }
+      }
+    }
+    expect(heistMap(9, 9, 4).lasers, isEmpty);
+    expect(heistMap(9, 9, 4).cardGuards, isEmpty);
+  });
+
+  test('الليزر الوامض ينطفئ ويشتعل', () {
+    final m = heistMap(77, 20, 5);
+    final l = m.lasers.firstWhere((l) => !l.sweep);
+    final on = [for (double t = 0; t < 10; t += .1) l.at(t) != null];
+    expect(on.contains(true) && on.contains(false), true);
+  });
+
+  test('السرقة من الخلف فقط', () {
+    final m = heistMap(31, 20, 5);
+    final g = m.guards.first;
+    final (gp, ga) = guardAt(g, 3);
+    final back = gp - Offset(cos(ga), sin(ga)) * .8;
+    final front = gp + Offset(cos(ga), sin(ga)) * .8;
+    expect(m.behind(0, back, 3), true);
+    expect(m.behind(0, front, 3), false);
+  });
+
+  test('فتح الخزنة يطلق الهروب، ثم المخرج = فوز، والحبس = خسارة', () {
+    final p = generatePuzzles(5);
+    final base = GameState(seed: 5, rooms: const ['keypad'], phase: 'playing', startedAt: 1000, stage: 12, heist: true);
+    var s = applyAction(base, p, {'type': 'submit', 'value': p.keypad.answer}, 5000);
+    expect(s.phase, 'playing');
+    expect(s.escape > 0, true);
+    expect(s.lastEvent?.type, 'escape');
+    // لا أقفال أثناء الهروب
+    expect(applyAction(s, p, {'type': 'submit', 'value': p.keypad.answer}, 6000).eventId, s.eventId);
+    final won = applyAction(s, p, {'type': 'escaped'}, 9000);
+    expect(won.phase, 'won');
+    expect(applyAction(s, p, {'type': 'caught'}, 9000).phase, 'lost');
+    expect(GameState.fromJson(s.toJson()).escape, s.escape);
+    // قبل المرحلة 10: الخزنة تنهي المهمّة مباشرة
+    final early = GameState(seed: 5, rooms: const ['keypad'], phase: 'playing', startedAt: 1000, stage: 9, heist: true);
+    expect(applyAction(early, p, {'type': 'submit', 'value': p.keypad.answer}, 5000).phase, 'won');
+  });
+
+  test('البطاقة وقطع التيار', () {
+    final p = generatePuzzles(6);
+    var s = GameState(seed: 6, rooms: const ['keypad', 'wires'], phase: 'playing', startedAt: 1000, stage: 16, heist: true);
+    s = applyAction(s, p, {'type': 'card', 'room': 1}, 2000);
+    expect(s.cards, [1]);
+    expect(applyAction(s, p, {'type': 'card', 'room': 1}, 2500).eventId, s.eventId);
+    s = applyAction(s, p, {'type': 'power'}, 3000);
+    expect(s.power > 0, true);
+    // إعادة القطع قبل انتهاء فترة الانتظار مرفوضة
+    expect(applyAction(s, p, {'type': 'power'}, 10000).power, s.power);
+    final later = applyAction(s, p, {'type': 'power'}, 3000 + ((kPowerSeconds + kPowerCooldown + 1) * 1000).round());
+    expect(later.power > s.power, true);
+    final back = GameState.fromJson(later.toJson());
+    expect(back.cards, [1]);
+    expect(back.power, later.power);
+    // قبل المرحلة 15 لا قطع للتيار
+    final early = GameState(seed: 6, rooms: const ['keypad'], phase: 'playing', startedAt: 1000, stage: 13, heist: true);
+    expect(applyAction(early, p, {'type': 'power'}, 3000).power, 0);
+  });
 }

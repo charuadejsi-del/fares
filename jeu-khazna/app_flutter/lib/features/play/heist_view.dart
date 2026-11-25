@@ -65,7 +65,7 @@ class HeistPlay extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, box) => Column(children: [
         SizedBox(height: box.maxHeight * .42, child: _AnalystMap(c: c, map: map)),
-        Expanded(child: lockView),
+        Expanded(child: s.escape > 0 ? _EscapePanel(c: c, map: map) : lockView),
       ]),
     );
   }
@@ -94,7 +94,15 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
   int _spots = 0, _room = 0;
   bool _hacking = false;
   bool _help = true;
+  String? _intro;
   Duration _last = Duration.zero;
+
+  // مفاجآت المطاردة
+  double _pick = 0; // تقدّم سرقة البطاقة (0..kPickSeconds)
+  final Set<int> _picked = {};
+  bool _endSent = false;
+  int _shutCount = 0;
+  double _nearGuard = double.infinity;
 
   GameController get c => widget.c;
 
@@ -108,7 +116,25 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
     // بعد تبادل الأدوار: نبدأ من آخر موقع للشريك
     _pos = c.partnerX != null && s.room > 0 ? Offset(c.partnerX!, c.partnerY!) : widget.map.checkpoint(s.room);
     if (s.room > 0 || s.spots > 0) _help = false;
+    _intro = _introFor(s.stage);
+    if (_intro != null) {
+      Future.delayed(const Duration(seconds: 9), () {
+        if (mounted) setState(() => _intro = null);
+      });
+    }
   }
+
+  /// تعريف المفاجأة الجديدة في مرحلتها الأولى.
+  static String? _introFor(int n) => switch (n) {
+        6 => '🔊 جديد: الحرّاس لا يتوقّفون وأنت تخترق. راقب تحذير الخطى واهرب قبل أن يراك.',
+        10 => '🚨 جديد: فتح الخزنة يطلق الإنذار! عُد إلى نقطة البداية قبل أن تُغلق الأبواب خلفك.',
+        12 => '🪪 جديد: جهاز غرفة الحارس الذهبي يحتاج بطاقته. تسلّل خلفه وابقَ قريباً لتسرقها.',
+        15 => '⚡ جديد: شريكك يستطيع قطع التيار: الكاميرات تتوقّف والحرّاس يرون أقلّ… وأنت أيضاً.',
+        18 => '🔴 جديد: أشعّة ليزر تومض. لا تعبرها وهي مشتعلة — شريكك يعدّ لك التوقيت.',
+        30 => '🔴 جديد: شعاع ليزر يكنس الغرفة ذهاباً وإياباً. اعبر خلفه.',
+        35 => '🪪 حارسان يحملان بطاقتين هذه المرّة.',
+        _ => null,
+      };
 
   @override
   void dispose() {
@@ -133,49 +159,117 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
     _last = now;
     final s = c.state;
     if (s == null || s.phase != 'playing') return;
+    final map = widget.map;
     final solved = s.room;
+    final t = c.heistTime;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final escaping = s.escape > 0;
+    final since = escaping ? t - s.escape : 0.0;
+    final power = s.power > t;
 
-    // اكتُشف العميل → العودة إلى نقطة الحفظ
+    // الأبواب التي أُغلقت (الباب الذي يقف فيه العميل يبقى له حتى يخرج منه)
+    final shut = escaping ? (map.shutAfter(since)..removeWhere((i) => (map.doorCenter(i) - _pos).distance < 1.4)) : <int>{};
+    if (escaping && map.shutAfter(since).length != _shutCount) {
+      _shutCount = map.shutAfter(since).length;
+      HapticFeedback.heavyImpact();
+    }
+
+    // اكتُشف العميل → العودة إلى نقطة الحفظ (أثناء الهروب: لا عودة، فقط العقوبة)
     if (s.spots != _spots) {
       _spots = s.spots;
-      _pos = widget.map.checkpoint(solved);
-      _invulnUntil = DateTime.now().millisecondsSinceEpoch + 2500;
+      if (!escaping) _pos = map.checkpoint(solved);
+      _invulnUntil = nowMs + 2500;
       _seenFor = 0;
+      _pick = 0;
+      if (_hacking) setState(() => _hacking = false);
     }
     // فُتح القفل → العودة إلى الخريطة والباب التالي مفتوح
-    if (s.room != _room) {
+    if (s.room != _room || (escaping && _hacking)) {
       _room = s.room;
       if (_hacking) setState(() => _hacking = false);
     }
 
-    if (!_hacking && !s.paused) {
+    if (s.paused) {
+      _frame.value++;
+      return;
+    }
+
+    if (!_hacking) {
       var v = _stick.distance > .1 ? _stick : _keys();
       if (v.distance > 1) v = v / v.distance;
       if (v.distance > .05) {
         _facing = atan2(v.dy, v.dx);
-        _pos = widget.map.move(_pos, v * 3.2 * dt, solved);
+        _pos = map.move(_pos, v * kAgentSpeed * dt, solved, shut: shut);
         if (_help) setState(() => _help = false);
       }
-      // الكشف: نصف ثانية متواصلة تحت الرؤية
-      final t = c.heistTime;
-      if (DateTime.now().millisecondsSinceEpoch > _invulnUntil && widget.map.seen(_pos, t, solved, s.camOff)) {
+    }
+
+    // الكشف: نصف ثانية تحت الرؤية، والليزر فوراً. من المرحلة 6 يستمرّ حتى أثناء الاختراق.
+    final watch = !_hacking || footstepsStage(s.stage);
+    if (watch && nowMs > _invulnUntil) {
+      if (map.laserHit(_pos, t)) {
+        _spot();
+      } else if (map.seen(_pos, t, solved, s.camOff, power: power, alarm: escaping, shut: shut)) {
         _seenFor += dt;
-        if (_seenFor >= .5) {
-          _seenFor = 0;
-          _invulnUntil = DateTime.now().millisecondsSinceEpoch + 2500;
-          c.dispatch({'type': 'spotted'});
-        }
+        if (_seenFor >= .5) _spot();
       } else {
         _seenFor = max(0, _seenFor - dt * 2);
       }
-      c.sendPos(_pos.dx, _pos.dy);
     }
+    _nearGuard = map.guards.isEmpty ? double.infinity : map.nearestGuard(_pos, t);
+
+    // سرقة البطاقة: البقاء خلف الحارس kPickSeconds
+    if (cardStage(s.stage) && !_hacking && !escaping) {
+      int? target;
+      for (final g in map.cardGuards) {
+        final r = map.guards[g].room;
+        if (s.cards.contains(r) || _picked.contains(r)) continue;
+        if (map.behind(g, _pos, t)) target = r;
+      }
+      if (target != null) {
+        _pick += dt;
+        if (_pick >= kPickSeconds) {
+          _pick = 0;
+          _picked.add(target);
+          HapticFeedback.mediumImpact();
+          c.dispatch({'type': 'card', 'room': target});
+        }
+      } else {
+        _pick = max(0, _pick - dt * 1.5);
+      }
+    }
+
+    // الهروب: المخرج، أو انتهاء الوقت، أو الحبس خلف باب مغلق
+    if (escaping && !_endSent) {
+      final r = map.roomOf(_pos);
+      if ((_pos - map.spawn).distance < 1.1) {
+        _endSent = true;
+        c.dispatch({'type': 'escaped'});
+      } else if (since > map.escape.seconds || (r >= 0 && shut.any((k) => k < r))) {
+        _endSent = true;
+        c.dispatch({'type': 'caught'});
+      }
+    }
+
+    c.sendPos(_pos.dx, _pos.dy);
     _frame.value++;
+  }
+
+  void _spot() {
+    _seenFor = 0;
+    _invulnUntil = DateTime.now().millisecondsSinceEpoch + 2500;
+    c.dispatch({'type': 'spotted'});
+  }
+
+  /// الجهاز يحتاج بطاقة لم تُسرق بعد.
+  bool get _needsCard {
+    final s = c.state!;
+    return cardStage(s.stage) && widget.map.cardRooms.contains(s.room) && !s.cards.contains(s.room);
   }
 
   bool get _atTerminal {
     final s = c.state!;
-    if (s.room >= widget.map.rooms.length) return false;
+    if (s.escape > 0 || s.room >= widget.map.rooms.length) return false;
     return (_pos - widget.map.rooms[s.room].terminal).distance < 1.3;
   }
 
@@ -185,6 +279,7 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
     final p = widget.map.params;
     final blackout = stageMods(s.stage).contains('blackout') && !s.lit;
     final vision = blackout ? 2.2 : p.vision;
+    final footsteps = footstepsStage(s.stage) && widget.map.guards.isNotEmpty;
     return Stack(children: [
       Positioned.fill(
         child: ClipRect(
@@ -201,6 +296,7 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
               agentMode: true,
               vision: vision,
               showGuards: true,
+              pick: () => _pick,
             ),
           ),
         ),
@@ -212,6 +308,13 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
         right: 0,
         child: _Hud(c: c, onExit: widget.onExit, frame: _frame),
       ),
+      if (_intro != null && !_help)
+        Positioned(
+          top: 64,
+          left: 16,
+          right: 16,
+          child: GestureDetector(onTap: () => setState(() => _intro = null), child: _Banner(text: _intro!, color: K.amber)),
+        ),
       if (_help)
         Positioned(
           top: 64,
@@ -228,7 +331,20 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
         right: 20,
         child: ValueListenableBuilder<int>(
           valueListenable: _frame,
-          builder: (context, _, __) => !_hacking && _atTerminal
+          builder: (context, _, __) => !_hacking && _atTerminal && _needsCard
+              ? FilledButton.icon(
+                  onPressed: null,
+                  icon: const Icon(Icons.badge_outlined, size: 20),
+                  label: const Text('🔒 يحتاج بطاقة الحارس الذهبي', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                  style: FilledButton.styleFrom(
+                    disabledBackgroundColor: const Color(0xE6121518),
+                    disabledForegroundColor: K.amber,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    side: const BorderSide(color: K.amber),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(K.radius)),
+                  ),
+                )
+              : !_hacking && _atTerminal
               ? FilledButton.icon(
                   onPressed: () => setState(() => _hacking = true),
                   icon: Icon(_isVault(s) ? Icons.lock_open : Icons.terminal, size: 20),
@@ -292,16 +408,34 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
                 child: widget.lockView,
               ),
             ),
+            if (footsteps)
+              Positioned(
+                top: 8,
+                left: 60,
+                right: 60,
+                child: IgnorePointer(
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: _frame,
+                    builder: (context, _, __) => _Footsteps(distance: _nearGuard, seenFor: _seenFor),
+                  ),
+                ),
+              ),
             Positioned(
               left: 12,
               bottom: 12,
-              child: FloatingActionButton.small(
-                heroTag: 'heist-map',
-                backgroundColor: K.surface2,
-                foregroundColor: K.text,
-                tooltip: 'العودة إلى الخريطة',
-                onPressed: () => setState(() => _hacking = false),
-                child: const Icon(Icons.map_outlined),
+              child: ValueListenableBuilder<int>(
+                valueListenable: _frame,
+                builder: (context, _, __) {
+                  final danger = footsteps && _nearGuard < 3.2;
+                  return FloatingActionButton.extended(
+                    heroTag: 'heist-map',
+                    backgroundColor: danger ? K.danger : K.surface2,
+                    foregroundColor: danger ? Colors.white : K.text,
+                    onPressed: () => setState(() => _hacking = false),
+                    icon: Icon(danger ? Icons.directions_run : Icons.map_outlined),
+                    label: Text(danger ? 'اختبئ!' : 'الخريطة', style: const TextStyle(fontWeight: FontWeight.w800)),
+                  );
+                },
               ),
             ),
           ]),
@@ -332,6 +466,7 @@ class _Hud extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             MonoLabel('FIELD AGENT · ROOM ${min(s.room + 1, s.rooms.length)}/${s.rooms.length} · ERR ${s.errors}', size: 10.5),
             Text(s.stage > 0 ? stageDef(s.stage).name : 'المهمّة', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+            ValueListenableBuilder<int>(valueListenable: frame, builder: (context, _, __) => _StatusChips(c: c)),
           ]),
         ),
         ValueListenableBuilder<int>(
@@ -349,7 +484,8 @@ class _Hud extends StatelessWidget {
 
 class _Banner extends StatelessWidget {
   final String text;
-  const _Banner({required this.text});
+  final Color color;
+  const _Banner({required this.text, this.color = K.neon});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -357,10 +493,161 @@ class _Banner extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xE6121518),
           borderRadius: BorderRadius.circular(K.radius),
-          border: Border.all(color: K.neon.withAlpha(120)),
+          border: Border.all(color: color.withAlpha(140)),
         ),
         child: Text(text, style: const TextStyle(fontSize: 13, height: 1.55)),
       );
+}
+
+/// شارات الحالة: الإنذار والتيار والبطاقات (تتحدّث كل إطار).
+class _StatusChips extends StatelessWidget {
+  final GameController c;
+  const _StatusChips({required this.c});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = c.state;
+    if (s == null) return const SizedBox.shrink();
+    final map = heistMap(s.seed, s.stage, s.rooms.length);
+    final t = c.heistTime;
+    final chips = <Widget>[];
+    if (s.escape > 0) {
+      final left = map.escape.seconds - (t - s.escape);
+      chips.add(_chip('🚨 المخرج ${_clock(left)}', K.danger, blink: true));
+    }
+    if (s.power > t) chips.add(_chip('⚡ ظلام ${(s.power - t).ceil()} ث', const Color(0xFF7FA7FF)));
+    final cards = map.cardRooms;
+    if (cardStage(s.stage) && cards.isNotEmpty && s.escape <= 0) {
+      final got = cards.where(s.cards.contains).length;
+      chips.add(_chip('🪪 $got/${cards.length}', got == cards.length ? K.ok : K.amber));
+    }
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Padding(padding: const EdgeInsets.only(top: 3), child: Wrap(spacing: 6, children: chips));
+  }
+
+  static Widget _chip(String text, Color color, {bool blink = false}) {
+    final on = !blink || (DateTime.now().millisecondsSinceEpoch ~/ 400).isEven;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withAlpha(on ? 60 : 25),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withAlpha(on ? 220 : 90)),
+      ),
+      child: Text(text, style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w800, fontFamily: K.mono)),
+    );
+  }
+}
+
+/// تحذير وقع الخطى أثناء الاختراق: يشتدّ كلّما اقترب أقرب حارس.
+class _Footsteps extends StatelessWidget {
+  final double distance;
+  final double seenFor;
+  const _Footsteps({required this.distance, required this.seenFor});
+
+  @override
+  Widget build(BuildContext context) {
+    if (distance > 6.5 && seenFor <= 0) return const SizedBox.shrink();
+    final k = (1 - (distance - 1) / 5.5).clamp(0.0, 1.0);
+    final seen = seenFor > 0;
+    final color = seen ? K.danger : Color.lerp(K.amber, K.danger, k)!;
+    final text = seen ? '👁 يراك الآن!' : (distance < 3.2 ? '🔊 حارس خلفك تماماً!' : '🔊 خطى تقترب…');
+    final bars = (1 + k * 4).round();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xE6121518),
+        borderRadius: BorderRadius.circular(K.radius),
+        border: Border.all(color: color, width: 1.5),
+        boxShadow: [BoxShadow(color: color.withAlpha((60 + 120 * k).round()), blurRadius: 14)],
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 14)),
+        const SizedBox(width: 10),
+        for (int i = 0; i < 5; i++)
+          Container(
+            width: 5,
+            height: 6.0 + i * 3,
+            margin: const EdgeInsets.only(left: 2),
+            color: i < bars ? color : const Color(0xFF2A2F35),
+          ),
+      ]),
+    );
+  }
+}
+
+/// لوحة المحلّل أثناء الهروب: العدّ التنازلي ومتى يُغلق كل باب.
+class _EscapePanel extends StatefulWidget {
+  final GameController c;
+  final HeistMap map;
+  const _EscapePanel({required this.c, required this.map});
+
+  @override
+  State<_EscapePanel> createState() => _EscapePanelState();
+}
+
+class _EscapePanelState extends State<_EscapePanel> with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker((_) {
+      if (mounted) setState(() {});
+    })..start();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.c.state!;
+    final plan = widget.map.escape;
+    final since = widget.c.heistTime - s.escape;
+    final left = plan.seconds - since;
+    final blink = (DateTime.now().millisecondsSinceEpoch ~/ 350).isEven;
+    // الأبواب بترتيب الإغلاق (من الخزنة نحو المخرج)
+    final order = [for (int i = 0; i < plan.doorClose.length; i++) i]..sort((a, b) => plan.doorClose[a].compareTo(plan.doorClose[b]));
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: RadialGradient(colors: [K.danger.withAlpha(blink ? 70 : 40), const Color(0xFF0A0C0E)], radius: 1.1),
+      ),
+      child: Column(children: [
+        Text('🚨 الإنذار يعمل', style: TextStyle(color: K.danger, fontSize: 22, fontWeight: FontWeight.w900, shadows: [Shadow(color: K.danger.withAlpha(blink ? 200 : 60), blurRadius: 18)])),
+        const SizedBox(height: 4),
+        const Text('وجّه شريكك إلى نقطة البداية (EXIT) قبل أن تُغلق الأبواب', textAlign: TextAlign.center, style: TextStyle(color: K.text2, fontSize: 13)),
+        const SizedBox(height: 10),
+        Text(_clock(left), style: TextStyle(fontFamily: K.mono, fontSize: 54, fontWeight: FontWeight.w800, color: left < 10 ? K.danger : K.text)),
+        const SizedBox(height: 8),
+        Expanded(
+          child: ListView(children: [
+            for (final i in order)
+              () {
+                final rem = plan.doorClose[i] - since;
+                final closed = rem <= 0;
+                final soon = !closed && rem < 4;
+                final col = closed ? K.danger : (soon ? K.amber : K.ok);
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(children: [
+                    Icon(closed ? Icons.lock : Icons.sensor_door_outlined, color: col, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('باب الغرفة ${i + 1} ↔ ${i + 2}', style: TextStyle(color: col, fontWeight: FontWeight.w700))),
+                    Text(closed ? 'مغلق' : '${rem.ceil()} ث', style: TextStyle(color: col, fontFamily: K.mono, fontWeight: FontWeight.w800)),
+                  ]),
+                );
+              }(),
+          ]),
+        ),
+      ]),
+    );
+  }
 }
 
 /// عصا تحكّم بسيطة: تُرجع متّجهاً طوله ≤ 1.
@@ -505,6 +792,7 @@ class _AnalystMapState extends State<_AnalystMap> with SingleTickerProviderState
                   agentMode: false,
                   vision: 0,
                   showGuards: analystSeesGuards(s.stage),
+                  pick: () => 0,
                 ),
               ),
             ),
@@ -522,6 +810,39 @@ class _AnalystMapState extends State<_AnalystMap> with SingleTickerProviderState
           child: Text('المس الخريطة لتضع إشارة لشريكك · المس كاميرا لتعطيلها 10 ث',
               textAlign: TextAlign.center, style: TextStyle(color: K.muted, fontSize: 11)),
         ),
+        Positioned(
+          top: 4,
+          left: 8,
+          child: ValueListenableBuilder<int>(valueListenable: _frame, builder: (context, _, __) => _StatusChips(c: c)),
+        ),
+        if (powerStage(s.stage) && s.escape <= 0)
+          Positioned(
+            right: 8,
+            bottom: 24,
+            child: ValueListenableBuilder<int>(
+              valueListenable: _frame,
+              builder: (context, _, __) {
+                final s = c.state!;
+                final t = c.heistTime;
+                final on = s.power > t;
+                final wait = s.power > 0 ? (s.power + kPowerCooldown - t) : 0.0;
+                final ready = wait <= 0;
+                return FilledButton.icon(
+                  onPressed: ready ? () => c.dispatch({'type': 'power'}) : null,
+                  icon: const Icon(Icons.power_off, size: 18),
+                  label: Text(on ? 'ظلام ${(s.power - t).ceil()}' : (ready ? 'اقطع التيار' : '${wait.ceil()} ث'),
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontFamily: K.mono)),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF2B4A8F),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFF1C222A),
+                    disabledForegroundColor: on ? const Color(0xFF7FA7FF) : K.muted,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                );
+              },
+            ),
+          ),
       ]),
     );
   }
@@ -539,6 +860,7 @@ class HeistPainter extends CustomPainter {
   final bool agentMode;
   final double vision;
   final bool showGuards;
+  final double Function() pick;
 
   HeistPainter({
     required this.map,
@@ -552,6 +874,7 @@ class HeistPainter extends CustomPainter {
     required this.agentMode,
     required this.vision,
     required this.showGuards,
+    required this.pick,
   }) : super(repaint: repaint);
 
   static const _floor = Color(0xFF16191C), _floor2 = Color(0xFF1A1D21), _wall = Color(0xFF353A40), _wallTop = Color(0xFF4A5057);
@@ -561,7 +884,12 @@ class HeistPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final s = state();
     final t = time();
-    final solved = s.room;
+    final escaping = s.escape > 0;
+    final since = escaping ? t - s.escape : 0.0;
+    final shut = escaping ? map.shutAfter(since) : const <int>{};
+    final power = s.power > t;
+    // أثناء الهروب تُعدّ الخزنة محلولة
+    final solved = escaping ? map.rooms.length : s.room;
     final a = agent();
     final pulse = .5 + .5 * sin(DateTime.now().millisecondsSinceEpoch / 260);
 
@@ -631,7 +959,12 @@ class HeistPainter extends CustomPainter {
 
     // الأبواب
     final doorImg = HeistSprites.get('h_door');
-    for (final d in map.doors) {
+    for (int di = 0; di < map.doors.length; di++) {
+      final d = map.doors[di];
+      if (escaping) {
+        _escapeDoor(canvas, d, origin, scale, shut.contains(di), map.escape.doorClose[di] - since, pulse);
+        continue;
+      }
       final open = d.after < solved;
       for (final c in d.cells) {
         final r = Rect.fromLTWH(origin.dx + c.x * scale, origin.dy + c.y * scale, scale, scale);
@@ -661,6 +994,7 @@ class HeistPainter extends CustomPainter {
       final vault = i == map.rooms.length - 1;
       final col = i < solved ? K.ok : (i == solved ? K.neon : const Color(0xFF5B6168));
       if (i == solved) canvas.drawCircle(c, scale * (.6 + .25 * pulse), Paint()..color = K.neon.withAlpha(40));
+      final cardLocked = i >= solved && map.cardRooms.contains(i) && !s.cards.contains(i);
       if (vault) {
         canvas.drawCircle(c, scale * .38, Paint()..color = const Color(0xFF2E3237));
         canvas.drawCircle(c, scale * .38, Paint()
@@ -672,6 +1006,7 @@ class HeistPainter extends CustomPainter {
         canvas.drawCircle(c, scale * .5, Paint()..color = col.withAlpha(i == solved ? 70 : 35));
         _sprite(canvas, HeistSprites.get('h_terminal')!, c, scale * .85, 0, i > solved ? .55 : 1);
         if (i < solved) canvas.drawCircle(c + Offset(scale * .3, -scale * .3), scale * .12, Paint()..color = K.ok);
+        if (cardLocked) _card(canvas, c + Offset(scale * .32, -scale * .34), scale * .5, false);
       } else {
         final r = Rect.fromCenter(center: c, width: scale * .62, height: scale * .5);
         canvas.drawRRect(RRect.fromRectAndRadius(r, Radius.circular(scale * .06)), Paint()..color = const Color(0xFF22262B));
@@ -682,7 +1017,7 @@ class HeistPainter extends CustomPainter {
     // الكاميرات
     for (int i = 0; i < map.cams.length; i++) {
       final cam = map.cams[i];
-      final off = (s.camOff['$i'] ?? -1) > t;
+      final off = power || (s.camOff['$i'] ?? -1) > t;
       final p = sc(cam.pos);
       final ang = camAngle(cam, t);
       if (!off) _cone(canvas, p, ang, kCamHalf, map.params.camRange * scale, const Color(0xFFFFC94D));
@@ -694,14 +1029,17 @@ class HeistPainter extends CustomPainter {
         canvas.drawRect(Rect.fromCenter(center: p, width: scale * .34, height: scale * .34), Paint()..color = off ? const Color(0xFF3A3F45) : const Color(0xFFB9BEC4));
         canvas.drawCircle(p, scale * .08, Paint()..color = off ? K.muted : K.danger);
       }
-      if (off) {
+      if (off && !power) {
         final sec = ((s.camOff['$i'] ?? 0) - t).ceil();
         _label(canvas, p + Offset(0, -scale * .55), '$sec', K.ok, scale * .32);
       }
     }
 
     // الحرّاس (أو مساراتهم فقط عند المحلّل في المراحل المتقدّمة)
-    for (final g in map.guards) {
+    final gRange = map.guardRange(power: power, alarm: escaping);
+    for (int gi = 0; gi < map.guards.length; gi++) {
+      final g = map.guards[gi];
+      final carries = map.cardGuards.contains(gi) && !s.cards.contains(g.room);
       if (!showGuards) {
         final path = Path()..moveTo(sc(g.path.first).dx, sc(g.path.first).dy);
         for (final q in g.path.skip(1)) {
@@ -716,19 +1054,51 @@ class HeistPainter extends CustomPainter {
       }
       final (gp, ga) = guardAt(g, t);
       final p = sc(gp);
-      _cone(canvas, p, ga, kGuardHalf, map.params.guardRange * scale, _coneRed);
+      _cone(canvas, p, ga, kGuardHalf, gRange * scale, power ? const Color(0xFFFFF1B8) : _coneRed);
+      if (carries) {
+        // هالة ذهبية خلف الحارس: منطقة السرقة
+        final back = ga + pi;
+        canvas.drawPath(
+          Path()
+            ..moveTo(p.dx, p.dy)
+            ..arcTo(Rect.fromCircle(center: p, radius: kPickRange * scale), back - pi / 2, pi, false)
+            ..close(),
+          Paint()..color = K.amber.withAlpha((25 + 35 * pulse).round()),
+        );
+      }
       final gImg = HeistSprites.get('h_guard');
       if (gImg != null) {
         canvas.drawCircle(p + Offset(scale * .05, scale * .08), scale * .36, Paint()..color = Colors.black.withAlpha(90));
         _sprite(canvas, gImg, p, scale * .95, ga + pi / 2);
+        if (carries) _card(canvas, p + Offset(0, -scale * .62), scale * .5, true);
         continue;
       }
+      if (carries) _card(canvas, p + Offset(0, -scale * .62), scale * .5, true);
       canvas.drawCircle(p, scale * .32, Paint()..color = const Color(0xFF2B3A55));
       canvas.drawCircle(p, scale * .32, Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = scale * .06
         ..color = _guard);
       canvas.drawCircle(p + Offset(cos(ga), sin(ga)) * scale * .2, scale * .08, Paint()..color = _guard);
+    }
+
+    // الليزر
+    for (final l in map.lasers) {
+      _laser(canvas, l, t, sc, scale);
+    }
+
+    // المخرج أثناء الهروب
+    if (escaping) {
+      final p = sc(map.spawn);
+      for (final k in [0.0, .33, .66]) {
+        final ph = ((DateTime.now().millisecondsSinceEpoch / 1100) + k) % 1;
+        canvas.drawCircle(p, scale * (.4 + ph * 1.4), Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = scale * .08
+          ..color = K.ok.withAlpha(((1 - ph) * 220).round()));
+      }
+      canvas.drawCircle(p, scale * .42, Paint()..color = K.ok.withAlpha(200));
+      _label(canvas, p, 'EXIT', const Color(0xFF07130C), scale * .26);
     }
 
     // إشارة المحلّل
@@ -766,31 +1136,143 @@ class HeistPainter extends CustomPainter {
         ..color = const Color(0xFFE6E8EA));
       if (agentMode) canvas.drawCircle(p + Offset(cos(f), sin(f)) * scale * .18, scale * .08, Paint()..color = const Color(0xFF0A0C0E));
       }
+      // تقدّم سرقة البطاقة
+      final pk = pick();
+      if (pk > 0) {
+        canvas.drawArc(Rect.fromCircle(center: p, radius: scale * .58), -pi / 2, 2 * pi * (pk / kPickSeconds).clamp(0.0, 1.0), false, Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = scale * .1
+          ..strokeCap = StrokeCap.round
+          ..color = K.amber);
+      }
       // تحذير «!» عندما يراه أحد
       final al = alert();
       if (al > 0) _label(canvas, p + Offset(0, -scale * .75), '!', K.danger, scale * (.45 + al));
     }
 
-    // الظلام حول العميل
+    // الظلام حول العميل (أضيق حين يُقطع التيار)
     if (agentMode && a != null) {
       final p = sc(a);
+      final vr = power ? min(vision, 1.9) : vision;
       canvas.saveLayer(Offset.zero & size, Paint());
       canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xF2050607));
       canvas.drawCircle(
         p,
-        vision * scale,
+        vr * scale,
         Paint()
           ..blendMode = BlendMode.dstOut
           ..shader = RadialGradient(colors: const [Colors.black, Colors.black, Color(0x00000000)], stops: const [0, .7, 1])
-              .createShader(Rect.fromCircle(center: p, radius: vision * scale)),
+              .createShader(Rect.fromCircle(center: p, radius: vr * scale)),
       );
       canvas.restore();
-      // الجهاز المطلوب يبقى ظاهراً كمنارة خافتة حتى خارج الرؤية
-      if (solved < map.rooms.length) {
+      // الهدف يبقى ظاهراً كمنارة خافتة حتى خارج الرؤية
+      if (escaping) {
+        canvas.drawCircle(sc(map.spawn), scale * (.22 + .1 * pulse), Paint()..color = K.ok.withAlpha(190));
+      } else if (solved < map.rooms.length) {
         final tp = sc(map.rooms[solved].terminal);
         canvas.drawCircle(tp, scale * (.18 + .08 * pulse), Paint()..color = K.neon.withAlpha(150));
       }
+      // الليزر يُرى عبر الظلام (وهجه أحمر)
+      for (final l in map.lasers) {
+        final seg = l.at(t);
+        if (seg != null) {
+          canvas.drawLine(sc(seg.$1), sc(seg.$2), Paint()
+            ..strokeWidth = scale * .05
+            ..color = const Color(0xFFFF3B3B).withAlpha(140));
+        }
+      }
     }
+
+    // انقطاع التيار: زرقة باهتة على خريطة المحلّل
+    if (power && !agentMode) {
+      canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0x66060A1A));
+    }
+    // الإنذار: نبض أحمر على الحوافّ
+    if (escaping) {
+      final k = (.5 + .5 * sin(DateTime.now().millisecondsSinceEpoch / 180));
+      canvas.drawRect(
+        Offset.zero & size,
+        Paint()
+          ..shader = RadialGradient(
+            radius: .85,
+            colors: [const Color(0x00000000), K.danger.withAlpha((40 + 80 * k).round())],
+            stops: const [.55, 1],
+          ).createShader(Offset.zero & size),
+      );
+    }
+  }
+
+  /// باب أثناء الهروب: مفتوح (أخضر)، يوشك أن يُغلق (يومض)، مغلق (مصراع أحمر مخطّط).
+  void _escapeDoor(Canvas canvas, HDoor d, Offset origin, double scale, bool closed, double left, double pulse) {
+    final rects = [for (final c in d.cells) Rect.fromLTWH(origin.dx + c.x * scale, origin.dy + c.y * scale, scale, scale)];
+    final all = rects.reduce((a, b) => a.expandToInclude(b));
+    if (closed) {
+      canvas.drawRect(all, Paint()..color = const Color(0xFF3A1416));
+      final stripe = Paint()
+        ..color = K.danger
+        ..strokeWidth = max(1, scale * .1);
+      canvas.save();
+      canvas.clipRect(all);
+      for (double x = all.left - all.height; x < all.right; x += scale * .45) {
+        canvas.drawLine(Offset(x, all.bottom), Offset(x + all.height, all.top), stripe);
+      }
+      canvas.restore();
+      canvas.drawRect(all, Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = max(1, scale * .08)
+        ..color = K.danger);
+      return;
+    }
+    final soon = left < 4;
+    canvas.drawRect(all, Paint()..color = (soon ? K.amber : K.ok).withAlpha(soon ? (60 + 120 * pulse).round() : 45));
+    if (left < 9) _label(canvas, all.center, '${left.ceil()}', soon ? K.amber : K.ok, scale * .5);
+  }
+
+  void _laser(Canvas canvas, HLaser l, double t, Offset Function(Offset) sc, double scale) {
+    final seg = l.at(t);
+    // الباعثان على الجدارين
+    final ends = seg ?? (l.a, l.b);
+    for (final e in [ends.$1, ends.$2]) {
+      canvas.drawCircle(sc(e), scale * .12, Paint()..color = const Color(0xFF55595E));
+      canvas.drawCircle(sc(e), scale * .06, Paint()..color = seg != null ? const Color(0xFFFF3B3B) : const Color(0xFF6B2224));
+    }
+    if (seg == null) {
+      // تحذير قبل الاشتعال: خطّ متقطّع خافت
+      final w = l.warmup(t);
+      if (w != null && w < .9) {
+        final a = sc(l.a), b = sc(l.b);
+        final n = max(2, ((b - a).distance / (scale * .35)).floor());
+        final paint = Paint()
+          ..strokeWidth = scale * .04
+          ..color = const Color(0xFFFF3B3B).withAlpha((80 + 120 * (1 - w / .9)).round());
+        for (int i = 0; i < n; i += 2) {
+          canvas.drawLine(Offset.lerp(a, b, i / n)!, Offset.lerp(a, b, (i + 1) / n)!, paint);
+        }
+      }
+      return;
+    }
+    final a = sc(seg.$1), b = sc(seg.$2);
+    canvas.drawLine(a, b, Paint()
+      ..strokeWidth = scale * .32
+      ..color = const Color(0x55FF2020)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, scale * .18));
+    canvas.drawLine(a, b, Paint()
+      ..strokeWidth = scale * .08
+      ..color = const Color(0xFFFF4545));
+    canvas.drawLine(a, b, Paint()
+      ..strokeWidth = scale * .025
+      ..color = const Color(0xFFFFD6D6));
+  }
+
+  /// بطاقة دخول ذهبية صغيرة (فوق الحارس، أو قفل على الجهاز).
+  void _card(Canvas canvas, Offset c, double w, bool glow) {
+    final r = RRect.fromRectAndRadius(Rect.fromCenter(center: c, width: w, height: w * .66), Radius.circular(w * .1));
+    if (glow) canvas.drawRRect(r.inflate(w * .12), Paint()..color = K.amber.withAlpha(70));
+    canvas.drawRRect(r, Paint()..color = const Color(0xFFE9B949));
+    canvas.drawRect(Rect.fromLTWH(r.left + w * .12, r.top + w * .16, w * .22, w * .18), Paint()..color = const Color(0xFF8A6A1E));
+    canvas.drawLine(Offset(r.left + w * .45, r.top + w * .22), Offset(r.right - w * .1, r.top + w * .22), Paint()
+      ..strokeWidth = w * .06
+      ..color = const Color(0xFF8A6A1E));
   }
 
   /// يرسم صورة مدوّرة حول [center] بعرض [size] (الصورة تنظر إلى الأعلى أصلاً).

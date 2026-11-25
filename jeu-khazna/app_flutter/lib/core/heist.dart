@@ -49,6 +49,57 @@ class HCam {
   const HCam(this.pos, this.a0, this.a1, this.period, this.room);
 }
 
+/// شعاع ليزر: إمّا يومض (يشتعل وينطفئ) في مكانه، وإمّا ثابت الاشتعال يكنس الغرفة ذهاباً وإياباً.
+class HLaser {
+  final Offset a, b;
+  final bool sweep;
+
+  /// الكنس: الشعاع عمودي ويتحرّك أفقياً (true) أو أفقي ويتحرّك عمودياً.
+  final bool vertical;
+  final double lo, hi, period, phase;
+  final int room;
+  const HLaser(this.a, this.b, this.period, this.phase, this.room, {this.sweep = false, this.vertical = false, this.lo = 0, this.hi = 0});
+
+  static const double onFrac = .55;
+
+  /// موضع الشعاع عند الوقت [t]، أو null حين يكون مطفأً.
+  (Offset, Offset)? at(double t) {
+    if (sweep) {
+      final v = lo + (hi - lo) * (.5 - .5 * cos(2 * pi * (t + phase) / period));
+      return vertical ? (Offset(v, a.dy), Offset(v, b.dy)) : (Offset(a.dx, v), Offset(b.dx, v));
+    }
+    return ((t + phase) % period) < period * onFrac ? (a, b) : null;
+  }
+
+  /// كم ثانية بقيت قبل الاشتعال (للتحذير)، أو null إن كان مشتعلاً.
+  double? warmup(double t) {
+    if (sweep) return null;
+    final ph = (t + phase) % period;
+    return ph < period * onFrac ? null : period - ph;
+  }
+
+  bool hits(Offset p, double t) {
+    final seg = at(t);
+    if (seg == null) return false;
+    return _segDist(p, seg.$1, seg.$2) < .32;
+  }
+}
+
+double _segDist(Offset p, Offset a, Offset b) {
+  final ab = b - a;
+  final l2 = ab.dx * ab.dx + ab.dy * ab.dy;
+  if (l2 == 0) return (p - a).distance;
+  final k = (((p.dx - a.dx) * ab.dx + (p.dy - a.dy) * ab.dy) / l2).clamp(0.0, 1.0);
+  return (p - (a + ab * k)).distance;
+}
+
+/// خطّة الهروب بعد فتح الخزنة: المدّة الكلّية، ومتى يُغلق كل باب (ثوانٍ من بداية الإنذار).
+class EscapePlan {
+  final double seconds;
+  final List<double> doorClose;
+  const EscapePlan(this.seconds, this.doorClose);
+}
+
 class HeistParams {
   final int guards, cams, crates;
   final double guardSpeed, guardRange, camRange, vision;
@@ -75,6 +126,28 @@ const double kCamHackSeconds = 10;
 /// المحلّل يرى الحرّاس مباشرة حتى المرحلة 40؛ بعدها يرى المسارات فقط.
 bool analystSeesGuards(int stage) => stage <= 40;
 
+// ───── مفاجآت المطاردة (تتراكم مرحلة بعد مرحلة) ─────
+/// وقع الخطى: الحرّاس يواصلون دورتهم أثناء الاختراق ويمكنهم رؤيتك وأنت عند الجهاز.
+bool footstepsStage(int n) => n >= 6;
+
+/// الهروب: فتح الخزنة يطلق الإنذار؛ الأبواب تُغلق واحداً بعد الآخر حتى تصل إلى المخرج.
+bool escapeStage(int n) => n >= 10;
+
+/// بطاقة الحارس: جهاز غرفة الحارس لا يعمل إلا ببطاقته — تُسرق من خلفه.
+bool cardStage(int n) => n >= 12;
+
+/// قطع التيار: المحلّل يطفئ المبنى، الكاميرات تتوقّف والحرّاس بمصابيح قصيرة.
+bool powerStage(int n) => n >= 15;
+
+/// الليزر: أشعّة تومض، ومن المرحلة 30 أشعّة تكنس الغرفة.
+bool laserStage(int n) => n >= 18;
+
+const double kAgentSpeed = 3.2;
+const double kPowerSeconds = 15, kPowerCooldown = 35;
+
+/// كم يقترب العميل من ظهر الحارس ليسرق البطاقة، وكم يبقى خلفه.
+const double kPickRange = 1.15, kPickSeconds = .8;
+
 class HeistMap {
   final int w, h;
   final List<int> tiles;
@@ -84,19 +157,82 @@ class HeistMap {
   final List<HCam> cams;
   final Offset spawn;
   final HeistParams params;
+  final List<HLaser> lasers = [];
+
+  /// الحرّاس الذين يحملون بطاقات (رقم الحارس)؛ البطاقة تفتح جهاز غرفته.
+  final List<int> cardGuards = [];
   HeistMap(this.w, this.h, this.tiles, this.rooms, this.doors, this.guards, this.cams, this.spawn, this.params);
 
   int at(int x, int y) => (x < 0 || y < 0 || x >= w || y >= h) ? kWall : tiles[y * w + x];
 
-  bool doorClosedAt(int x, int y, int solved) {
-    for (final d in doors) {
-      if (d.after >= solved && d.cells.any((c) => c.x == x && c.y == y)) return true;
+  /// [shut]: أبواب أُغلقت أثناء الهروب (أرقامها).
+  bool doorClosedAt(int x, int y, int solved, [Set<int> shut = const {}]) {
+    for (int i = 0; i < doors.length; i++) {
+      final d = doors[i];
+      if ((d.after >= solved || shut.contains(i)) && d.cells.any((c) => c.x == x && c.y == y)) return true;
     }
     return false;
   }
 
   /// صلب للحركة: جدار أو صندوق أو باب مغلق.
-  bool solid(int x, int y, int solved) => at(x, y) != kFloor || doorClosedAt(x, y, solved);
+  bool solid(int x, int y, int solved, [Set<int> shut = const {}]) => at(x, y) != kFloor || doorClosedAt(x, y, solved, shut);
+
+  /// رقم الغرفة التي فيها النقطة (‎-1 = في باب أو جدار).
+  int roomOf(Offset p) {
+    for (int i = 0; i < rooms.length; i++) {
+      if (rooms[i].contains(p)) return i;
+    }
+    return -1;
+  }
+
+  Offset doorCenter(int i) {
+    final d = doors[i];
+    var c = Offset.zero;
+    for (final q in d.cells) {
+      c += Offset(q.x + .5, q.y + .5);
+    }
+    return c / d.cells.length.toDouble();
+  }
+
+  /// غرف الأجهزة المقفلة بالبطاقة.
+  Set<int> get cardRooms => {for (final g in cardGuards) guards[g].room};
+
+  /// الأبواب المغلقة بعد [since] ثانية من بداية الإنذار.
+  Set<int> shutAfter(double since) => {
+        for (int i = 0; i < doors.length; i++)
+          if (since >= escape.doorClose[i]) i,
+      };
+
+  late final EscapePlan escape = () {
+    // مسافة المشي الحقيقية (بحث عرضي) من الخزنة إلى كل باب وإلى المخرج
+    final all = doors.length + 1;
+    final dist = List<int>.filled(w * h, -1);
+    final v = rooms.last.terminal;
+    final q = <int>[v.dy.floor() * w + v.dx.floor()];
+    dist[q.first] = 0;
+    for (int k = 0; k < q.length; k++) {
+      final c = q[k], cx = c % w, cy = c ~/ w;
+      for (final o in const [Point(1, 0), Point(-1, 0), Point(0, 1), Point(0, -1)]) {
+        final x = cx + o.x, y = cy + o.y;
+        if (solid(x, y, all)) continue;
+        final i = y * w + x;
+        if (dist[i] < 0) {
+          dist[i] = dist[c] + 1;
+          q.add(i);
+        }
+      }
+    }
+    double secs(int tiles) => tiles / kAgentSpeed;
+    final close = [
+      for (final d in doors)
+        () {
+          final m = d.cells.map((c) => dist[c.y * w + c.x]).where((x) => x >= 0).fold<int>(0, max);
+          return secs(m) * 1.5 + 3.5;
+        }(),
+    ];
+    final exit = dist[spawn.dy.floor() * w + spawn.dx.floor()];
+    return EscapePlan(secs(max(0, exit)) * 1.5 + 6, close);
+  }();
 
   /// نقطة الحفظ: مدخل الغرفة الحالية (أو نقطة البداية).
   Offset checkpoint(int solved) {
@@ -114,11 +250,11 @@ class HeistMap {
   }
 
   /// يتحرّك من [from] بمقدار [delta] مع منع اختراق الجدران (دائرة نصف قطرها [radius]).
-  Offset move(Offset from, Offset delta, int solved, [double radius = .3]) {
+  Offset move(Offset from, Offset delta, int solved, {double radius = .3, Set<int> shut = const {}}) {
     bool blocked(double x, double y) {
       for (final dx in [-radius, radius]) {
         for (final dy in [-radius, radius]) {
-          if (solid((x + dx).floor(), (y + dy).floor(), solved)) return true;
+          if (solid((x + dx).floor(), (y + dy).floor(), solved, shut)) return true;
         }
       }
       return false;
@@ -131,28 +267,62 @@ class HeistMap {
   }
 
   /// خطّ رؤية: الجدران والصناديق والأبواب المغلقة تحجب.
-  bool lineOfSight(Offset a, Offset b, int solved) {
+  bool lineOfSight(Offset a, Offset b, int solved, [Set<int> shut = const {}]) {
     final d = b - a;
     final n = max(1, (d.distance / .2).ceil());
     for (int i = 1; i < n; i++) {
       final p = a + d * (i / n);
-      if (solid(p.dx.floor(), p.dy.floor(), solved)) return false;
+      if (solid(p.dx.floor(), p.dy.floor(), solved, shut)) return false;
     }
     return true;
   }
 
   /// هل يُرى العميل الآن؟ [camOff]: الكاميرات المعطّلة (رقم ← حتى أيّ وقت).
-  bool seen(Offset p, double t, int solved, Map<String, double> camOff) {
+  /// [power]: التيار مقطوع (لا كاميرات، مصابيح الحرّاس أقصر). [alarm]: الإنذار يعمل (الحرّاس أيقظ).
+  bool seen(Offset p, double t, int solved, Map<String, double> camOff,
+      {bool power = false, bool alarm = false, Set<int> shut = const {}}) {
+    final range = guardRange(power: power, alarm: alarm);
     for (final g in guards) {
       final (gp, ga) = guardAt(g, t);
-      if (inCone(gp, ga, p, params.guardRange, kGuardHalf) && lineOfSight(gp, p, solved)) return true;
+      if (inCone(gp, ga, p, range, kGuardHalf) && lineOfSight(gp, p, solved, shut)) return true;
     }
+    if (power) return false;
     for (int i = 0; i < cams.length; i++) {
       if ((camOff['$i'] ?? -1) > t) continue;
       final c = cams[i];
       if (inCone(c.pos, camAngle(c, t), p, params.camRange, kCamHalf) && lineOfSight(c.pos, p, solved)) return true;
     }
     return false;
+  }
+
+  double guardRange({bool power = false, bool alarm = false}) =>
+      params.guardRange * (power ? .55 : 1) * (alarm ? 1.25 : 1);
+
+  /// هل يلمس العميل شعاعاً مشتعلاً؟
+  bool laserHit(Offset p, double t) => lasers.any((l) => l.hits(p, t));
+
+  /// العميل خلف الحارس وقريب منه (خارج مخروط رؤيته).
+  bool behind(int g, Offset p, double t) {
+    final (gp, ga) = guardAt(guards[g], t);
+    final d = p - gp;
+    if (d.distance > kPickRange) return false;
+    var diff = atan2(d.dy, d.dx) - ga;
+    while (diff > pi) {
+      diff -= 2 * pi;
+    }
+    while (diff < -pi) {
+      diff += 2 * pi;
+    }
+    return diff.abs() > pi / 2;
+  }
+
+  /// أقرب حارس إلى [p] (للتحذير بوقع الخطى).
+  double nearestGuard(Offset p, double t) {
+    var best = double.infinity;
+    for (final g in guards) {
+      best = min(best, (guardAt(g, t).$1 - p).distance);
+    }
+    return best;
   }
 }
 
@@ -337,6 +507,48 @@ HeistMap _generate(int seed, int stage, int n) {
       if (reserved.contains(y * w + x) || nearDoor(x, y) || tiles[y * w + x] != kFloor) continue;
       set(x, y, kCrate);
       if (!_connected(map)) set(x, y, kFloor);
+    }
+  }
+
+  // بطاقات الحرّاس: حارس واحد، ومن المرحلة 35 حارسان في غرفتين مختلفتين
+  final rc = Random(seed ^ 0xCA4D);
+  if (cardStage(stage) && guards.isNotEmpty) {
+    final order = [for (int i = 0; i < guards.length; i++) i]..shuffle(rc);
+    final want = stage >= 35 ? 2 : 1;
+    for (final g in order) {
+      if (map.cardGuards.length >= want) break;
+      if (map.cardGuards.any((o) => guards[o].room == guards[g].room)) continue;
+      map.cardGuards.add(g);
+    }
+  }
+
+  // الليزر: في غرف لا فيها جهاز على صفّ الشعاع، ولا في غرفة البداية
+  final rl = Random(seed ^ 0x1A5E);
+  if (laserStage(stage) && n > 1) {
+    final count = stage >= 40 ? 3 : (stage >= 30 ? 2 : 1);
+    final pool = [for (int i = 1; i < n; i++) i]..shuffle(rl);
+    for (int k = 0; k < count && k < pool.length; k++) {
+      final ri = pool[k];
+      final b = bounds[ri];
+      final term = rooms[ri].terminal;
+      final tx = term.dx.floor(), ty = term.dy.floor();
+      final period = 2.6 + rl.nextDouble() * 1.6;
+      final phase = rl.nextDouble() * period;
+      final sweep = stage >= 30 && k == 0;
+      if (sweep) {
+        // الجهاز على جدار جانبي ← شعاع عمودي يكنس بين الجدارين دون أن يصله
+        final vertical = tx == b[0] || tx == b[2];
+        map.lasers.add(vertical
+            ? HLaser(Offset(0, b[1].toDouble()), Offset(0, b[3] + 1.0), period * 2.2, phase, ri,
+                sweep: true, vertical: true, lo: b[0] + 1.5, hi: b[2] - .5)
+            : HLaser(Offset(b[0].toDouble(), 0), Offset(b[2] + 1.0, 0), period * 2.2, phase, ri,
+                sweep: true, lo: b[1] + 1.5, hi: b[3] - .5));
+        continue;
+      }
+      final rows = [for (int y = b[1] + 1; y < b[3]; y++) if (y != ty) y];
+      if (rows.isEmpty) continue;
+      final y = rows[rl.nextInt(rows.length)] + .5;
+      map.lasers.add(HLaser(Offset(b[0].toDouble(), y), Offset(b[2] + 1.0, y), period, phase, ri));
     }
   }
   return map;

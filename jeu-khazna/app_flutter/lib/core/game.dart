@@ -1,9 +1,9 @@
 // منطق لعبة «الخزنة» — نسخة Dart مطابقة لـ core.js
 // نفس البذرة تعطي نفس الألغاز في نسخة الويب والنسخة الأصلية، فيمكن اللعب بينهما.
-import 'dart:math' show Random;
+import 'dart:math' show Random, max;
 
 import 'ext_locks.dart';
-import 'heist.dart' show kSpotPenalty, kCamHackSeconds;
+import 'heist.dart' show kSpotPenalty, kCamHackSeconds, kPowerSeconds, kPowerCooldown, escapeStage, powerStage, cardStage;
 import 'stages.dart' show stageMods;
 
 const int kDuration = 600; // ثانية
@@ -454,6 +454,15 @@ class GameState {
   /// الكاميرات المعطّلة: رقمها ← حتى أيّ ثانية من وقت المهمّة.
   final Map<String, double> camOff;
 
+  /// الهروب: لحظة انطلاق الإنذار بعد فتح الخزنة (ثوانٍ من وقت المهمّة؛ 0 = لم يبدأ).
+  final double escape;
+
+  /// قطع التيار: حتى أيّ ثانية من وقت المهمّة (0 = لم يُقطع بعد).
+  final double power;
+
+  /// الغرف التي سُرقت بطاقة حارسها.
+  final List<int> cards;
+
   const GameState({
     required this.seed,
     this.rooms = kRooms,
@@ -485,6 +494,9 @@ class GameState {
     this.heist = false,
     this.spots = 0,
     this.camOff = const {},
+    this.escape = 0,
+    this.power = 0,
+    this.cards = const [],
   });
 
   /// الضوء مشترى للقفل الحالي أو للجولة كاملة (يلغي انقطاع الكهرباء).
@@ -531,6 +543,9 @@ class GameState {
     bool? heist,
     int? spots,
     Map<String, double>? camOff,
+    double? escape,
+    double? power,
+    List<int>? cards,
   }) =>
       GameState(
         seed: seed,
@@ -563,6 +578,9 @@ class GameState {
         heist: heist ?? this.heist,
         spots: spots ?? this.spots,
         camOff: camOff ?? this.camOff,
+        escape: escape ?? this.escape,
+        power: power ?? this.power,
+        cards: cards ?? this.cards,
       );
 
   /// نسخة بمدّة مختلفة (تأتي من الخادم عند بداية الجلسة).
@@ -572,7 +590,7 @@ class GameState {
         cut: cut, lastEvent: lastEvent, eventId: eventId, finishedIn: finishedIn, duration: seconds,
         pausedAt: pausedAt, pauseReason: pauseReason, hints: hints, hint: hint,
         errors: errors, syncOp: syncOp, syncEx: syncEx, variant: variant, variantRoom: variantRoom, bought: bought,
-        heist: heist, spots: spots, camOff: camOff,
+        heist: heist, spots: spots, camOff: camOff, escape: escape, power: power, cards: cards,
       );
 
   Map<String, dynamic> toJson() => {
@@ -606,6 +624,9 @@ class GameState {
         if (heist) 'heist': true,
         if (spots > 0) 'spots': spots,
         if (camOff.isNotEmpty) 'camOff': camOff,
+        if (escape > 0) 'escape': escape,
+        if (power > 0) 'power': power,
+        if (cards.isNotEmpty) 'cards': cards,
       };
 
   static int _i(dynamic v, [int d = 0]) => v is num ? v.toInt() : d;
@@ -646,6 +667,9 @@ class GameState {
         camOff: j['camOff'] is Map
             ? {for (final e in (j['camOff'] as Map).entries) '${e.key}': (e.value as num? ?? 0).toDouble()}
             : const {},
+        escape: (j['escape'] as num? ?? 0).toDouble(),
+        power: (j['power'] as num? ?? 0).toDouble(),
+        cards: _l(j['cards']),
       );
 }
 
@@ -796,6 +820,11 @@ GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
   if (s.phase != 'playing' || s.paused) return s;
   final room = s.roomId;
   final type = a['type'];
+  // وقت المهمّة (مثل heistTime عند اللاعبين): الحرّاس والكاميرات والهروب تُحسب به
+  final ht = s.effectiveDuration - s.penalty - remainingSeconds(s, now);
+
+  // أثناء الهروب: الخزنة فُتحت، لا أقفال بعد الآن
+  if (s.escape > 0 && type != 'spotted' && type != 'escaped' && type != 'caught' && type != 'buy') return s;
 
   // شراء مدفوع (الضوء / مورس): الخصم تمّ في الخادم قبل الإرسال.
   if (type == 'buy') {
@@ -818,6 +847,10 @@ GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
       return x.copyWith(variant: 2, variantRoom: s.room, hint: '', eventId: s.eventId + 1, lastEvent: GameEvent('part2', room));
     }
     final next = s.room + 1;
+    // وضع الخريطة: فتح الخزنة يطلق الإنذار، ويبقى الهروب إلى المخرج
+    if (next >= s.rooms.length && s.heist && escapeStage(s.stage) && s.escape <= 0) {
+      return x.copyWith(escape: max(.01, ht), hint: '', eventId: s.eventId + 1, lastEvent: GameEvent('escape', room));
+    }
     if (next >= s.rooms.length) {
       final y = x.copyWith(room: next, phase: 'won');
       return ev(y.copyWith(finishedIn: (s.effectiveDuration - remainingSeconds(y, now)).round(), hint: ''), 'solved');
@@ -842,12 +875,33 @@ GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
     if (!s.heist) return s;
     return wrong(s.copyWith(spots: s.spots + 1), kSpotPenalty, 'spotted');
   }
+  // الهروب: العميل وصل إلى المخرج ← الفوز. انتهى الوقت أو حُبس خلف باب ← القبض.
+  if (type == 'escaped') {
+    if (s.escape <= 0) return s;
+    final y = s.copyWith(room: s.rooms.length, phase: 'won');
+    return ev(y.copyWith(finishedIn: (s.effectiveDuration - remainingSeconds(y, now)).round(), hint: ''), 'solved');
+  }
+  if (type == 'caught') {
+    if (s.escape <= 0) return s;
+    return ev(s.copyWith(phase: 'lost'), 'caught');
+  }
+  // بطاقة الحارس سُرقت
+  if (type == 'card') {
+    final r = a['room'];
+    if (!s.heist || !cardStage(s.stage) || r is! int || s.cards.contains(r)) return s;
+    return ev(s.copyWith(cards: [...s.cards, r]), 'card');
+  }
+  // المحلّل يقطع التيار (مرّة كل kPowerCooldown ثانية)
+  if (type == 'power') {
+    if (!s.heist || !powerStage(s.stage)) return s;
+    if (s.power > 0 && ht < s.power + kPowerCooldown) return s;
+    return ev(s.copyWith(power: ht + kPowerSeconds), 'power');
+  }
   // وضع الخريطة: المحلّل يعطّل كاميرا (مرّة لكل كاميرا)
   if (type == 'hackcam') {
     final i = '${a['cam']}';
     if (!s.heist || s.camOff.containsKey(i)) return s;
-    final t = s.effectiveDuration - s.penalty - remainingSeconds(s, now);
-    return s.copyWith(camOff: {...s.camOff, i: t + kCamHackSeconds}, eventId: s.eventId + 1, lastEvent: GameEvent('hacked', room));
+    return s.copyWith(camOff: {...s.camOff, i: ht + kCamHackSeconds}, eventId: s.eventId + 1, lastEvent: GameEvent('hacked', room));
   }
 
   GameState out = s;

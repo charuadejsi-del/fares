@@ -188,7 +188,25 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with TickerProviderStat
         audio.fx(Sfx.alarm, HapticKind.heavy, volume: 0.7);
         _shake.forward(from: 0);
         _danger.forward(from: 0);
-        _showFlash('رآك الحارس! −${e.pen} ث · عودة لنقطة الحفظ', K.danger);
+        _showFlash((c.state?.escape ?? 0) > 0 ? 'رآك الحارس! −${e.pen} ث · واصل الركض!' : 'رآك الحارس! −${e.pen} ث · عودة لنقطة الحفظ', K.danger);
+        break;
+      case 'escape':
+        audio.fx(Sfx.alarm, HapticKind.heavy);
+        _shake.forward(from: 0);
+        _danger.forward(from: 0);
+        _showFlash('🚨 الخزنة مفتوحة — الإنذار! اهربوا إلى المخرج', K.danger);
+        break;
+      case 'caught':
+        audio.fx(Sfx.alarm, HapticKind.heavy);
+        _showFlash('⛓ أُغلقت الأبواب… قُبض عليكم', K.danger);
+        break;
+      case 'card':
+        audio.fx(Sfx.success, HapticKind.medium);
+        _showFlash('🪪 سُرقت بطاقة الحارس!', K.amber);
+        break;
+      case 'power':
+        audio.fx(Sfx.light, HapticKind.heavy);
+        _showFlash('⚡ انقطع التيار — الكاميرات متوقّفة', const Color(0xFF7FA7FF));
         break;
       case 'hacked':
         audio.fx(Sfx.success, HapticKind.light);
