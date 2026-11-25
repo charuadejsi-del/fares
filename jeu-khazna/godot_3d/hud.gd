@@ -7,6 +7,9 @@ signal switch_pressed
 signal tool_pressed(kind: String)
 signal mic_pressed
 signal crouch_pressed
+signal binoc_pressed
+signal dark_pressed
+signal sync_pressed
 signal next_pressed
 
 var player
@@ -39,6 +42,15 @@ var _interact: Button
 var _crouch: Button
 var _cam_meter: ProgressBar
 var _tip: Label
+var _binoc: Button
+var _dark: Button
+var _sync: Control
+var _sync_lbl: Label
+var _gauge_rows: Array = [] # [شريط، تسمية] لكل عدّاد
+var _valve_lbls: Array = []
+var _radio_freq: Label
+var _radio_led: ColorRect
+var _radio_code: Label
 var _switch: Button
 var _alert_mat: ShaderMaterial
 var _hit := 0.0
@@ -153,6 +165,26 @@ void fragment() {
 	_crouch.visible = false
 	_crouch.pressed.connect(func(): crouch_pressed.emit())
 	_root.add_child(_crouch)
+
+	# أزرار المحلّل في غرفة المراقبة ذات النافذة: منظار، وإطفاء الأضواء عند مرور الدورية
+	_binoc = _button("🔭 منظار", Color(0.1, 0.13, 0.16, 0.92), Color(0.85, 0.92, 1.0), 22)
+	_binoc.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_binoc.offset_left = -220
+	_binoc.offset_right = -36
+	_binoc.offset_top = -230
+	_binoc.offset_bottom = -150
+	_binoc.visible = false
+	_binoc.pressed.connect(func(): binoc_pressed.emit())
+	_root.add_child(_binoc)
+	_dark = _button("🌑 أطفئ الأضواء", Color(0.1, 0.13, 0.16, 0.92), Color(0.85, 0.92, 1.0), 22)
+	_dark.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_dark.offset_left = -440
+	_dark.offset_right = -236
+	_dark.offset_top = -230
+	_dark.offset_bottom = -150
+	_dark.visible = false
+	_dark.pressed.connect(func(): dark_pressed.emit())
+	_root.add_child(_dark)
 
 	# عدّاد الكاميرا: يمتلئ حين تراك كاميرا
 	_cam_meter = ProgressBar.new()
@@ -277,9 +309,13 @@ func _input(event) -> void:
 			for c2 in _tools.get_children():
 				if _tools.visible and (c2 as Control).get_global_rect().has_point(event.position):
 					return
-			for b in [_interact, _switch, _mic, _crouch]:
+			for b in [_interact, _switch, _mic, _crouch, _binoc, _dark]:
 				if b.visible and b.get_global_rect().has_point(event.position):
 					return
+			if _sync != null:
+				for c3 in _sync.find_children("*", "Button", true, false):
+					if (c3 as Button).get_global_rect().has_point(event.position):
+						return
 			if _vault != null:
 				for c in _vault.find_children("*", "Button", true, false):
 					if (c as Button).get_global_rect().has_point(event.position):
@@ -409,6 +445,213 @@ func hide_tool(k: String) -> void:
 	if _tool_btns.has(k):
 		(_tool_btns[k][0] as Button).queue_free()
 		_tool_btns.erase(k)
+
+
+# ───────── أدوات المحلّل: منظار وإطفاء الأضواء ─────────
+func set_analyst_buttons(visible_: bool, binoc_on: bool, dark_on: bool) -> void:
+	_binoc.visible = visible_ and _panel == null
+	_dark.visible = visible_ and _panel == null
+	_binoc.text = "🔭 أنزل المنظار" if binoc_on else "🔭 منظار"
+	_dark.text = "💡 أشعل الأضواء" if dark_on else "🌑 أطفئ الأضواء"
+
+
+# ───────── الصمّامات (العميل) ─────────
+func open_valves(values: Array, tags: Array, on_turn: Callable, on_confirm: Callable) -> void:
+	var v := _open("لوحة الصمّامات")
+	var hint := _label(19, Color(0.6, 0.64, 0.68))
+	hint.text = "كل صمّام يغيّر الضغط في أكثر من أنبوب. المحلّل يرى العدّادات: أدِر صمّاماً واحداً واسأله ماذا تغيّر. ضغط زائد = انفجار بخار وإنذار!"
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(hint)
+	_valve_lbls = []
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 14)
+	grid.add_theme_constant_override("v_separation", 8)
+	v.add_child(grid)
+	for i in values.size():
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 6)
+		var t := _label(22, tags[i][1])
+		t.text = str(tags[i][0])
+		t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(t)
+		var val := _label(44, Color.WHITE)
+		val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		val.text_direction = Control.TEXT_DIRECTION_LTR
+		col.add_child(val)
+		_valve_lbls.append(val)
+		var idx := i
+		for d in [1, -1]:
+			var b := _button("⟳ +" if d > 0 else "⟲ −", Color(0.2, 0.22, 0.25), Color.WHITE, 26)
+			b.custom_minimum_size = Vector2(118, 62)
+			var dd: int = d
+			b.pressed.connect(func(): on_turn.call(idx, dd))
+			col.add_child(b)
+		grid.add_child(col)
+	var ok := _button("✔ ثبّت الضغط", Color(0.2, 0.45, 0.28), Color.WHITE, 28)
+	ok.custom_minimum_size = Vector2(0, 70)
+	ok.pressed.connect(func(): on_confirm.call())
+	v.add_child(ok)
+	update_valves(values)
+
+
+func update_valves(values: Array) -> void:
+	for i in mini(values.size(), _valve_lbls.size()):
+		if is_instance_valid(_valve_lbls[i]):
+			(_valve_lbls[i] as Label).text = ["◯", "◔", "◑", "◕", "●"][clampi(int(values[i]), 0, 4)] + " " + str(values[i])
+
+
+# ───────── عدّادات الضغط (المحلّل) ─────────
+func open_gauges(names: Array) -> void:
+	var v := _open("مخطّط الضغط — مباشر")
+	var hint := _label(19, Color(0.6, 0.64, 0.68))
+	hint.text = "اجعل كل عدّاد داخل المنطقة الخضراء. الأحمر = خطر انفجار. لا تعرف أيّ صمّام يحرّك أيّ عدّاد: اطلب من العميل أن يجرّب صمّاماً واحداً."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(hint)
+	_gauge_rows = []
+	for n in names:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var l := _label(24, Color(0.85, 0.9, 0.95))
+		l.text = str(n)
+		l.custom_minimum_size = Vector2(130, 0)
+		row.add_child(l)
+		var bar := Control.new()
+		bar.custom_minimum_size = Vector2(380, 40)
+		row.add_child(bar)
+		var num := _label(26, Color.WHITE)
+		num.custom_minimum_size = Vector2(90, 0)
+		num.text_direction = Control.TEXT_DIRECTION_LTR
+		row.add_child(num)
+		v.add_child(row)
+		_gauge_rows.append([bar, num])
+
+
+## يُستدعى كل إطار حين تكون لوحة العدّادات مفتوحة: القيمة، والهدف، وحدّ الخطر.
+func update_gauges(values: Array, targets: Array, maxv: int) -> void:
+	for i in mini(values.size(), _gauge_rows.size()):
+		var bar: Control = _gauge_rows[i][0]
+		var num: Label = _gauge_rows[i][1]
+		if not is_instance_valid(bar):
+			return
+		for c in bar.get_children():
+			c.queue_free()
+		var w := bar.custom_minimum_size.x
+		var unit := w / float(maxv)
+		var bg := ColorRect.new()
+		bg.color = Color(0.12, 0.13, 0.15)
+		bg.size = Vector2(w, 40)
+		bar.add_child(bg)
+		var tgt: int = int(targets[i])
+		var green := ColorRect.new()
+		green.color = Color(0.2, 0.55, 0.3, 0.8)
+		green.position = Vector2((tgt - 0.5) * unit, 0)
+		green.size = Vector2(unit, 40)
+		bar.add_child(green)
+		var red := ColorRect.new()
+		red.color = Color(0.6, 0.12, 0.1, 0.8)
+		red.position = Vector2((tgt + 3.5) * unit, 0)
+		red.size = Vector2(maxf(0.0, w - (tgt + 3.5) * unit), 40)
+		bar.add_child(red)
+		var needle := ColorRect.new()
+		needle.color = Color(1, 0.85, 0.3)
+		needle.position = Vector2(clampf(int(values[i]) * unit, 0, w - 6), -4)
+		needle.size = Vector2(6, 48)
+		bar.add_child(needle)
+		num.text = "%d / %d" % [int(values[i]), tgt]
+		num.add_theme_color_override("font_color", OK if int(values[i]) == tgt else (DANGER if int(values[i]) > tgt + 2 else Color.WHITE))
+
+
+# ───────── جهاز اللاسلكي (العميل) ─────────
+func open_radio(freq: float, on_tune: Callable, on_submit: Callable) -> void:
+	var v := _open("جهاز اللاسلكي")
+	var hint := _label(19, Color(0.6, 0.64, 0.68))
+	hint.text = "اضبط التردّد الصحيح (المحلّل يقرؤه بالمنظار). ستسمع وترى إشارة مورس: قصير ● وطويل ▬. صِفها للمحلّل، فيترجمها إلى 4 أرقام."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(hint)
+	var top := HBoxContainer.new()
+	top.alignment = BoxContainer.ALIGNMENT_CENTER
+	top.add_theme_constant_override("separation", 18)
+	v.add_child(top)
+	_radio_led = ColorRect.new()
+	_radio_led.custom_minimum_size = Vector2(56, 56)
+	_radio_led.color = Color(0.15, 0.05, 0.05)
+	top.add_child(_radio_led)
+	_radio_freq = _label(52, AMBER)
+	_radio_freq.text_direction = Control.TEXT_DIRECTION_LTR
+	top.add_child(_radio_freq)
+	var tune := HBoxContainer.new()
+	tune.alignment = BoxContainer.ALIGNMENT_CENTER
+	tune.add_theme_constant_override("separation", 10)
+	v.add_child(tune)
+	for st in [[-1.0, "◀◀"], [-0.1, "◀"], [0.1, "▶"], [1.0, "▶▶"]]:
+		var b := _button(str(st[1]), Color(0.2, 0.22, 0.25), Color.WHITE, 30)
+		b.custom_minimum_size = Vector2(120, 66)
+		var dv: float = st[0]
+		b.pressed.connect(func(): on_tune.call(dv))
+		tune.add_child(b)
+	_radio_code = _label(40, OK)
+	_radio_code.text = "____"
+	_radio_code.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_radio_code.text_direction = Control.TEXT_DIRECTION_LTR
+	v.add_child(_radio_code)
+	var entered := [""]
+	var grid := GridContainer.new()
+	grid.columns = 6
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	v.add_child(grid)
+	for k in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "⌫", "✔"]:
+		var b := _button(k, Color(0.2, 0.45, 0.28) if k == "✔" else Color(0.2, 0.22, 0.25), Color.WHITE, 28)
+		b.custom_minimum_size = Vector2(84, 62)
+		b.pressed.connect(func():
+			if k == "⌫":
+				entered[0] = str(entered[0]).substr(0, maxi(0, str(entered[0]).length() - 1))
+			elif k == "✔":
+				on_submit.call(str(entered[0]))
+				entered[0] = ""
+			elif str(entered[0]).length() < 4:
+				entered[0] = str(entered[0]) + k
+			if is_instance_valid(_radio_code):
+				_radio_code.text = (str(entered[0]) + "____").substr(0, 4)
+		)
+		grid.add_child(b)
+	set_radio(freq, false)
+
+
+func set_radio(freq: float, led: bool) -> void:
+	if _radio_freq and is_instance_valid(_radio_freq):
+		_radio_freq.text = "%.1f MHz" % freq
+	if _radio_led and is_instance_valid(_radio_led):
+		_radio_led.color = Color(1.0, 0.25, 0.15) if led else Color(0.15, 0.05, 0.05)
+
+
+# ───────── القفل الزمني: الضغط معاً ─────────
+func sync_ui(on: bool, text := "") -> void:
+	if not on:
+		if _sync:
+			_sync.queue_free()
+			_sync = null
+		return
+	if _sync == null:
+		_sync = VBoxContainer.new()
+		_sync.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		_sync.offset_left = -300
+		_sync.offset_right = 300
+		_sync.offset_top = -330
+		_sync.offset_bottom = -150
+		_root.add_child(_sync)
+		_sync_lbl = _label(34, AMBER)
+		_sync_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_sync.add_child(_sync_lbl)
+		var b := _button("🔑 اضغط الآن!", Color(0.75, 0.15, 0.12), Color.WHITE, 34)
+		b.custom_minimum_size = Vector2(0, 96)
+		b.pressed.connect(func(): sync_pressed.emit())
+		_sync.add_child(b)
+	_sync_lbl.text = text
 
 
 ## قاطع الليزر: يُدخل العميل ترتيب ثلاثة ألوان يمليه المحلّل.

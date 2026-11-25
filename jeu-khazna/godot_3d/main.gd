@@ -5,8 +5,8 @@
 extends Node3D
 
 const WALL_H := 3.2
-const SPAWN := Vector3(2.0, 0.0, 6.0)
-const ARCHIVE := Vector3(100.0, 0.0, 0.0) # ركن غرفة المحلّل
+var SPAWN := Vector3(2.0, 0.0, 6.0)
+var ARCHIVE := Vector3(100.0, 0.0, 0.0) # ركن غرفة المحلّل
 const ESCAPE_SECONDS := 50.0
 const MISSION_SECONDS := 720.0
 const SYMBOLS := ["▲", "●", "■", "★", "◆", "✚"]
@@ -14,10 +14,33 @@ const WIRES := [
 	["أحمر", Color(0.85, 0.15, 0.15)], ["أزرق", Color(0.2, 0.42, 0.95)], ["أصفر", Color(0.95, 0.8, 0.15)],
 	["أخضر", Color(0.2, 0.72, 0.3)], ["أبيض", Color(0.92, 0.92, 0.92)],
 ]
-const VAULT_FRONT := Vector3(27.5, 0.0, 5.0) # دائرة الوقوف أمام الخزنة
+const VAULT_C := Vector3(27.5, 0.0, 5.0) # دائرة الوقوف أمام الخزنة (في إحداثيات الخزنة الأصلية)
+var VAULT_FRONT := VAULT_C
+# ───── بيانات الخريطة (قيم الميناء؛ كل خريطة تغيّرها في maps.gd) ─────
+var vault_xf := Transform3D.IDENTITY # مكان الخزنة وحجرة الكنز واتّجاهها
+var spawn_yaw := -PI / 2.0
+var analyst_spawn := Vector3(105.0, 0.0, 6.2)
+var analyst_yaw := 0.0
+var term_specs: Array = [[Vector3(7.4, 0, 1.3), 1.0, "لوحة الأرقام"], [Vector3(19.4, 0, 8.7), -1.0, "لوحة الأسلاك"]]
+var door_specs: Array = [[Vector3(8, 0, 4.5), 0.0, Vector3(1, 0, 0)], [Vector3(20, 0, 5), 0.0, Vector3(1, 0, 0)]]
+var checkpoints: Array = [Vector3(2, 0, 6), Vector3(9.2, 0, 4.5), Vector3(21.2, 0, 5)]
+var guard_routes: Array = [
+	[[Vector3(9.5, 0, 8.6), Vector3(18.5, 0, 8.6), Vector3(18.5, 0, 1.3), Vector3(9.5, 0, 1.3)], 1.25, Rect2(8.5, 0.5, 11.0, 9.0)],
+	[[Vector3(22, 0, 8.2), Vector3(27.2, 0, 8.2), Vector3(27.2, 0, 1.6), Vector3(22, 0, 1.6)], 1.0, Rect2(20.5, 0.5, 8.6, 9.0)],
+	[[Vector3(18.5, 0, 1.3), Vector3(18.5, 0, 8.6), Vector3(9.5, 0, 8.6), Vector3(9.5, 0, 1.3)], 1.1, Rect2(8.5, 0.5, 11.0, 9.0)],
+]
+var reach_rect := Rect2(0, 0, 30, 10)
+var feed_cams: Array = [
+	[Vector3(0.6, 2.9, 0.6), Vector3(5, 0.8, 5), "كاميرا 1 · المدخل"],
+	[Vector3(8.6, 2.9, 9.4), Vector3(15, 0.6, 3), "كاميرا 2 · المخزن"],
+	[Vector3(20.6, 2.9, 0.6), Vector3(28, 0.8, 6), "كاميرا 3 · الخزنة"],
+]
+var alarm_spots: Array = [Vector3(4, 3.0, 4), Vector3(14, 3.0, 5), Vector3(25, 3.0, 5)]
+var gate_types: Array = ["keypad", "wires"] # نوع لغز كل بوّابة
+var analyst_kind := "archive" # archive | cabin | hut
 const Levels := preload("res://levels.gd")
 const LCOLORS := [["أحمر", Color(0.85, 0.15, 0.12)], ["أزرق", Color(0.15, 0.4, 0.9)], ["أخضر", Color(0.2, 0.7, 0.3)], ["أصفر", Color(0.95, 0.8, 0.2)]]
-const KILL_POS := Vector3(8.3, 0.0, 1.2) # قاطع الليزر على جدار الغرفة الثانية
+var KILL_POS := Vector3(8.3, 0.0, 1.2) # قاطع الليزر
 const LASER_OFF := 20.0
 
 var role := "solo" # agent | analyst | solo
@@ -39,6 +62,28 @@ var _tut_moved := 0.0
 var _breath_t := 3.0
 var breath: CPUParticles3D
 var maps # بنّاء خرائط النهر والجبل (maps.gd)
+# ───── ألغاز النهر والجبل ─────
+const VALVE_TAGS := [["صمّام أحمر", Color(0.95, 0.35, 0.3)], ["صمّام أزرق", Color(0.4, 0.6, 1.0)], ["صمّام أصفر", Color(1.0, 0.85, 0.3)], ["صمّام أخضر", Color(0.4, 0.9, 0.5)]]
+const GAUGE_NAMES := ["أنبوب A", "أنبوب B", "أنبوب C", "أنبوب D"]
+const MORSE := {"0": "-----", "1": ".----", "2": "..---", "3": "...--", "4": "....-", "5": ".....", "6": "-....", "7": "--...", "8": "---..", "9": "----."}
+var valves := [0, 0, 0, 0]
+var radio_cur := 150.0
+var _radio_open := false
+var _gauges_open := false
+var _gauge_t := 0.0
+var _morse_units: Array = []
+var s_morse: AudioStreamPlayer
+var _morse_pb: AudioStreamGeneratorPlayback
+var _morse_phase := 0.0
+var analyst_targets: Array = [] # ما يضيء للمحلّل في كل مرحلة
+var analyst_dark := false
+var analyst_locked := 0.0
+var binoc := false
+var cabin_lights: Array = []
+var _patrol_warned := false
+var sync_go := -1.0
+var sync_a := -1.0
+var sync_b := -1.0
 var net
 var hud
 var menu
@@ -189,19 +234,19 @@ func _smoke() -> void:
 	q.exclude = [agent.get_rid()]
 	var solid := true
 	for pnt in [Vector3(29.62, 1.2, 5), Vector3(29.9, 1.5, 3.7), Vector3(29.9, 1.5, 6.3), Vector3(29.9, 0.4, 4.0), Vector3(29.9, 2.6, 6.0), Vector3(29.62, 0.5, 5.6)]:
-		q.transform = Transform3D(Basis(), pnt)
+		q.transform = Transform3D(Basis(), vault_xf * pnt)
 		if space.intersect_shape(q, 1).is_empty():
 			solid = false
 			print("SMOKE hole at ", pnt)
-	q.transform = Transform3D(Basis(), Vector3(27.5, 1.2, 5))
+	q.transform = Transform3D(Basis(), vault_xf * Vector3(27.5, 1.2, 5))
 	var front_free := space.intersect_shape(q, 1).is_empty()
-	q.transform = Transform3D(Basis(), Vector3(28.45, 1.2, 5))
+	q.transform = Transform3D(Basis(), vault_xf * Vector3(28.45, 1.2, 5))
 	var barrier := not space.intersect_shape(q, 1).is_empty()
 	if solid and front_free and barrier:
 		print("SMOKE vault solid ok")
-	_submit_code(str(puzzle.code))
-	_cut_wire(str(WIRES[int(puzzle.answer)][0]))
-	print("SMOKE stage after puzzles: ", stage)
+	await _smoke_gate(0)
+	await _smoke_gate(1)
+	print("SMOKE stage after puzzles: ", stage, " gates=", gate_types)
 	print("SMOKE guard: ", guards[0].debug)
 	await get_tree().create_timer(1.0).timeout
 	var pose_s := str(guards[0].pose_report())
@@ -216,7 +261,7 @@ func _smoke() -> void:
 	if r.spawn and r.t0 and r.t1 and r.vault:
 		print("SMOKE reach ok")
 	_on_switch()
-	analyst.set_meta("looking", drawer)
+	analyst.set_meta("looking", analyst_targets[0])
 	_analyst_interact()
 	_analyst_interact()
 	print("SMOKE symbols: ", _check_symbols(puzzle.symbols.duplicate()))
@@ -256,12 +301,58 @@ func _smoke() -> void:
 	for n in c:
 		dial_number = int(n)
 		_dial_confirm()
+	if sync_go > 0.0:
+		# القفل الزمني: نضغط في النافذة
+		while htime < sync_go + 0.2:
+			await get_tree().process_frame
+		_sync_press()
+		while sync_go > 0.0:
+			await get_tree().process_frame
+		print("SMOKE sync lock ok")
 	await get_tree().create_timer(3.5).timeout
 	print("SMOKE final stage: ", stage, " escape: ", escape_left, " door=", rad_to_deg(vault_pivot.rotation.y))
 	get_tree().quit()
 
 
 ## يتحقّق أن العميل يستطيع المشي من البداية إلى كل جهاز وإلى الخزنة (بعد فتح الأبواب).
+## حلّ بوّابة في الاختبار الآلي (ويجرّب الخطأ أولاً حيث يفيد).
+func _smoke_gate(i: int) -> void:
+	match str(gate_types[i]):
+		"keypad":
+			_submit_code(str(puzzle.code))
+		"wires":
+			_cut_wire(str(WIRES[int(puzzle.answer)][0]))
+		"valves":
+			# ضغط زائد يُفجّر البخار ويعيد الصمّامات إلى الصفر
+			var burst := false
+			for k in 5:
+				for v in 4:
+					_turn_valve(v, 1)
+					if int(valves[0]) == 0 and int(valves[1]) == 0 and int(valves[2]) == 0 and int(valves[3]) == 0:
+						burst = true
+			hud.close_panel()
+			_confirm_valves() # خطأ: يجب ألّا يفتح
+			var blocked := stage == i
+			for k in 4:
+				valves[k] = int(puzzle.vsol[k])
+			_confirm_valves()
+			print("SMOKE valves burst=", burst, " blocked=", blocked, " stage=", stage)
+			if stage == i + 1 and blocked:
+				print("SMOKE valves ok")
+		"radio":
+			radio_cur = 150.0
+			_radio_open = true
+			hud.open_radio(radio_cur, _tune_radio, _submit_morse)
+			_tune_radio(float(puzzle.freq) - 150.0)
+			await get_tree().create_timer(0.4).timeout
+			var tuned := _radio_tuned()
+			_build_morse()
+			_submit_morse(str(puzzle.morse))
+			print("SMOKE radio tuned=", tuned, " units=", _morse_units.size(), " stage=", stage)
+			if stage == i + 1 and tuned and _morse_units.size() > 20:
+				print("SMOKE radio ok")
+
+
 ## اختبارات العوائق: الليزر يلمس الواقف ويُعبَر (انحناء أو توقيت)، الكاميرا ترى ثم تعمى عند التجميد، والقاطع يطفئ الليزر.
 func _smoke_hazards() -> void:
 	var ok_l := true
@@ -282,7 +373,7 @@ func _smoke_hazards() -> void:
 	if not lasers.is_empty() and ok_l:
 		print("SMOKE laser ok")
 	if not cctvs.is_empty():
-		var c = cctvs[0]
+		var c = cctvs[cctvs.size() - 1]
 		c.update(0.0, 0.0)
 		await get_tree().physics_frame
 		var fwd: Vector3 = -(c._head.global_transform.basis.z)
@@ -322,9 +413,9 @@ func _reach_test() -> Dictionary:
 	q.exclude = [agent.get_rid()]
 	var step := 0.25
 	var free := {}
-	for ix in int(30.0 / step):
-		for iz in int(10.0 / step):
-			var p := Vector3(ix * step + step / 2.0, 0, iz * step + step / 2.0)
+	for ix in int(reach_rect.size.x / step):
+		for iz in int(reach_rect.size.y / step):
+			var p := Vector3(reach_rect.position.x + ix * step + step / 2.0, 0, reach_rect.position.y + iz * step + step / 2.0)
 			var ok := true
 			for y in [0.45, 1.25]:
 				q.transform = Transform3D(Basis(), p + Vector3(0, y, 0))
@@ -333,7 +424,7 @@ func _reach_test() -> Dictionary:
 					break
 			if ok:
 				free[Vector2i(ix, iz)] = true
-	var start := Vector2i(int(SPAWN.x / step), int(SPAWN.z / step))
+	var start := Vector2i(int((SPAWN.x - reach_rect.position.x) / step), int((SPAWN.z - reach_rect.position.y) / step))
 	var seen := {start: true}
 	var queue := [start]
 	var qi := 0
@@ -348,7 +439,7 @@ func _reach_test() -> Dictionary:
 	var near := func(target: Vector3, rad: float) -> bool:
 		for k in seen:
 			var cell: Vector2i = k
-			if Vector2(cell.x * step + step / 2.0 - target.x, cell.y * step + step / 2.0 - target.z).length() < rad:
+			if Vector2(reach_rect.position.x + cell.x * step + step / 2.0 - target.x, reach_rect.position.y + cell.y * step + step / 2.0 - target.z).length() < rad:
 				return true
 		return false
 	return {"spawn": free.has(start), "t0": near.call(terminals[0].pos, 1.5), "t1": near.call(terminals[1].pos, 1.5), "vault": near.call(VAULT_FRONT, 1.2), "cells": seen.size()}
@@ -407,6 +498,20 @@ func _on_msg(m: Dictionary) -> void:
 				var e = gl[i]
 				if typeof(e) == TYPE_ARRAY and e.size() >= 4:
 					guards[i].apply_remote(Vector3(float(e[0]), 0, float(e[1])), float(e[2]), str(e[3]))
+	elif t == "valves" and role == "analyst":
+		var vv = m.get("v", [])
+		if typeof(vv) == TYPE_ARRAY and vv.size() == 4:
+			valves = vv
+	elif t == "sync" and role == "analyst":
+		sync_go = float(m.get("go", -1.0))
+		sync_b = -1.0
+	elif t == "press" and role == "agent":
+		sync_b = float(m.get("h", -1.0))
+	elif t == "spotted" and role == "agent" and ready_world and agent:
+		hud.flash("🚨 الدورية كشفت المحلّل! حارس قادم نحوك", Color(0.9, 0.28, 0.3))
+		var gs = _nearest_guard(agent.global_position)
+		if gs and not gs.is_chasing():
+			gs.chase(agent)
 	elif t == "tool" and role == "agent" and ready_world:
 		_do_tool(str(m.get("k", "")))
 	elif t == "prog" and role == "analyst" and ready_world:
@@ -432,6 +537,7 @@ func _start(r: String, s: int) -> void:
 	lv = Levels.get_level(level_i)
 	mission_left = float(lv.mission)
 	maps = preload("res://maps.gd").new(self)
+	maps.data(str(lv.get("theme", "port")))
 	puzzle = _make_puzzle(s)
 	if menu:
 		menu.queue_free()
@@ -452,6 +558,9 @@ func _start(r: String, s: int) -> void:
 	hud.interact_pressed.connect(_on_interact)
 	hud.tool_pressed.connect(_on_tool)
 	hud.switch_pressed.connect(_on_switch)
+	hud.binoc_pressed.connect(_toggle_binoc)
+	hud.dark_pressed.connect(_toggle_dark)
+	hud.sync_pressed.connect(_sync_press)
 	hud.crouch_pressed.connect(func():
 		if agent and active == agent and not vault_mode:
 			agent.set_crouch(not agent.crouch))
@@ -462,9 +571,9 @@ func _start(r: String, s: int) -> void:
 		hud.hide_tool("freeze")
 	hud.set_switch_visible(role == "solo")
 	if role != "analyst":
-		agent = _make_player(SPAWN, -PI / 2.0)
+		agent = _make_player(SPAWN, spawn_yaw)
 	if role != "agent":
-		analyst = _make_player(ARCHIVE + Vector3(5, 0, 6.2), 0.0)
+		analyst = _make_player(analyst_spawn, analyst_yaw)
 		avatar = _make_avatar()
 		_build_feeds()
 	_set_active(analyst if role == "analyst" else agent)
@@ -611,7 +720,49 @@ func _make_puzzle(s: int) -> Dictionary:
 	var laser := []
 	for i in 3:
 		laser.append(str(LCOLORS[cl[i]][0]))
-	return {"code": code, "serial": serial, "table": table, "answer": answer, "wires": wires, "symbols": syms, "combo": combo, "laser": laser}
+	# الصمّامات: كل صمّام يحرّك عدّة أنابيب؛ الحلّ موجود دائماً (نولّده ثم نحسب الأهداف منه)
+	var r3 := RandomNumberGenerator.new()
+	r3.seed = s + 31337
+	var mat := []
+	for j in 4:
+		var row := []
+		for i in 4:
+			row.append(r3.randi_range(1, 2) if i == j else (r3.randi_range(0, 2) if r3.randf() < 0.55 else 0))
+		mat.append(row)
+	var sol := []
+	for i in 4:
+		sol.append(r3.randi_range(1, 4))
+	var base := []
+	var target := []
+	for j in 4:
+		base.append(r3.randi_range(1, 3))
+		var t := int(base[j])
+		for i in 4:
+			t += int(mat[j][i]) * int(sol[i])
+		target.append(t)
+	var freq := snappedf(140.0 + r3.randi_range(0, 199) * 0.1, 0.1)
+	var morse := ""
+	for i in 4:
+		morse += str(r3.randi_range(0, 9))
+	return {"code": code, "serial": serial, "table": table, "answer": answer, "wires": wires, "symbols": syms, "combo": combo, "laser": laser,
+		"vmat": mat, "vsol": sol, "vbase": base, "vtarget": target, "freq": freq, "morse": morse}
+
+
+func _gauges() -> Array:
+	var out := []
+	for j in 4:
+		var g := int(puzzle.vbase[j])
+		for i in 4:
+			g += int(puzzle.vmat[j][i]) * int(valves[i])
+		out.append(g)
+	return out
+
+
+func _gauge_max() -> int:
+	var m := 0
+	for t in puzzle.vtarget:
+		m = maxi(m, int(t))
+	return m + 8
 
 
 # ───────── المواد والجوّ ─────────
@@ -874,7 +1025,7 @@ func _sounds() -> void:
 	s_door = _snd3d("door", Vector3(8, 1.5, 4.5), 2.0)
 	s_creep = _snd3d("door", Vector3.ZERO, -2.0)
 	s_music = _snd("chase", true, -40.0)
-	s_vault = _snd3d("vault_open", Vector3(29.6, 1.5, 5), 4.0)
+	s_vault = _snd3d("vault_open", vault_xf * Vector3(29.6, 1.5, 5), 4.0)
 	s_beep = _snd("cam_beep", false, -4.0)
 
 
@@ -944,6 +1095,241 @@ func _apply_low_quality() -> void:
 	for f in feeds:
 		(f[0] as SubViewport).size = Vector2i(200, 112)
 	print("QUALITY: low")
+
+
+# ═════════ ألغاز البوّابات الجديدة ═════════
+func _turn_valve(i: int, d: int) -> void:
+	valves[i] = clampi(int(valves[i]) + d, 0, 4)
+	Input.vibrate_handheld(10)
+	if s_click.stream:
+		s_click.play()
+	hud.update_valves(valves)
+	_send_valves()
+	var g := _gauges()
+	for j in 4:
+		if int(g[j]) > int(puzzle.vtarget[j]) + 3:
+			_valve_burst(j)
+			return
+
+
+func _send_valves() -> void:
+	if net and role == "agent":
+		net.send({"t": "valves", "v": valves})
+
+
+func _valve_burst(j: int) -> void:
+	hud.close_panel()
+	hud.flash("💥 انفجر البخار في %s! الحارس سمع — اختبئ" % GAUGE_NAMES[j], Color(0.9, 0.28, 0.3))
+	hud.hit()
+	shake = 0.6
+	Input.vibrate_handheld(400)
+	if s_beep.stream:
+		s_beep.play()
+	if s_clunk.stream:
+		s_clunk.play()
+	for i in 4:
+		valves[i] = 0
+	_send_valves()
+	var g = _nearest_guard(agent.global_position)
+	if g and not g.is_chasing():
+		g.chase(agent)
+
+
+func _confirm_valves() -> void:
+	var g := _gauges()
+	var off := 0
+	for j in 4:
+		if int(g[j]) != int(puzzle.vtarget[j]):
+			off += 1
+	if off == 0:
+		hud.close_panel()
+		hud.flash("✔ الضغط متوازن — الباب الهيدروليكي يُفتح", Color(0.42, 0.85, 0.58))
+		_advance()
+	else:
+		mission_left = maxf(10.0, mission_left - 10.0)
+		hud.flash("✖ %d أنابيب غير متوازنة (−10 ث)" % off, Color(0.9, 0.28, 0.3))
+		hud.hit()
+
+
+func _tune_radio(dv: float) -> void:
+	radio_cur = clampf(snappedf(radio_cur + dv, 0.1), 140.0, 160.0)
+	if s_click.stream:
+		s_click.play()
+	hud.set_radio(radio_cur, false)
+
+
+func _radio_tuned() -> bool:
+	return absf(radio_cur - float(puzzle.freq)) < 0.05
+
+
+func _submit_morse(v: String) -> void:
+	if lockout > 0.0:
+		hud.flash("الجهاز مقفل… انتظر", Color(0.9, 0.28, 0.3))
+		return
+	if v == str(puzzle.morse):
+		hud.close_panel()
+		_radio_open = false
+		hud.flash("✔ الرمز صحيح — باب القبو يُفتح", Color(0.42, 0.85, 0.58))
+		_advance()
+	else:
+		lockout = 5.0
+		mission_left = maxf(10.0, mission_left - 15.0)
+		hud.flash("✖ رمز خاطئ — الجهاز مقفل 5 ث (−15 ث)", Color(0.9, 0.28, 0.3))
+		hud.hit()
+
+
+## إشارة مورس: سلسلة وحدات زمنية (1 = صوت). قصير = وحدة، طويل = 3، بين الإشارات وحدة، بين الأرقام 3، وفي النهاية 8.
+func _build_morse() -> void:
+	_morse_units = []
+	for ch in str(puzzle.morse):
+		var pat: String = MORSE[ch]
+		for k in pat.length():
+			var n := 1 if pat[k] == "." else 3
+			for u in n:
+				_morse_units.append(1)
+			_morse_units.append(0)
+		_morse_units.append(0)
+		_morse_units.append(0)
+	for u in 6:
+		_morse_units.append(0)
+
+
+func _morse_update() -> void:
+	if not (_radio_open and hud.panel_open()):
+		_radio_open = false
+		if s_morse and s_morse.playing:
+			s_morse.stop()
+		return
+	var tuned := _radio_tuned()
+	var on := false
+	if tuned:
+		if _morse_units.is_empty():
+			_build_morse()
+		var u := int(Time.get_ticks_msec() / 140.0) % _morse_units.size()
+		on = int(_morse_units[u]) == 1
+	hud.set_radio(radio_cur, on)
+	if s_morse == null:
+		s_morse = AudioStreamPlayer.new()
+		var gen := AudioStreamGenerator.new()
+		gen.mix_rate = 22050.0
+		gen.buffer_length = 0.15
+		s_morse.stream = gen
+		s_morse.volume_db = -6.0
+		add_child(s_morse)
+	if not s_morse.playing:
+		s_morse.play()
+		_morse_pb = s_morse.get_stream_playback()
+	if _morse_pb == null:
+		return
+	# نغمة 700 هرتز عند الإشارة، وتشويش راديو يخفّ كلّما اقترب التردّد
+	var noise := clampf(absf(radio_cur - float(puzzle.freq)) / 3.0, 0.08, 0.5) if not tuned else 0.04
+	var frames := _morse_pb.get_frames_available()
+	for f in frames:
+		_morse_phase = fmod(_morse_phase + 700.0 / 22050.0, 1.0)
+		var v := (sin(_morse_phase * TAU) * 0.45 if on else 0.0) + randf_range(-noise, noise)
+		_morse_pb.push_frame(Vector2(v, v))
+
+
+# ═════════ المحلّل: منظار، أضواء، ودورية ═════════
+func _toggle_binoc() -> void:
+	binoc = not binoc
+	var tw := create_tween()
+	tw.tween_property(analyst.cam, "fov", 13.0 if binoc else 72.0, 0.35).set_trans(Tween.TRANS_CUBIC)
+	analyst.sens = 0.22 if binoc else 1.0
+
+
+func _toggle_dark() -> void:
+	analyst_dark = not analyst_dark
+	_apply_dark()
+	hud.flash("🌑 أطفأت الأضواء — لن تراك الدورية، لكنك لا ترى الشاشات" if analyst_dark else "💡 الأضواء تعمل", Color(0.6, 0.75, 0.95))
+
+
+func _apply_dark() -> void:
+	for l in cabin_lights:
+		(l as Light3D).visible = not analyst_dark
+	for mm in feed_mats:
+		(mm as ShaderMaterial).set_shader_parameter("glitch", 1.0 if analyst_dark else 0.0)
+	if analyst_dark:
+		hud.close_panel()
+
+
+func _patrol_update(delta: float) -> void:
+	if not maps.has_method("patrol_update"):
+		return
+	var st: Dictionary = maps.patrol_update(htime)
+	analyst_locked = maxf(0.0, analyst_locked - delta)
+	if role == "agent" or analyst == null:
+		return
+	if st.get("warn", false) and not _patrol_warned and active == analyst:
+		_patrol_warned = true
+		hud.flash("🚤 الدورية تقترب من نافذتك — أطفئ الأضواء 🌑", Color(1.0, 0.63, 0.23))
+		Input.vibrate_handheld(150)
+	if not st.get("warn", false) and not st.get("lit", false):
+		_patrol_warned = false
+	if st.get("lit", false) and not analyst_dark and analyst_locked <= 0.0 and role == "analyst":
+		analyst_locked = 20.0
+		hud.close_panel()
+		hud.flash("🚨 كشّاف الدورية رآك! أدواتك معطّلة 20 ث، والحارس انتبه", Color(0.9, 0.28, 0.3))
+		hud.hit()
+		if net:
+			net.send({"t": "spotted"})
+
+
+# ═════════ القفل الزمني: الضغط معاً ═════════
+func _start_sync() -> void:
+	sync_go = htime + 4.0
+	sync_a = -1.0
+	sync_b = -1.0
+	if net and role == "agent":
+		net.send({"t": "sync", "go": sync_go})
+	hud.flash("⏱ قفل زمني! اضغطا الزرّ معاً عند «الآن»", Color(1.0, 0.63, 0.23))
+
+
+func _sync_press() -> void:
+	if sync_go < 0.0:
+		return
+	if role == "analyst":
+		sync_b = htime
+		if net:
+			net.send({"t": "press", "h": htime})
+	else:
+		sync_a = htime
+		if role == "solo":
+			sync_b = htime
+	Input.vibrate_handheld(30)
+
+
+func _sync_update() -> void:
+	if sync_go < 0.0:
+		hud.sync_ui(false)
+		return
+	var rem := sync_go - htime
+	var inwin := func(x: float) -> bool: return x >= sync_go - 0.15 and x <= sync_go + 1.3
+	if rem > 0.0:
+		hud.sync_ui(true, "استعدّا… %d" % int(ceil(rem)))
+	elif rem > -1.3:
+		hud.sync_ui(true, "🔴 الآن!")
+	elif role != "analyst":
+		var ok: bool = inwin.call(sync_a) and inwin.call(sync_b)
+		sync_go = -1.0
+		hud.sync_ui(false)
+		if ok:
+			hud.flash("✔ ضغطتما معاً — الأقفال تتحرّك…", Color(0.42, 0.85, 0.58))
+			if net:
+				net.send({"t": "sync", "go": -1.0})
+			_spin_wheel()
+		else:
+			hud.flash("✖ لم تضغطا في نفس اللحظة — إعادة بعد 4 ث", Color(0.9, 0.28, 0.3))
+			hud.hit()
+			shake = 0.3
+			for g in guards:
+				if not g.is_chasing():
+					g.set_alert(true, agent.global_position)
+			get_tree().create_timer(4.0).timeout.connect(func():
+				if result == "" and stage == 2:
+					_start_sync())
+	else:
+		hud.sync_ui(true, "…")
 
 
 # ───────── جوّ المرحلة ─────────
@@ -1327,6 +1713,20 @@ func _map_port() -> void:
 				lb.rotation_degrees.y = 180
 
 
+## يبني شيئاً في إحداثيات الخزنة الأصلية ثم ينقله مع الخزنة (جدارها في كل خريطة).
+func _in_vault_frame(f: Callable) -> void:
+	var before := get_child_count()
+	f.call()
+	var root := Node3D.new()
+	var moved := []
+	for i in range(before, get_child_count()):
+		moved.append(get_child(i))
+	add_child(root)
+	for n in moved:
+		n.reparent(root, false)
+	root.transform = vault_xf
+
+
 func _probe(c: Vector3, size: Vector3) -> void:
 	var rp := ReflectionProbe.new()
 	rp.position = c
@@ -1346,6 +1746,8 @@ func _vault_wall(mat: Material) -> void:
 
 ## ما تشترك فيه كل المراحل: حجرة الكنز، البابان، الجهازان، الخزنة، والسهم.
 func _build_core() -> void:
+	# الخزنة وحجرة الكنز تُبنى في إحداثياتها الأصلية ثم تُنقل كلّها إلى مكانها في الخريطة
+	var before := get_child_count()
 	_wall_x(3.4, 30, 33.3, mat_steel)
 	_wall_x(6.6, 30, 33.3, mat_steel)
 	_wall_z(33.3, 3.4, 6.6, mat_steel)
@@ -1362,11 +1764,24 @@ func _build_core() -> void:
 	treasure.omni_range = 4.0
 	add_child(treasure)
 
-	doors.append(_door(Vector3(8, 0, 4.5)))
-	doors.append(_door(Vector3(20, 0, 5)))
-	terminals.append(_terminal(Vector3(7.4, 0, 1.3), "لوحة الأرقام"))
-	terminals.append(_terminal(Vector3(19.4, 0, 8.7), "لوحة الأسلاك"))
 	_build_vault()
+	var vroot := Node3D.new()
+	vroot.name = "VaultRoot"
+	var moved := []
+	for i in range(before, get_child_count()):
+		moved.append(get_child(i))
+	add_child(vroot)
+	for n in moved:
+		n.reparent(vroot, false)
+	vroot.transform = vault_xf
+	VAULT_FRONT = vault_xf * VAULT_C
+	for ds in door_specs:
+		var d := _door(ds[0])
+		(d.body as Node3D).rotation.y = float(ds[1])
+		d["dir"] = ds[2]
+		doors.append(d)
+	for ts in term_specs:
+		terminals.append(_terminal(ts[0], str(ts[2]), float(ts[1])))
 
 	marker = MeshInstance3D.new()
 	var pm := PrismMesh.new()
@@ -1413,16 +1828,17 @@ func _door(base: Vector3) -> Dictionary:
 	return {"body": body, "stripe": stripe, "open": false}
 
 
-func _terminal(pos: Vector3, title: String) -> Dictionary:
+func _terminal(pos: Vector3, title: String, facing := 0.0) -> Dictionary:
 	var root := _box(pos + Vector3(0, 0.75, 0), Vector3(0.6, 1.5, 0.45), mat_dark)
 	var screen := MeshInstance3D.new()
 	var qm := QuadMesh.new()
 	qm.size = Vector2(0.44, 0.3)
 	screen.mesh = qm
 	screen.material_override = _glow(Color(1.0, 0.63, 0.23), 3.0)
-	var face := Vector3(0, 0.35, 0.231) if pos.z < 5 else Vector3(0, 0.35, -0.231)
+	var front := facing if facing != 0.0 else (1.0 if pos.z < 5 else -1.0)
+	var face := Vector3(0, 0.35, 0.231 * front)
 	screen.position = face
-	if pos.z >= 5:
+	if front < 0.0:
 		screen.rotation_degrees.y = 180
 	root.add_child(screen)
 	var l := OmniLight3D.new()
@@ -1671,7 +2087,7 @@ func _build_vault() -> void:
 	rt.outer_radius = 0.72
 	stand.mesh = rt
 	stand.material_override = _glow(Color(1.0, 0.63, 0.23), 2.5)
-	stand.position = VAULT_FRONT + Vector3(0, 0.02, 0)
+	stand.position = VAULT_C + Vector3(0, 0.02, 0)
 	add_child(stand)
 	vault_ring = stand
 	var light := SpotLight3D.new()
@@ -1685,21 +2101,13 @@ func _build_vault() -> void:
 
 
 func _spawn_guards() -> void:
-	var g = preload("res://guard.gd").new()
-	add_child(g)
-	g.setup([Vector3(9.5, 0, 8.6), Vector3(18.5, 0, 8.6), Vector3(18.5, 0, 1.3), Vector3(9.5, 0, 1.3)], 1.25, Rect2(8.5, 0.5, 11.0, 9.0))
-	guards.append(g)
-	if lv.id != "tutorial":
-		var g2 = preload("res://guard.gd").new()
-		add_child(g2)
-		g2.setup([Vector3(22, 0, 8.2), Vector3(27.2, 0, 8.2), Vector3(27.2, 0, 1.6), Vector3(22, 0, 1.6)], 1.0, Rect2(20.5, 0.5, 8.6, 9.0))
-		guards.append(g2)
-	if lv.get("extra_guard", false):
-		# حارس ثالث يدور في الغرفة الثانية بالاتّجاه المعاكس
-		var g3 = preload("res://guard.gd").new()
-		add_child(g3)
-		g3.setup([Vector3(18.5, 0, 1.3), Vector3(18.5, 0, 8.6), Vector3(9.5, 0, 8.6), Vector3(9.5, 0, 1.3)], 1.1, Rect2(8.5, 0.5, 11.0, 9.0))
-		guards.append(g3)
+	var n := 1 if lv.id == "tutorial" else (3 if lv.get("extra_guard", false) else 2)
+	for k in mini(n, guard_routes.size()):
+		var r: Array = guard_routes[k]
+		var g = preload("res://guard.gd").new()
+		add_child(g)
+		g.setup(r[0], float(r[1]), r[2])
+		guards.append(g)
 	for gg in guards:
 		gg.speed *= float(lv.guard_speed)
 		gg.sight = float(lv.guard_sight)
@@ -1740,7 +2148,21 @@ func _build_archive() -> void:
 	_box(o + Vector3(5, -0.1, 4), Vector3(10.6, 0.2, 8.6), mat_wood)
 	_box(o + Vector3(5, WALL_H + 0.1, 4), Vector3(10.6, 0.2, 8.6), mat_ceil)
 	_wall_x(o.z + 0, o.x, o.x + 10, mat_wall_dark)
-	_wall_x(o.z + 8, o.x, o.x + 10, mat_wall_dark)
+	if analyst_kind == "archive":
+		_wall_x(o.z + 8, o.x, o.x + 10, mat_wall_dark)
+	else:
+		# غرفة مراقبة بنافذة عريضة تطلّ على الهدف (المنظار 🔭 يقرّب الرؤية)
+		_box(Vector3(o.x + 5, 0.5, o.z + 8), Vector3(10.3, 1.0, 0.3), mat_wall_dark)
+		_box(Vector3(o.x + 5, WALL_H - 0.3, o.z + 8), Vector3(10.3, 0.6, 0.3), mat_wall_dark)
+		_box(Vector3(o.x + 5, 1.6, o.z + 8), Vector3(10.0, 1.2, 0.05), null, true).visible = false
+		var glass := StandardMaterial3D.new()
+		glass.albedo_color = Color(0.5, 0.6, 0.7, 0.12)
+		glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		glass.metallic = 0.6
+		glass.roughness = 0.05
+		_box(Vector3(o.x + 5, 1.6, o.z + 8), Vector3(10.0, 1.2, 0.02), glass, false)
+		for k in 5:
+			_box(Vector3(o.x + 0.1 + k * 2.45, 1.6, o.z + 8), Vector3(0.12, 1.25, 0.14), mat_steel, false)
 	_wall_z(o.x + 0, o.z, o.z + 8, mat_wall_dark)
 	_wall_z(o.x + 10, o.z, o.z + 8, mat_wall_dark)
 	# المكتب أمام جدار الشاشات
@@ -1761,14 +2183,37 @@ func _build_archive() -> void:
 	_label3d("> ARCHIVE_", o + Vector3(5, 1.08, 1.06), 28, Color(0.75, 1.0, 0.8))
 	# دليل الأسلاك (كتاب أحمر)
 	var book := _box(o + Vector3(3.2, 0.83, 1.3), Vector3(0.38, 0.07, 0.5), _glow(Color(0.45, 0.06, 0.05), 0.4))
-	book.set_meta("kind", "book")
+	var morse_book: bool = gate_types.has("radio")
+	book.set_meta("kind", "morse" if morse_book else "book")
 	book_node = book
-	var bl := _label3d("دليل الأسلاك", o + Vector3(3.2, 0.875, 1.3), 24, Color(1.0, 0.9, 0.8))
+	var bl := _label3d("دليل مورس" if morse_book else "دليل الأسلاك", o + Vector3(3.2, 0.875, 1.3), 24, Color(1.0, 0.9, 0.8))
 	bl.rotation_degrees.x = -90
 	# خزانة الأدراج: الدرج العلوي يُفتح وفيه ورقة
 	_box(o + Vector3(9.4, 0.6, 4.5), Vector3(0.7, 1.2, 0.9), mat_crate)
 	drawer = _box(o + Vector3(9.1, 1.0, 4.5), Vector3(0.12, 0.3, 0.8), mat_steel)
-	drawer.set_meta("kind", "drawer")
+	if gate_types.has("keypad"):
+		drawer.set_meta("kind", "drawer")
+	var gauge_node: Node3D = null
+	if gate_types.has("valves"):
+		gauge_node = _box(o + Vector3(7.3, 1.08, 0.95), Vector3(0.75, 0.5, 0.08), mat_dark)
+		gauge_node.set_meta("kind", "gauges")
+		var gs := MeshInstance3D.new()
+		var gq := QuadMesh.new()
+		gq.size = Vector2(0.68, 0.42)
+		gs.mesh = gq
+		gs.material_override = _glow(Color(0.25, 0.7, 0.95), 1.4)
+		gs.position = Vector3(0, 0, 0.045)
+		gauge_node.add_child(gs)
+		_label3d("ضغط المضخّات", o + Vector3(7.3, 1.42, 1.0), 24, Color(0.7, 0.9, 1.0))
+	for gt in gate_types:
+		match str(gt):
+			"keypad":
+				analyst_targets.append(drawer)
+			"wires", "radio":
+				analyst_targets.append(book_node)
+			"valves":
+				analyst_targets.append(gauge_node)
+	analyst_targets.append(pc_node)
 	var sheet := MeshInstance3D.new()
 	var sq := QuadMesh.new()
 	sq.size = Vector2(0.5, 0.35)
@@ -1812,13 +2257,15 @@ func _build_archive() -> void:
 	desk.spot_range = 3.0
 	desk.spot_angle = 45
 	desk.shadow_enabled = true
-	_lamp(o + Vector3(5, WALL_H, 5), Color(0.75, 0.82, 1.0), 0.7, true)
+	cabin_lights.append(desk)
+	cabin_lights.append(_lamp(o + Vector3(5, WALL_H, 5), Color(0.75, 0.82, 1.0), 0.7, true))
 	var red := OmniLight3D.new()
 	red.position = o + Vector3(9.5, 2.7, 7.5)
 	red.light_color = Color(1.0, 0.1, 0.08)
 	red.light_energy = 1.0
 	red.omni_range = 4.0
 	add_child(red)
+	cabin_lights.append(red)
 	_dust(o + Vector3(5, 1.5, 4), Vector3(5, 1.4, 4))
 
 
@@ -1844,11 +2291,7 @@ void fragment() {
 	ALBEDO = vec3(g * 0.7, g * 1.0, g * 0.75);
 }
 """
-	var cams := [
-		[Vector3(0.6, 2.9, 0.6), Vector3(5, 0.8, 5), "كاميرا 1 · المدخل"],
-		[Vector3(8.6, 2.9, 9.4), Vector3(15, 0.6, 3), "كاميرا 2 · المخزن"],
-		[Vector3(20.6, 2.9, 0.6), Vector3(28, 0.8, 6), "كاميرا 3 · الخزنة"],
-	]
+	var cams := feed_cams
 	for i in cams.size():
 		var sv := SubViewport.new()
 		sv.size = Vector2i(320, 180)
@@ -1880,6 +2323,7 @@ void fragment() {
 		glow.light_energy = 0.5
 		glow.omni_range = 2.5
 		add_child(glow)
+		cabin_lights.append(glow)
 
 
 # ───────── اللعب ─────────
@@ -1952,6 +2396,19 @@ func _process(delta: float) -> void:
 		hud.set_timer(mission_left, mission_left < 60.0)
 
 	_hint_update(t)
+	_morse_update()
+	_sync_update()
+	_patrol_update(delta)
+	if _gauges_open:
+		if hud.panel_open():
+			_gauge_t -= delta
+			if _gauge_t <= 0.0:
+				_gauge_t = 0.2
+				hud.update_gauges(_gauges(), puzzle.vtarget, _gauge_max())
+		else:
+			_gauges_open = false
+	var win_room := analyst_kind != "archive"
+	hud.set_analyst_buttons(win_room and analyst != null and active == analyst and result == "", binoc, analyst_dark)
 	if lv.id == "tutorial":
 		_tutorial_update(delta)
 	hud.set_crouch(agent != null and active == agent and not vault_mode and result == "", agent != null and agent.crouch)
@@ -1961,7 +2418,7 @@ func _process(delta: float) -> void:
 	_fear_update(delta, t)
 	for k in tool_cd:
 		tool_cd[k] = maxf(0.0, float(tool_cd[k]) - delta)
-	hud.set_tools(analyst != null and active == analyst and result == "", tool_cd)
+	hud.set_tools(analyst != null and active == analyst and result == "" and not analyst_dark and analyst_locked <= 0.0, tool_cd)
 	_music_update(delta)
 	if agent:
 		var cam: Camera3D = agent.cam
@@ -2050,8 +2507,9 @@ func _close_shutter(i: int) -> void:
 	tw.tween_property(d.body, "position:y", WALL_H / 2.0, 2.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	await tw.finished
 	# العميل بقي خلف الباب المغلق ← حُبس
-	var door_x: float = (d.body as Node3D).global_position.x
-	if agent and role != "analyst" and result == "" and agent.global_position.x > door_x + 0.2:
+	var dpos: Vector3 = (d.body as Node3D).global_position
+	var inward: Vector3 = d.get("dir", Vector3(1, 0, 0))
+	if agent and role != "analyst" and result == "" and (agent.global_position - dpos).dot(inward) > 0.2:
 		hud.flash("⛓ حُبستَ خلف الباب!", Color(0.9, 0.28, 0.3))
 		_end(false)
 
@@ -2106,12 +2564,8 @@ func _do_tool(kind: String) -> void:
 
 func _hint_update(t: float) -> void:
 	var target: Node3D = null
-	if stage == 0:
-		target = drawer
-	elif stage == 1:
-		target = book_node
-	elif stage == 2:
-		target = pc_node
+	if stage < analyst_targets.size():
+		target = analyst_targets[stage]
 	var on: bool = target != null and analyst != null and active == analyst and not hud.panel_open()
 	hint_light.visible = on
 	hint_arrow.visible = on
@@ -2256,7 +2710,7 @@ func _analyst_logic() -> void:
 		if col is Node and (col as Node).has_meta("kind"):
 			obj = col
 	var kind := str((obj as Node).get_meta("kind")) if obj else ""
-	var labels := {"drawer": "اقرأ الورقة" if drawer_open else "افتح الدرج", "book": "اقرأ دليل الأسلاك", "computer": "شغّل الحاسوب", "monitor": "كبّر الشاشة", "laserdoc": "اقرأ سجلّ الليزر"}
+	var labels := {"drawer": "اقرأ الورقة" if drawer_open else "افتح الدرج", "book": "اقرأ دليل الأسلاك", "computer": "شغّل الحاسوب", "monitor": "كبّر الشاشة", "laserdoc": "اقرأ سجلّ الليزر", "gauges": "افتح مخطّط الضغط", "morse": "اقرأ دليل مورس"}
 	hud.show_interact(str(labels.get(kind, "")))
 	analyst.set_meta("looking", obj)
 
@@ -2271,22 +2725,43 @@ func _on_interact() -> void:
 		return
 	if stage >= 3:
 		return
-	if stage == 0:
-		hud.open_keypad("لوحة الأرقام — الرمز في درج مكتب المحلّل", _submit_code)
-	elif stage == 1:
-		var wl := []
-		for w in puzzle.wires:
-			wl.append(WIRES[w])
-		hud.open_wires(str(puzzle.serial), wl, _cut_wire)
-	elif stage == 2:
+	if stage == 2:
 		_enter_vault()
+		return
+	match str(gate_types[stage]):
+		"keypad":
+			hud.open_keypad("لوحة الأرقام — الرمز في درج مكتب المحلّل", _submit_code)
+		"wires":
+			var wl := []
+			for w in puzzle.wires:
+				wl.append(WIRES[w])
+			hud.open_wires(str(puzzle.serial), wl, _cut_wire)
+		"valves":
+			hud.open_valves(valves, VALVE_TAGS, _turn_valve, _confirm_valves)
+		"radio":
+			_radio_open = true
+			hud.open_radio(radio_cur, _tune_radio, _submit_morse)
 
 
 func _analyst_interact() -> void:
 	var obj = analyst.get_meta("looking", null)
 	if obj == null:
 		return
-	var kind := str(obj.get_meta("kind"))
+	var kind := str(obj.get_meta("kind", ""))
+	if analyst_dark or analyst_locked > 0.0:
+		hud.flash("🌑 الأضواء مطفأة — لا ترى شيئاً" if analyst_dark else "🚨 رأتك الدورية — انتظر %d ث" % int(ceil(analyst_locked)), Color(0.9, 0.28, 0.3))
+		return
+	if kind == "gauges":
+		hud.open_gauges(GAUGE_NAMES)
+		_gauges_open = true
+		_gauge_t = 0.0
+		return
+	if kind == "morse":
+		var lines := []
+		for d in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]:
+			lines.append(d + "   " + str(MORSE[d]).replace(".", "●").replace("-", "▬"))
+		hud.open_text("دليل مورس — الأرقام", "● قصير    ▬ طويل\n\n" + "\n".join(lines) + "\n\nالتردّد مكتوب على جدار المضخّات المقابل: انظر من النافذة بالمنظار 🔭")
+		return
 	if kind == "drawer":
 		if not drawer_open:
 			drawer_open = true
@@ -2380,14 +2855,21 @@ func _update_objective() -> void:
 		return
 	var agent_side: bool = active == agent
 	var txt := ""
+	var OBJ := {
+		"keypad": ["اذهب إلى الجهاز (السهم البرتقالي) — رمزه المكوّن من 4 أرقام في درج المحلّل، اطلبه منه", "افتح الدرج المضيء، اقرأ الرمز وأمْلِه على العميل"],
+		"wires": ["افتح لوحة الأسلاك، اقرأ الرقم التسلسلي لشريكك، واقطع السلك الذي يقوله", "اسأل العميل عن آخر رقم في الرقم التسلسلي، وابحث عنه في الدليل الأحمر المضيء"],
+		"valves": ["في بيت المضخّات: أدِر الصمّامات الأربعة حتى يقول المحلّل إن كل العدّادات خضراء، ثم ثبّت الضغط", "افتح «مخطّط الضغط» المضيء: اطلب من العميل أن يدير صمّاماً واحداً، وراقب أيّ عدّاد يتحرّك"],
+		"radio": ["في غرفة اللاسلكي: اضبط التردّد الذي يقوله المحلّل، صِف له إشارات مورس، وأدخل الأرقام", "انظر من النافذة بالمنظار 🔭 إلى جدار المضخّات واقرأ التردّد، ثم ترجم إشارات العميل بدليل مورس"],
+	}
+	if stage < 2 and stage < gate_types.size():
+		var pair: Array = OBJ.get(str(gate_types[stage]), ["", ""])
+		txt = ("١. " if stage == 0 else "٢. ") + str(pair[0] if agent_side else pair[1])
 	match stage:
-		0:
-			txt = "١. اذهب إلى الجهاز (السهم البرتقالي) — رمزه المكوّن من 4 أرقام في درج المحلّل، اطلبه منه" if agent_side else "١. افتح الدرج المضيء (على يمينك)، اقرأ الرمز وأمْلِه على العميل"
-		1:
-			txt = "٢. افتح لوحة الأسلاك، اقرأ الرقم التسلسلي لشريكك، واقطع السلك الذي يقوله" if agent_side else "٢. اسأل العميل عن آخر رقم في الرقم التسلسلي، وابحث عنه في الدليل الأحمر المضيء"
 		2:
 			txt = "٣. صِف لشريكك الرموز الثلاثة على باب الخزنة، ثم أدِر القرص على الأرقام التي يقولها" if agent_side else "٣. أدخل في الحاسوب المضيء الرموز التي يصفها العميل، وأمْلِه التركيبة"
-		_:
+			if lv.get("sync", false):
+				txt += " — ثم قفل زمني: اضغطا معاً!"
+		3, 4, 5:
 			txt = "🚨 اهرب إلى نقطة البداية!" if agent_side else "🚨 وجّه العميل إلى المخرج عبر الكاميرات!"
 	if lv.get("killswitch", false) and stage == 1:
 		txt += "\n🔴 الليزر يسدّ الطريق: انحنِ وانتظر الفراغ، أو استعمل القاطع (الترتيب في «سجلّ الليزر» عند المحلّل)" if agent_side else "\n🔴 العميل يحتاج ترتيب قاطع الليزر: اقرأه من «سجلّ الليزر» على الجدار"
@@ -2405,6 +2887,7 @@ func _enter_vault() -> void:
 	_cam_saved = agent.cam.global_transform
 	var target := Transform3D.IDENTITY.looking_at(Vector3(1, 0, 0), Vector3.UP)
 	target.origin = Vector3(28.6, 1.72, 5.0)
+	target = vault_xf * target
 	var tw := create_tween()
 	tw.tween_property(agent.cam, "global_transform", target, 0.6).set_trans(Tween.TRANS_CUBIC)
 	hud.vault_ui(true, _dial_step, _dial_confirm, _exit_vault)
@@ -2451,8 +2934,11 @@ func _dial_confirm() -> void:
 		shake = 0.15
 		hud.vault_state(dial_number, dial_entered.size())
 		if dial_entered.size() == 3:
-			hud.flash("✔ الأقفال تتحرّك…", Color(0.42, 0.85, 0.58))
-			_spin_wheel()
+			if lv.get("sync", false):
+				_start_sync()
+			else:
+				hud.flash("✔ الأقفال تتحرّك…", Color(0.42, 0.85, 0.58))
+				_spin_wheel()
 	else:
 		# خطأ: ارتجاج وضوء أحمر، ونعيد من الرقم الأول دون الخروج
 		hud.flash("✖ رقم خاطئ — أعد من الرقم الأول", Color(0.9, 0.28, 0.3))
@@ -2524,7 +3010,7 @@ func _alarm() -> void:
 		g.alarm = true
 		if agent and g.sees(agent, get_world_3d().direct_space_state):
 			g.chase(agent)
-	for c in [Vector3(4, WALL_H - 0.2, 4), Vector3(14, WALL_H - 0.2, 5), Vector3(25, WALL_H - 0.2, 5), ARCHIVE + Vector3(5, WALL_H - 0.2, 4)]:
+	for c in alarm_spots + [ARCHIVE + Vector3(5, WALL_H - 0.2, 4)]:
 		for k in 2:
 			var s := SpotLight3D.new()
 			s.position = c
@@ -2556,7 +3042,7 @@ func _spotted() -> void:
 	if stage >= 3:
 		escape_left = maxf(1.0, escape_left - 8.0)
 		return
-	agent.global_position = SPAWN if stage == 0 else (Vector3(9.2, 0, 4.5) if stage == 1 else Vector3(21.2, 0, 5))
+	agent.global_position = checkpoints[clampi(stage, 0, checkpoints.size() - 1)]
 
 
 func _end(won: bool) -> void:

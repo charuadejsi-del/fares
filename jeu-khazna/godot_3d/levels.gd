@@ -25,10 +25,10 @@ const LIST := [
 		"killswitch": false,
 	},
 	{
-		"id": "river", "name": "النهر", "sub": "رصيف ليلي تحت المطر، غرفة مضخّات، وقبو غارق — اهرب بالقارب",
-		"theme": "river", "mission": 720.0, "guard_speed": 1.1, "guard_sight": 1.0, "extra_guard": false,
-		"lasers": [[15.6, 0.2, 9.8, "sweep", [0.5, 1.2, 1.9], 0.0]],
-		"cams": [[Vector3(14.0, 2.85, 0.25), 180.0, 55.0, 7.0], [Vector3(25.0, 2.85, 9.75), 0.0, 50.0, 6.0]],
+		"id": "river", "name": "النهر", "sub": "رصيف ليلي، بيت مضخّات، مستودع حاويات، وقبو غارق — المحلّل على الضفّة المقابلة",
+		"theme": "river", "mission": 900.0, "guard_speed": 1.05, "guard_sight": 1.0, "extra_guard": true, "sync": true,
+		"lasers": [[12.0, 10.2, 14.9, "sweep", [0.5, 1.2, 1.9], 0.0]],
+		"cams": [[Vector3(12.0, 2.85, 21.75), 0.0, 55.0, 7.0], [Vector3(25.0, 2.85, 24.75), 0.0, 50.0, 6.0]],
 		"killswitch": true,
 	},
 	{

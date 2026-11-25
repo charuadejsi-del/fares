@@ -229,77 +229,276 @@ func _lightning(moon: DirectionalLight3D) -> void:
 	)
 
 
+# ═════════ بيانات الخرائط ═════════
+## تُستدعى قبل البناء: تضبط نقاط اللعب، الحرّاس، الكاميرات، الألغاز، وغرفة المحلّل لكل خريطة.
+func data(theme: String) -> void:
+	match theme:
+		"river":
+			m.SPAWN = Vector3(-7, 0, 4)
+			m.spawn_yaw = -PI / 2.0
+			m.vault_xf = Transform3D(Basis(), Vector3(0, 0, 15))
+			m.term_specs = [[Vector3(10.6, 0, -2.1), 1.0, "لوحة الصمّامات"], [Vector3(18.8, 0, 10.5), 1.0, "جهاز اللاسلكي"]]
+			m.door_specs = [[Vector3(8, 0, 10), PI / 2.0, Vector3(0, 0, 1)], [Vector3(20, 0, 20), 0.0, Vector3(1, 0, 0)]]
+			m.checkpoints = [Vector3(-7, 0, 4), Vector3(8, 0, 8.4), Vector3(18.6, 0, 20.0)]
+			m.guard_routes = [
+				[[Vector3(3.6, 0, 0.2), Vector3(11.0, 0, 0.2), Vector3(11.0, 0, 4.8), Vector3(3.6, 0, 4.8)], 1.15, Rect2(2.4, -2.8, 9.4, 8.6)],
+				[[Vector3(5.0, 0, 19.8), Vector3(18.5, 0, 19.8), Vector3(18.5, 0, 14.6), Vector3(18.5, 0, 19.8)], 1.2, Rect2(4.2, 14.2, 15.6, 7.6)],
+				[[Vector3(22, 0, 23.2), Vector3(27.2, 0, 23.2), Vector3(27.2, 0, 16.6), Vector3(22, 0, 16.6)], 1.0, Rect2(20.5, 15.5, 8.6, 9.0)],
+			]
+			m.reach_rect = Rect2(-10, -3, 40, 28)
+			m.feed_cams = [
+				[Vector3(-1.5, 3.4, -2.6), Vector3(5, 0, 6), "كاميرا 1 · الرصيف"],
+				[Vector3(4.6, 4.6, 21.4), Vector3(14, 0.5, 13), "كاميرا 2 · المستودع"],
+				[Vector3(20.6, 2.9, 15.6), Vector3(28, 0.8, 21), "كاميرا 3 · القبو"],
+			]
+			m.alarm_spots = [Vector3(7, 3.0, 1.5), Vector3(12, 4.6, 16), Vector3(25, 3.0, 20)]
+			m.gate_types = ["valves", "radio"]
+			m.analyst_kind = "cabin"
+			m.ARCHIVE = Vector3(-24, 0, -14)
+			m.analyst_spawn = m.ARCHIVE + Vector3(5, 0, 6.2)
+			m.KILL_POS = Vector3(4.3, 0, 12.0)
+
+
 # ═════════ النهر ═════════
+# رصيف ليلي → بيت المضخّات (لغز الصمّامات) → المستودع (حاويات، ممرّان: ليزر أو كاميرا) → غرفة اللاسلكي (مورس)
+# → القبو الغارق (الخزنة + قفل زمني) → الهروب بالقارب. المحلّل في غرفة مراقبة على الضفّة المقابلة،
+# يرى المكان من النافذة، يقرأ التردّد بالمنظار، ويطفئ أضواءه حين يمرّ كشّاف قارب الدورية.
+var _patrol: Node3D
+var _patrol_lamp: SpotLight3D
+var _patrol_search: Node3D
+
+
 func river() -> void:
 	var planks := _mat("brown_planks_04", m.mat_wood, 2.0, Color(0.55, 0.5, 0.46), 0.3)
 	var iron := _mat("corrugated_iron_02", m.mat_steel, 2.5, Color(0.5, 0.55, 0.58), 0.45, 0.55)
 	var factory := _mat("factory_wall", m.mat_wall, 3.0, Color(0.62, 0.64, 0.66))
 	var basement := _mat("rock_embedded_concrete_wall", m.mat_wall_dark, 2.5, Color(0.5, 0.52, 0.5))
 	var rust := _mat("rusty_metal_03", m.mat_rust, 1.5, Color(0.8, 0.75, 0.7))
-	var wet = m.mat_floor.duplicate() as StandardMaterial3D
+	var box_mat := _mat("container_side", m.mat_rust, 3.0, Color(0.75, 0.4, 0.3), 0.5, 0.5)
+	var box_mat2 := _mat("container_side", m.mat_rust, 3.0, Color(0.3, 0.45, 0.6), 0.5, 0.5)
+	var wet = m.mat_floor.duplicate()
 	wet.roughness = 0.18
 	wet.albedo_color = wet.albedo_color.darkened(0.3)
-	m.mat_wall = factory # الأبواب والجدران الداخلية
+	m.mat_wall = factory
 
 	_sky(Color(0.01, 0.015, 0.025), Color(0.05, 0.07, 0.09), Color(0.01, 0.01, 0.012))
 	var moon := _moon(Color(0.55, 0.65, 0.85), 0.35, -38.0, -60.0)
 	_lightning(moon)
+	_water(Vector3(0, -0.75, 5), Vector2(110, 110), Color(0.008, 0.02, 0.025), Color(0.06, 0.09, 0.1), 0.07, 0.96, 80)
 
-	# ── الرصيف (المنطقة أ، في الخارج) ──
-	m._box(Vector3(2.5, -0.1, 5), Vector3(11.0, 0.2, 16.0), planks) # x -3..8 · z -3..13
-	_water(Vector3(-8, -0.75, 5), Vector2(70, 70), Color(0.008, 0.02, 0.025), Color(0.06, 0.09, 0.1), 0.07, 0.96, 70)
-	# أعمدة الرصيف في الماء
-	for z in [-3.0, 0.0, 3.0, 6.0, 9.0, 13.0]:
-		_cyl(Vector3(-3.0, -0.9, z), 0.16, 1.8, rust, false)
-	for x in [-1.0, 2.0, 5.0]:
-		for z in [-3.0, 13.0]:
-			_cyl(Vector3(x, -0.9, z), 0.16, 1.8, rust, false)
-	# درابزين وحوافّ غير مرئية: لا سقوط في النهر
+	# ── الرصيف ──
+	m._box(Vector3(-4, -0.1, 3.5), Vector3(12, 0.2, 13), planks)
+	m._box(Vector3(11, -0.1, 8), Vector3(18, 0.2, 4), planks)
+	m._box(Vector3(16, -0.1, 1.5), Vector3(8, 0.2, 9), planks)
+	for e in [[Vector3(-10, 1, 3.5), Vector3(0.2, 2, 13)], [Vector3(5, 1, -3.1), Vector3(30, 2, 0.2)], [Vector3(20.1, 1, 3.5), Vector3(0.2, 2, 13)], [Vector3(-3, 1, 10.1), Vector3(14, 2, 0.2)]]:
+		_invisible(e[0], e[1])
 	var rail := _plain(Color(0.35, 0.18, 0.1), 0.6, 0.6)
-	for z in range(-3, 14, 2):
-		_cyl(Vector3(-2.9, 0.55, z), 0.04, 1.1, rail, false)
-	for x in range(-3, 8, 2):
-		_cyl(Vector3(x, 0.55, -2.9), 0.04, 1.1, rail, false)
-		_cyl(Vector3(x, 0.55, 12.9), 0.04, 1.1, rail, false)
-	m._box(Vector3(-2.9, 1.05, 5), Vector3(0.05, 0.05, 16), rail, false)
-	m._box(Vector3(2.5, 1.05, -2.9), Vector3(11, 0.05, 0.05), rail, false)
-	m._box(Vector3(2.5, 1.05, 12.9), Vector3(11, 0.05, 0.05), rail, false)
-	_invisible(Vector3(-3.0, 1.0, 5), Vector3(0.2, 2.0, 16))
-	_invisible(Vector3(2.5, 1.0, -3.0), Vector3(11, 2.0, 0.2))
-	_invisible(Vector3(2.5, 1.0, 13.0), Vector3(11, 2.0, 0.2))
-	# طوق نجاة وحبال وأوتاد ربط
+	for z in range(-3, 11, 2):
+		_cyl(Vector3(-9.9, 0.55, z), 0.04, 1.1, rail, false)
+		_cyl(Vector3(19.9, 0.55, z), 0.04, 1.1, rail, false)
+	for x in range(-10, 21, 2):
+		_cyl(Vector3(x, 0.55, -2.95), 0.04, 1.1, rail, false)
+	for x in range(-10, 4, 2):
+		_cyl(Vector3(x, 0.55, 9.95), 0.04, 1.1, rail, false)
+	m._box(Vector3(-9.9, 1.05, 3.5), Vector3(0.05, 0.05, 13), rail, false)
+	m._box(Vector3(19.9, 1.05, 3.5), Vector3(0.05, 0.05, 13), rail, false)
+	m._box(Vector3(5, 1.05, -2.95), Vector3(30, 0.05, 0.05), rail, false)
+	m._box(Vector3(-3, 1.05, 9.95), Vector3(14, 0.05, 0.05), rail, false)
+	for x in [-10.0, -6.0, -2.0, 2.0, 8.0, 14.0, 20.0]:
+		_cyl(Vector3(x, -0.9, -3.0), 0.16, 1.8, rust, false)
+	for p in [Vector3(-4.0, 0, 9.0), Vector3(-3.1, 0, 9.0), Vector3(-3.55, 0.9, 9.0), Vector3(0.5, 0, -2.0), Vector3(14.5, 0, -1.5), Vector3(15.4, 0, -1.5), Vector3(17.5, 0, 3.5), Vector3(-6.5, 0, -1.8)]:
+		m._box(p + Vector3(0, 0.45, 0), Vector3(0.9, 0.9, 0.9), m.mat_crate)
+	m._prop("Barrel_01", Vector3(-1.0, 0, 8.6))
+	m._prop("barrel_03", Vector3(16.8, 0, 7.6), 30)
+	m._prop("Barrel_01", Vector3(13.0, 0, 9.0), 70)
 	var white := _plain(Color(0.9, 0.9, 0.88), 0.6)
 	var orange := _plain(Color(0.95, 0.35, 0.08), 0.6)
-	for k in 2:
+	for k in 3:
 		var buoy := MeshInstance3D.new()
 		var tm := TorusMesh.new()
 		tm.inner_radius = 0.22
 		tm.outer_radius = 0.34
 		buoy.mesh = tm
-		buoy.material_override = orange if k == 0 else white
-		buoy.rotation_degrees = Vector3(90, 0, 0)
-		buoy.position = Vector3(-2.82, 0.75, 2.0 + k * 7.0)
-		buoy.rotation_degrees.z = 90
+		buoy.material_override = orange if k % 2 == 0 else white
+		buoy.rotation_degrees = Vector3(0, 0, 90)
+		buoy.position = Vector3(-9.82, 0.75, -1.0 + k * 4.5)
 		m.add_child(buoy)
-	for z in [1.0, 10.5]:
-		_cyl(Vector3(-2.4, 0.25, z), 0.14, 0.5, rust, true)
-		var rope := MeshInstance3D.new()
-		var rm := TorusMesh.new()
-		rm.inner_radius = 0.12
-		rm.outer_radius = 0.2
-		rope.mesh = rm
-		rope.material_override = _plain(Color(0.5, 0.42, 0.3), 0.95)
-		rope.position = Vector3(-1.6, 0.06, z)
-		m.add_child(rope)
-	# صناديق شحن وبراميل على الرصيف (مخابئ)
-	for p in [Vector3(4.6, 0, 9.8), Vector3(5.5, 0, 9.8), Vector3(5.05, 0.9, 9.8), Vector3(0.2, 0, 0.4), Vector3(4.4, 0, -1.6)]:
-		m._box(p + Vector3(0, 0.45, 0), Vector3(0.9, 0.9, 0.9), m.mat_crate)
-	m._prop("Barrel_01", Vector3(1.0, 0, 11.6))
-	m._prop("barrel_03", Vector3(1.8, 0, 11.9), 30)
-	m._prop("Barrel_01", Vector3(6.6, 0, -2.0), 70)
-	# القارب: مخرج الهروب، يتمايل على الماء بجانب نقطة البداية
+	_boat(Vector3(-12.2, -0.55, 4.0), planks, white)
+	var bl = m._label3d("🚤 الهروب", Vector3(-9.6, 2.2, 4.0), 44, Color(0.4, 1.0, 0.5))
+	bl.rotation_degrees.y = 90
+	_lamp_post(Vector3(-9.2, 0, 0.5), Color(1.0, 0.62, 0.25), 2.4)
+	_lamp_post(Vector3(-9.2, 0, 8.0), Color(1.0, 0.62, 0.25), 2.0, true)
+	_lamp_post(Vector3(13.0, 0, 6.6), Color(1.0, 0.62, 0.25), 1.8)
+	_lamp_post(Vector3(19.2, 0, -2.2), Color(1.0, 0.62, 0.25), 1.6, true)
+	_weather(Vector3(4.0, 9.0, 3.5), Vector3(15.0, 0.2, 7.5), false, 560)
+
+	# ── بيت المضخّات x 2..12 · z −3..6 (مدخله مفتوح من الغرب) ──
+	m._box(Vector3(7, -0.1, 1.5), Vector3(10, 0.2, 9), wet)
+	m._box(Vector3(7, 3.35, 1.5), Vector3(10.3, 0.2, 9.3), m.mat_ceil)
+	m._box(Vector3(7, 1.6, -3), Vector3(10.3, 3.2, 0.3), iron)
+	m._box(Vector3(7, 1.6, 6), Vector3(10.3, 3.2, 0.3), iron)
+	m._box(Vector3(12, 1.6, 1.5), Vector3(0.3, 3.2, 9.3), iron)
+	m._box(Vector3(2, 1.6, -1.0), Vector3(0.3, 3.2, 4.0), iron)
+	m._box(Vector3(2, 1.6, 4.5), Vector3(0.3, 3.2, 3.0), iron)
+	m._box(Vector3(2, 2.9, 2.0), Vector3(0.3, 0.6, 2.0), iron)
+	# التردّد مكتوب صغيراً على جدار المضخّات المطلّ على غرفة المحلّل (لا يُقرأ إلا بالمنظار)
+	var fl = m._label3d("📻 تردّد الليلة\n%.1f" % float(m.puzzle.freq), Vector3(1.82, 2.2, -1.6), 20, Color(1.0, 0.95, 0.8))
+	fl.rotation_degrees.y = -90
+	var fb := OmniLight3D.new()
+	fb.position = Vector3(1.0, 2.6, -1.6)
+	fb.light_color = Color(1.0, 0.8, 0.5)
+	fb.light_energy = 0.8
+	fb.omni_range = 2.5
+	m.add_child(fb)
+	var tank := _plain(Color(0.24, 0.32, 0.3), 0.45, 0.6)
+	var pipe := _plain(Color(0.3, 0.12, 0.08), 0.5, 0.7)
+	_cyl(Vector3(7.3, 1.4, 2.5), 0.85, 2.8, tank, true)
+	_cyl(Vector3(7.3, 2.9, 2.5), 0.7, 0.12, rust, false)
+	# مشعب الصمّامات الأربعة بألوانها فوق اللوحة
+	var cols := [Color(0.95, 0.3, 0.25), Color(0.35, 0.55, 1.0), Color(1.0, 0.85, 0.25), Color(0.35, 0.9, 0.45)]
+	_cyl(Vector3(10.6, 2.35, -2.6), 0.14, 3.6, pipe, false, Vector3(0, 0, 90))
+	for k in 4:
+		var wheel := MeshInstance3D.new()
+		var wm := TorusMesh.new()
+		wm.inner_radius = 0.12
+		wm.outer_radius = 0.17
+		wheel.mesh = wm
+		wheel.material_override = m._glow(cols[k], 0.9)
+		wheel.rotation_degrees = Vector3(90, 0, 0)
+		wheel.position = Vector3(9.4 + k * 0.8, 2.35, -2.35)
+		m.add_child(wheel)
+		_cyl(Vector3(9.4 + k * 0.8, 2.9, -2.6), 0.08, 1.0, pipe, false)
+	for z in [-2.6, 5.6]:
+		_cyl(Vector3(7.0, 3.0, z), 0.13, 10.0, pipe, false, Vector3(0, 0, 90))
+	m._lamp(Vector3(5.0, 3.25, 1.5), Color(0.8, 0.95, 0.9), 1.0, true)
+	m._lamp(Vector3(10.0, 3.25, 1.5), Color(0.8, 0.95, 0.9), 0.9)
+	m._drips(Vector3(4.0, 3.2, 4.5))
+
+	# ── المستودع x 4..20 · z 10..22 ──
+	m._box(Vector3(12, -0.1, 16), Vector3(16, 0.2, 12), wet)
+	m._box(Vector3(12, 5.1, 16), Vector3(16.3, 0.2, 12.3), m.mat_ceil)
+	m._box(Vector3(5.5, 2.5, 10), Vector3(3.3, 5.0, 0.3), iron)
+	m._box(Vector3(14.5, 2.5, 10), Vector3(11.3, 5.0, 0.3), iron)
+	m._box(Vector3(8, 4.1, 10), Vector3(2.0, 1.8, 0.3), iron)
+	m._box(Vector3(4, 2.5, 16), Vector3(0.3, 5.0, 12.3), iron)
+	m._box(Vector3(12, 2.5, 22), Vector3(16.3, 5.0, 0.3), iron)
+	m._box(Vector3(20, 2.5, 14.5), Vector3(0.3, 5.0, 9.3), iron)
+	m._box(Vector3(20, 2.5, 23.5), Vector3(0.3, 5.0, 5.3), iron)
+	m._box(Vector3(20, 4.1, 20), Vector3(0.3, 1.8, 2.0), iron)
+	var ws = m._label3d("مستودع ٧", Vector3(8, 4.3, 9.82), 54, Color(0.9, 0.85, 0.7))
+	ws.rotation_degrees.y = 180
+	# صفّ حاويات يقسم المستودع إلى ممرّين
+	m._box(Vector3(8.7, 1.3, 16.2), Vector3(5.4, 2.6, 2.4), box_mat)
+	m._box(Vector3(14.2, 1.3, 16.2), Vector3(5.6, 2.6, 2.4), box_mat2)
+	m._box(Vector3(9.5, 3.9, 16.2), Vector3(5.4, 2.4, 2.4), box_mat2, false)
+	m._box(Vector3(5.2, 0.45, 21.2), Vector3(0.9, 0.9, 0.9), m.mat_crate)
+	m._box(Vector3(9.0, 0.45, 21.3), Vector3(0.9, 0.9, 0.9), m.mat_crate)
+	# غرفة اللاسلكي x 16..20 · z 10..14 (بابها من الشمال)
+	m._box(Vector3(16, 1.6, 12), Vector3(0.3, 3.2, 4.3), factory)
+	m._box(Vector3(16.65, 1.6, 14), Vector3(1.3, 3.2, 0.3), factory)
+	m._box(Vector3(19.35, 1.6, 14), Vector3(1.3, 3.2, 0.3), factory)
+	m._box(Vector3(18, 2.9, 14), Vector3(1.4, 0.6, 0.3), factory)
+	m._box(Vector3(18, 3.3, 12), Vector3(4.3, 0.2, 4.3), m.mat_ceil)
+	var rl = m._label3d("📻 اللاسلكي", Vector3(18, 2.45, 14.17), 30, Color(0.6, 1.0, 0.7))
+	var rlight := OmniLight3D.new()
+	rlight.position = Vector3(18.0, 2.6, 12.0)
+	rlight.light_color = Color(0.4, 1.0, 0.55)
+	rlight.light_energy = 0.9
+	rlight.omni_range = 4.0
+	m.add_child(rlight)
+	m.flickers.append(rlight)
+	m._lamp(Vector3(8.0, 5.0, 12.5), Color(0.85, 0.9, 0.8), 1.1)
+	m._lamp(Vector3(12.5, 5.0, 19.6), Color(0.85, 0.9, 0.8), 1.0, true)
+	m._lamp(Vector3(5.0, 5.0, 19.6), Color(0.85, 0.9, 0.8), 0.7)
+	var red := OmniLight3D.new()
+	red.position = Vector3(19.6, 3.6, 18.0)
+	red.light_color = Color(1.0, 0.12, 0.08)
+	red.light_energy = 1.4
+	red.omni_range = 5.0
+	m.add_child(red)
+	m._drips(Vector3(11.0, 5.0, 12.5))
+
+	# ── القبو الغارق x 20..30 · z 15..25 ──
+	m._box(Vector3(25, -0.1, 20), Vector3(10.3, 0.2, 10.6), wet)
+	m._box(Vector3(25, 3.3, 20), Vector3(10.3, 0.2, 10.6), m.mat_ceil)
+	m._box(Vector3(25, 1.6, 15), Vector3(10.3, 3.2, 0.3), basement)
+	m._box(Vector3(25, 1.6, 25), Vector3(10.3, 3.2, 0.3), basement)
+	m._in_vault_frame(func(): m._vault_wall(basement))
+	_water(Vector3(25, 0.13, 20), Vector2(9.7, 9.7), Color(0.02, 0.04, 0.04), Color(0.1, 0.13, 0.12), 0.012, 0.78, 40)
+	for p in [Vector3(24.5, 0, 18.4), Vector3(24.5, 0, 21.6)]:
+		m._box(p + Vector3(0, 1.6, 0), Vector3(0.5, 3.2, 0.5), basement)
+	for d in [Vector3(22.5, 3.15, 18.0), Vector3(26.0, 3.15, 22.6), Vector3(28.5, 3.15, 17.2)]:
+		m._drips(d)
+	m.vault_lamp = m._lamp(Vector3(25.5, 3.2, 20), Color(0.55, 0.75, 1.0), 0.8, true)
+	m._probe(Vector3(7, 1.6, 1.5), Vector3(10, 3.2, 9))
+	m._probe(Vector3(12, 2.5, 16), Vector3(16, 5, 12))
+	m._probe(Vector3(25, 1.6, 20), Vector3(10, 3.2, 10))
+	m._dust(Vector3(12, 2.4, 16), Vector3(8, 2.2, 6))
+
+	# ── قارب الدورية: يمرّ في القناة بين الرصيف وغرفة المحلّل ──
+	_patrol = Node3D.new()
+	m.add_child(_patrol)
+	var hull := MeshInstance3D.new()
+	var hb := BoxMesh.new()
+	hb.size = Vector3(4.2, 0.9, 1.8)
+	hull.mesh = hb
+	hull.material_override = _plain(Color(0.08, 0.09, 0.1), 0.5, 0.4)
+	_patrol.add_child(hull)
+	var cab := MeshInstance3D.new()
+	var cbm := BoxMesh.new()
+	cbm.size = Vector3(1.4, 1.0, 1.3)
+	cab.mesh = cbm
+	cab.material_override = white
+	cab.position = Vector3(-0.6, 0.9, 0)
+	_patrol.add_child(cab)
+	var search = preload("res://cctv.gd").new()
+	_patrol.add_child(search)
+	search.setup_search(Vector3(0.9, 1.6, 0), 180.0, 45.0, 7.0)
+	search.RANGE = 16.0
+	m.cctvs.append(search)
+	_patrol_search = search
+	_patrol_lamp = SpotLight3D.new()
+	_patrol_lamp.position = Vector3(0.9, 1.7, -0.4)
+	_patrol_lamp.rotation_degrees = Vector3(-8, 0, 0)
+	_patrol_lamp.light_color = Color(1.0, 0.96, 0.85)
+	_patrol_lamp.light_energy = 0.0
+	_patrol_lamp.spot_range = 14.0
+	_patrol_lamp.spot_angle = 22.0
+	_patrol.add_child(_patrol_lamp)
+	var eng := OmniLight3D.new()
+	eng.light_color = Color(1.0, 0.15, 0.1)
+	eng.light_energy = 0.7
+	eng.omni_range = 3.0
+	eng.position = Vector3(-2.0, 1.0, 0)
+	_patrol.add_child(eng)
+
+
+## موضع القارب من «زمن العوائق» (نفسه عند اللاعبَين): ذهاب وإياب كل 70 ثانية.
+## lit = كشّافه الجانبي يضيء نافذة المحلّل الآن؛ warn = سيصل خلال ثوانٍ.
+func patrol_update(t: float) -> Dictionary:
+	if _patrol == null:
+		return {}
+	var ph := fmod(t + 20.0, 70.0) / 70.0
+	var k := ph * 2.0 if ph < 0.5 else 2.0 - ph * 2.0
+	var x := lerpf(-34.0, 18.0, k)
+	_patrol.position = Vector3(x, -0.5, -4.6)
+	_patrol.rotation.y = 0.0 if ph < 0.5 else PI
+	_patrol.rotation.z = sin(t * 1.3) * 0.03
+	var cx: float = m.ARCHIVE.x + 5.0
+	var near := absf(x - cx) < 7.0
+	var soon := absf(x - cx) < 15.0 and not near
+	# الكشّاف الجانبي يلتفت نحو النافذة (الجنوب) حين يقترب
+	_patrol_lamp.light_energy = 7.0 if near else 0.0
+	# المصباح الجانبي نحو الجنوب (النافذة) والكشّاف الكبير نحو الشمال (الرصيف) مهما كان اتّجاه القارب
+	_patrol_lamp.rotation_degrees.y = 0.0 if ph < 0.5 else 180.0
+	if _patrol_search:
+		_patrol_search.rotation.y = 0.0 if ph < 0.5 else PI
+	return {"lit": near, "warn": soon}
+
+
+func _boat(at: Vector3, planks: Material, white: Material) -> void:
 	var boat := Node3D.new()
-	boat.position = Vector3(-5.2, -0.55, 6.0)
+	boat.position = at
 	m.add_child(boat)
 	var hull_mat := _plain(Color(0.12, 0.22, 0.2), 0.5, 0.3)
 	var hull := MeshInstance3D.new()
@@ -339,109 +538,7 @@ func river() -> void:
 	var tw = m.create_tween().set_loops()
 	tw.tween_property(boat, "rotation_degrees:z", 3.0, 2.2).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(boat, "rotation_degrees:z", -3.0, 2.2).set_trans(Tween.TRANS_SINE)
-	m._box(Vector3(-3.6, -0.05, 6.0), Vector3(1.6, 0.08, 0.8), planks, false) # لوح العبور
-	var bl = m._label3d("🚤 الهروب", Vector3(-3.2, 2.2, 6.0), 44, Color(0.4, 1.0, 0.5))
-	bl.rotation_degrees.y = 90
-	# أعمدة إنارة صفراء ترتعش تحت المطر
-	_lamp_post(Vector3(-2.2, 0, 3.5), Color(1.0, 0.62, 0.25), 2.6)
-	_lamp_post(Vector3(-2.2, 0, 11.5), Color(1.0, 0.62, 0.25), 2.2, true)
-	_lamp_post(Vector3(6.6, 0, 12.2), Color(1.0, 0.62, 0.25), 1.8)
-	_weather(Vector3(2.0, 9.0, 5.0), Vector3(9.0, 0.2, 10.0), false, 520)
-
-	# ── واجهة المستودع (حديد مموّج) على x=8، أعلى من المبنى ──
-	m._box(Vector3(8, 3.0, -1.5), Vector3(0.3, 6.0, 3.0), iron)
-	m._box(Vector3(8, 3.0, 11.5), Vector3(0.3, 6.0, 3.0), iron)
-	m._box(Vector3(8, 1.6, 1.75), Vector3(0.3, 3.2, 3.5), iron)
-	m._box(Vector3(8, 1.6, 7.75), Vector3(0.3, 3.2, 4.5), iron)
-	m._box(Vector3(8, 4.6, 5.0), Vector3(0.3, 2.8, 10.0), iron)
-	m._box(Vector3(7.75, 3.45, 4.5), Vector3(0.2, 0.25, 2.6), m.mat_steel, false)
-	var signl = m._label3d("مستودع ٧ · مضخّات النهر", Vector3(7.8, 4.4, 4.5), 46, Color(0.9, 0.85, 0.7))
-	signl.rotation_degrees.y = -90
-	var warn := OmniLight3D.new()
-	warn.position = Vector3(7.2, 3.6, 4.5)
-	warn.light_color = Color(1.0, 0.5, 0.15)
-	warn.light_energy = 1.4
-	warn.omni_range = 5.0
-	m.add_child(warn)
-
-	# ── غرفة المضخّات (المنطقة ب) ──
-	m._box(Vector3(19.0, -0.1, 5), Vector3(22.3, 0.2, 10.6), wet)
-	m._box(Vector3(14.0, 4.3, 5), Vector3(12.3, 0.2, 10.6), m.mat_ceil)
-	m._box(Vector3(14.0, 2.1, 0), Vector3(12.3, 4.2, 0.3), factory)
-	m._box(Vector3(14.0, 2.1, 10), Vector3(12.3, 4.2, 0.3), factory)
-	m._box(Vector3(20, 2.1, 2.0), Vector3(0.3, 4.2, 4.3), factory)
-	m._box(Vector3(20, 2.1, 8.0), Vector3(0.3, 4.2, 4.3), factory)
-	m._box(Vector3(20, 3.7, 5.0), Vector3(0.3, 1.0, 2.0), factory)
-	# خزّانا ضخّ عملاقان وأنابيب وعجلات صمّامات ومقاييس ضغط
-	var tank := _plain(Color(0.24, 0.32, 0.3), 0.45, 0.6)
-	var pipe := _plain(Color(0.3, 0.12, 0.08), 0.5, 0.7)
-	for z in [3.0, 7.0]:
-		_cyl(Vector3(12.5, 1.5, z), 0.75, 3.0, tank, true)
-		_cyl(Vector3(12.5, 3.05, z), 0.6, 0.12, rust, false)
-		_cyl(Vector3(12.5, 3.65, z), 0.14, 1.2, pipe, false)
-		var wheel := MeshInstance3D.new()
-		var wm := TorusMesh.new()
-		wm.inner_radius = 0.17
-		wm.outer_radius = 0.22
-		wheel.mesh = wm
-		wheel.material_override = _plain(Color(0.7, 0.1, 0.08), 0.5, 0.4)
-		wheel.rotation_degrees = Vector3(0, 0, 90)
-		wheel.position = Vector3(13.32, 1.3, z)
-		m.add_child(wheel)
-		m._box(Vector3(13.27, 1.9, z + 0.35), Vector3(0.04, 0.16, 0.16), m._glow(Color(0.9, 0.95, 0.8), 0.8), false)
-	for z in [0.45, 9.55]:
-		_cyl(Vector3(14.0, 3.7, z), 0.16, 12.0, pipe, false, Vector3(0, 0, 90))
-		_cyl(Vector3(14.0, 3.25, z), 0.09, 12.0, rust, false, Vector3(0, 0, 90))
-	for x in [9.0, 17.5]:
-		_cyl(Vector3(x, 2.0, 0.45), 0.12, 4.0, pipe, false)
-	var steam := CPUParticles3D.new()
-	steam.position = Vector3(12.5, 3.9, 3.0)
-	steam.amount = 24
-	steam.lifetime = 2.5
-	steam.direction = Vector3(0.3, 1, 0)
-	steam.spread = 18.0
-	steam.initial_velocity_min = 0.4
-	steam.initial_velocity_max = 0.9
-	steam.gravity = Vector3(0, 0.2, 0)
-	var sq := QuadMesh.new()
-	sq.size = Vector2(0.5, 0.5)
-	var smat := StandardMaterial3D.new()
-	smat.albedo_color = Color(0.8, 0.85, 0.88, 0.08)
-	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	smat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	sq.material = smat
-	steam.mesh = sq
-	m.add_child(steam)
-	for p in [Vector3(9.2, 0, 9.3), Vector3(18.2, 0, 0.7)]:
-		m._box(p + Vector3(0, 0.45, 0), Vector3(0.9, 0.9, 0.9), m.mat_crate)
-	m._prop("power_box_01", Vector3(19.75, 1.1, 2.6), -90, false)
-	m._prop("korean_fire_extinguisher_01", Vector3(8.5, 0, 9.4), 0, false)
-	m._lamp(Vector3(11.0, 4.2, 5), Color(0.8, 0.95, 0.9), 1.1, true)
-	m._lamp(Vector3(17.0, 4.2, 5), Color(0.8, 0.95, 0.9), 1.0)
-	m._drips(Vector3(16.5, 4.15, 6.8))
-
-	# ── القبو الغارق (المنطقة ج) ──
-	m._box(Vector3(25.0, WALL_H() + 0.1, 5), Vector3(10.3, 0.2, 10.6), m.mat_ceil)
-	m._box(Vector3(25.0, WALL_H() / 2.0, 0), Vector3(10.3, WALL_H(), 0.3), basement)
-	m._box(Vector3(25.0, WALL_H() / 2.0, 10), Vector3(10.3, WALL_H(), 0.3), basement)
-	m._vault_wall(basement)
-	_water(Vector3(25.0, 0.13, 5.0), Vector2(9.7, 9.7), Color(0.02, 0.04, 0.04), Color(0.1, 0.13, 0.12), 0.012, 0.78, 40)
-	for p in [Vector3(24.5, 0, 3.4), Vector3(24.5, 0, 6.6)]:
-		m._box(p + Vector3(0, WALL_H() / 2.0, 0), Vector3(0.5, WALL_H(), 0.5), basement)
-	for d in [Vector3(22.5, 3.15, 3.0), Vector3(26.0, 3.15, 7.6), Vector3(28.5, 3.15, 2.2)]:
-		m._drips(d)
-	m.vault_lamp = m._lamp(Vector3(25.5, WALL_H(), 5), Color(0.55, 0.75, 1.0), 0.8, true)
-	var red := OmniLight3D.new()
-	red.position = Vector3(20.6, 2.6, 9.2)
-	red.light_color = Color(1.0, 0.12, 0.08)
-	red.light_energy = 1.2
-	red.omni_range = 5.0
-	m.add_child(red)
-	m._box(Vector3(20.25, 2.6, 9.2), Vector3(0.12, 0.18, 0.18), m._glow(Color(1.0, 0.15, 0.1), 3.0), false)
-	m._probe(Vector3(14, 2.0, 5), Vector3(12, 4.2, 10.5))
-	m._probe(Vector3(25, 1.6, 5), Vector3(10, WALL_H(), 10.5))
-	m._dust(Vector3(19, 1.8, 5), Vector3(11, 1.6, 5))
+	m._box(Vector3(-10.6, -0.05, at.z), Vector3(1.4, 0.08, 0.8), planks, false)
 
 
 # ═════════ الجبل ═════════

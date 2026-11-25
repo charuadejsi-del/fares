@@ -201,7 +201,7 @@ jobs:
           for L in tutorial river mountain; do
             LOW=0; [ "$L" = tutorial ] && LOW=1
             KHAZNA_LOW=$LOW KHAZNA_SMOKE=1 KHAZNA_LEVEL=$L timeout 120 godot --headless --path . > run_$L.log 2>&1 || true
-            grep -E "SMOKE (level|laser|cam|killswitch|final|reach)|QUALITY|SCRIPT ERROR|Parse Error" run_$L.log | head -20
+            grep -E "SMOKE (level|laser|cam|killswitch|final|reach|valves|radio|sync|stage)|QUALITY|SCRIPT ERROR|Parse Error" run_$L.log | head -20
             if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Invalid (call|get|set)" run_$L.log; then echo "خطأ سكربت في المرحلة $L"; exit 1; fi
             grep -q "SMOKE final stage: 3" run_$L.log || { echo "المرحلة $L لم تصل إلى الهروب"; tail -40 run_$L.log; exit 1; }
             grep -q "SMOKE reach ok" run_$L.log || { echo "في خريطة $L مكان لا يُوصل إليه"; grep "SMOKE reach" run_$L.log; exit 1; }
@@ -210,6 +210,9 @@ jobs:
             grep -q "SMOKE laser ok" run_$L.log || { echo "ليزر المرحلة $L لا يعمل"; exit 1; }
           done
           grep -q "SMOKE killswitch ok" run_river.log || { echo "قاطع الليزر لا يعمل"; exit 1; }
+          grep -q "SMOKE valves ok" run_river.log || { echo "لغز الصمّامات لا يعمل"; exit 1; }
+          grep -q "SMOKE radio ok" run_river.log || { echo "لغز اللاسلكي لا يعمل"; exit 1; }
+          grep -q "SMOKE sync lock ok" run_river.log || { echo "القفل الزمني لا يعمل"; exit 1; }
           grep -q "SMOKE killswitch ok" run_mountain.log || { echo "قاطع الليزر لا يعمل (الجبل)"; exit 1; }
           if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Invalid (call|get|set)" run.log; then exit 1; fi
 
