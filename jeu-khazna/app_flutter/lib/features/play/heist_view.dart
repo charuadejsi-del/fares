@@ -52,7 +52,7 @@ class _AgentView extends StatefulWidget {
 }
 
 class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMixin {
-  late final Ticker _ticker = createTicker(_tick)..start();
+  late final Ticker _ticker;
   final _frame = ValueNotifier<int>(0);
   late Offset _pos;
   Offset _stick = Offset.zero;
@@ -69,6 +69,7 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
   @override
   void initState() {
     super.initState();
+    _ticker = createTicker(_tick)..start();
     final s = c.state!;
     _spots = s.spots;
     _room = s.room;
@@ -190,13 +191,13 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
           ),
         ),
       // زرّ الاختراق عند الجهاز
-      ValueListenableBuilder<int>(
-        valueListenable: _frame,
-        builder: (context, _, __) => !_hacking && _atTerminal
-            ? Positioned(
-                bottom: 36,
-                right: 20,
-                child: FilledButton.icon(
+      Positioned(
+        bottom: 36,
+        right: 20,
+        child: ValueListenableBuilder<int>(
+          valueListenable: _frame,
+          builder: (context, _, __) => !_hacking && _atTerminal
+              ? FilledButton.icon(
                   onPressed: () => setState(() => _hacking = true),
                   icon: Icon(_isVault(s) ? Icons.lock_open : Icons.terminal, size: 20),
                   label: Text(_isVault(s) ? 'افتح الخزنة' : 'اخترق الجهاز', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
@@ -206,9 +207,9 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(K.radius)),
                   ),
-                ),
-              )
-            : const SizedBox.shrink(),
+                )
+              : const SizedBox.shrink(),
+        ),
       ),
       // عصا التحكّم
       if (!_hacking)
@@ -361,7 +362,13 @@ class _AnalystMap extends StatefulWidget {
 }
 
 class _AnalystMapState extends State<_AnalystMap> with SingleTickerProviderStateMixin {
-  late final Ticker _ticker = createTicker((_) => _frame.value++)..start();
+  late final Ticker _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker((_) => _frame.value++)..start();
+  }
   final _frame = ValueNotifier<int>(0);
   Offset _ax = Offset.zero, _target = Offset.zero;
   bool _hasAgent = false;
