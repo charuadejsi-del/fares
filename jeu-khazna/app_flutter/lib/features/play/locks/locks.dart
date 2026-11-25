@@ -11,6 +11,7 @@ import '../../../core/game.dart';
 import '../../../core/services.dart';
 import '../../../widgets/spy_ui.dart';
 import 'ext_view.dart';
+import 'lock_frame.dart';
 
 typedef Dispatch = void Function(Map<String, dynamic> action);
 
@@ -82,7 +83,13 @@ class Cell extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: padding,
-        decoration: BoxDecoration(color: color, border: Border.all(color: border), boxShadow: shadow),
+        // خانة معدنية بارزة
+        decoration: BoxDecoration(
+          gradient: steelGrad(color == K.cell ? kSteel : color),
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: border == K.line ? const Color(0xFF3A4048) : border),
+          boxShadow: shadow ?? kRaised,
+        ),
         child: child,
       );
 }
@@ -118,9 +125,10 @@ class SymbolCell extends StatelessWidget {
     final cell = AnimatedContainer(
       duration: const Duration(milliseconds: 160),
       decoration: BoxDecoration(
-        color: selected ? K.amber.withAlpha(35) : K.cell,
-        border: Border.all(color: selected ? K.amber : K.line),
-        boxShadow: selected ? K.glow(K.amber, 12, 90) : null,
+        gradient: steelGrad(selected ? const Color(0xFF4A3816) : kSteel),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: selected ? K.amber : const Color(0xFF3A4048)),
+        boxShadow: selected ? [...kRaised, BoxShadow(color: K.amber.withAlpha(90), blurRadius: 12)] : kRaised,
       ),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Text(sym.s, style: TextStyle(fontSize: 26, height: 1.1, color: selected ? K.amber : K.text)),
@@ -168,10 +176,10 @@ class _DeviceKeyState extends ConsumerState<DeviceKey> {
             end: Alignment.bottomCenter,
             colors: [Color.lerp(widget.color, Colors.white, 0.12)!, widget.color, Color.lerp(widget.color, Colors.black, 0.35)!],
           ),
-          border: Border.all(color: _down ? K.neon : const Color(0xFF2C3238)),
+          border: Border.all(color: _down ? K.neon : const Color(0xFF4A5057)),
           boxShadow: _down
-              ? K.glow(K.neon, 12, 90)
-              : const [BoxShadow(color: Colors.black, offset: Offset(0, 3), blurRadius: 2)],
+              ? [const BoxShadow(color: Colors.black, offset: Offset(0, 1), blurRadius: 1), BoxShadow(color: K.neon.withAlpha(90), blurRadius: 10)]
+              : kRaised,
         ),
         child: Center(child: widget.child),
       ),

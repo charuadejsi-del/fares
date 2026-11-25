@@ -254,7 +254,44 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
       if (_hacking)
         Positioned.fill(
           child: Stack(children: [
-            Positioned.fill(child: ColoredBox(color: K.bg, child: widget.lockView)),
+            // أرضية الغرفة خلف الجهاز + اقتراب الكاميرا (زووم) عند بدء الاختراق
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: K.bg,
+                  image: DecorationImage(
+                    image: AssetImage(s.stage <= 20
+                        ? 'assets/images/h_floor_port.jpg'
+                        : (s.stage <= 40 ? 'assets/images/h_floor_river.jpg' : 'assets/images/h_floor_mountain.jpg')),
+                    repeat: ImageRepeat.repeat,
+                    scale: 2,
+                    colorFilter: const ColorFilter.mode(Color(0xB30A0C0E), BlendMode.darken),
+                  ),
+                ),
+              ),
+            ),
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(radius: .95, colors: [Color(0x000A0C0E), Color(0xE60A0C0E)]),
+                  ),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: TweenAnimationBuilder<double>(
+                key: ValueKey('hack-${s.room}'),
+                tween: Tween(begin: 0, end: 1),
+                duration: const Duration(milliseconds: 380),
+                curve: Curves.easeOutCubic,
+                builder: (context, v, child) => Opacity(
+                  opacity: v,
+                  child: Transform.scale(scale: .78 + .22 * v, child: child),
+                ),
+                child: widget.lockView,
+              ),
+            ),
             Positioned(
               left: 12,
               bottom: 12,

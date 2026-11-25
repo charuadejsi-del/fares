@@ -11,6 +11,7 @@ import '../../../core/game.dart';
 import '../../../core/shop.dart' show gameRulesProvider, fmtCost;
 import '../../../core/services.dart';
 import '../../../core/stages.dart';
+import 'lock_frame.dart';
 import 'locks.dart';
 
 class ExtLockView extends StatelessWidget {
@@ -205,14 +206,14 @@ class ManualView extends StatelessWidget {
     if (t.startsWith('#c:')) {
       final v = int.tryParse(t.substring(3)) ?? 0xFF888888;
       return Center(
-        child: Container(width: 34, height: 22, decoration: BoxDecoration(color: Color(v), border: Border.all(color: K.line))),
+        child: Container(width: 34, height: 22, decoration: BoxDecoration(color: Color(v), border: Border.all(color: const Color(0xFF6B5E44)))),
       );
     }
     return Text(t,
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: head ? 12 : 14.5,
-          color: head ? K.muted : (t.contains('▒') ? K.line : K.text),
+          color: head ? const Color(0xFF6B5E44) : (t.contains('▒') ? const Color(0xFFB8AA88) : const Color(0xFF231F18)),
           fontWeight: head ? FontWeight.w700 : FontWeight.w600,
         ));
   }
@@ -229,28 +230,37 @@ class ManualView extends StatelessWidget {
       ];
     }
     return Container(
-      decoration: BoxDecoration(color: const Color(0xFF0E1012), border: Border.all(color: K.line)),
-      padding: const EdgeInsets.all(10),
+      // ورقة ملفّ مطبوعة
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF1EADA), Color(0xFFE6DCC4)],
+        ),
+        borderRadius: BorderRadius.circular(2),
+        boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 6, offset: Offset(1, 3))],
+      ),
+      padding: const EdgeInsets.all(12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         if (serial != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text('ملفّ رقم $serial', textDirection: TextDirection.rtl, style: const TextStyle(color: K.amber, fontWeight: FontWeight.w900)),
+            child: Text('ملفّ رقم $serial', textDirection: TextDirection.rtl, style: const TextStyle(color: Color(0xFF9C2A2A), fontWeight: FontWeight.w900, fontFamily: K.mono)),
           ),
         for (final rule in page.rules)
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
-            child: Text(rule, style: const TextStyle(color: Color(0xFFD5D9DD), fontSize: 14, height: 1.5)),
+            child: Text(rule, style: const TextStyle(color: Color(0xFF231F18), fontSize: 14, height: 1.5, fontWeight: FontWeight.w600)),
           ),
         if (page.rows.isNotEmpty) ...[
           const SizedBox(height: 4),
           Table(
-            border: TableBorder.all(color: K.line),
+            border: TableBorder.all(color: const Color(0xFFB8AA88)),
             defaultVerticalAlignment: TableCellVerticalAlignment.middle,
             children: [
               if (page.header.isNotEmpty)
                 TableRow(
-                  decoration: const BoxDecoration(color: K.cell),
+                  decoration: const BoxDecoration(color: Color(0xFFDCD2B8)),
                   children: [for (final h in page.header) Padding(padding: const EdgeInsets.all(6), child: _cell(h, head: true))],
                 ),
               for (final (_, row) in rows)
@@ -501,7 +511,7 @@ class OpItemView extends StatelessWidget {
             Container(
               margin: const EdgeInsets.only(bottom: 6),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(color: K.cell, border: Border.all(color: K.line)),
+              decoration: BoxDecoration(gradient: steelGrad(kSteel), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF3A4048)), boxShadow: kRaised),
               child: Row(children: [
                 const Icon(Icons.lock_open, color: K.neonDim, size: 18),
                 const SizedBox(width: 8),
@@ -871,9 +881,10 @@ class _ExtInputState extends ConsumerState<ExtInput> {
                     height: hasColors ? 62 : 64,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: hasColors ? Color(spec.colors[i]) : (_seq.contains(i) ? K.amber.withAlpha(50) : K.cell),
+                      gradient: steelGrad(hasColors ? Color(spec.colors[i]) : (_seq.contains(i) ? const Color(0xFF4A3816) : kSteel)),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: _seq.contains(i) ? K.amber : K.line, width: 2),
+                      border: Border.all(color: _seq.contains(i) ? K.amber : const Color(0xFF3A4048), width: 2),
+                      boxShadow: kRaised,
                     ),
                     child: hasColors
                         ? null
@@ -901,10 +912,12 @@ class _ExtInputState extends ConsumerState<ExtInput> {
                 width: cols > 0 ? null : 50,
                 height: cols > 0 ? null : 78,
                 decoration: BoxDecoration(
-                  color: _toggles[i] ? K.neon.withAlpha(40) : K.cell,
+                  gradient: steelGrad(_toggles[i] ? const Color(0xFF4A3816) : kSteel),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: _toggles[i] ? K.neon : K.line, width: 2),
-                  boxShadow: _toggles[i] ? K.glow(K.neon, 10, 80) : null,
+                  border: Border.all(color: _toggles[i] ? K.neon : const Color(0xFF3A4048), width: 2),
+                  boxShadow: _toggles[i]
+                      ? [...kRaised, BoxShadow(color: K.neon.withAlpha(90), blurRadius: 12)]
+                      : kRaised,
                 ),
                 child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(_toggles[i] ? Icons.toggle_on : Icons.toggle_off, color: _toggles[i] ? K.neon : K.muted, size: 30),
@@ -948,7 +961,7 @@ class _ExtInputState extends ConsumerState<ExtInput> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: K.cell,
+                        gradient: const RadialGradient(colors: [Color(0xFF3A3F45), Color(0xFF1C1F23)], center: Alignment(-.3, -.4)),
                         border: Border.all(color: i < spec.colors.length ? Color(spec.colors[i]) : K.line, width: 5),
                         boxShadow: i < spec.colors.length ? K.glow(Color(spec.colors[i]), 10, 70) : null,
                       ),
@@ -1000,9 +1013,9 @@ class _ExtInputState extends ConsumerState<ExtInput> {
                       child: Container(
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: _flowTimer != null && _seq.indexOf(i) >= 0 && _seq.indexOf(i) < _flow
+                          gradient: steelGrad(_flowTimer != null && _seq.indexOf(i) >= 0 && _seq.indexOf(i) < _flow
                               ? const Color(0xFF1E6FA8)
-                              : (_seq.contains(i) ? const Color(0xFF16313F) : K.cell),
+                              : (_seq.contains(i) ? const Color(0xFF16313F) : kSteel)),
                           border: Border.all(
                             color: seqMode && spec.colors.isNotEmpty && (i == spec.colors[0] || i == spec.colors[1]) ? K.neon : K.line,
                             width: seqMode && spec.colors.isNotEmpty && (i == spec.colors[0] || i == spec.colors[1]) ? 2.5 : 1,

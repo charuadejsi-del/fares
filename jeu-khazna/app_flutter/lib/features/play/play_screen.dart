@@ -25,6 +25,7 @@ import '../../widgets/stage_brief.dart';
 import '../../widgets/coach_card.dart';
 import '../../widgets/session_summary.dart';
 import 'heist_view.dart';
+import 'locks/lock_frame.dart';
 import '../../widgets/stage_map.dart';
 import '../../core/ext_locks.dart' show vaultDigit, kVaultCode;
 import '../../widgets/ui_kit.dart';
@@ -773,10 +774,18 @@ class _Game extends StatelessWidget {
                   CoachCard(lockId: s.roomId, role: role, guided: s.stage == 1),
                   if (s.hint.isNotEmpty) ...[const SizedBox(height: 8), HintBanner(text: s.hint)],
                   const SizedBox(height: 10),
-                  HudPanel(
-                    padding: const EdgeInsets.all(14),
-                    child: LockView(state: s, puzzles: p, role: role, dispatch: c.dispatch, buy: c.sessionId == null ? null : c.buy),
-                  ),
+                  // العميل: القفل داخل شاشة جهاز · المحلّل: ملفّ سرّي
+                  if (role == 'ex')
+                    DossierFrame(
+                      title: K.room(s.roomId),
+                      seed: s.seed + s.room,
+                      child: LockView(state: s, puzzles: p, role: role, dispatch: c.dispatch, buy: c.sessionId == null ? null : c.buy),
+                    )
+                  else
+                    TerminalFrame(
+                      title: K.room(s.roomId),
+                      child: LockView(state: s, puzzles: p, role: role, dispatch: c.dispatch, buy: c.sessionId == null ? null : c.buy),
+                    ),
                 ],
               ),
             ),
