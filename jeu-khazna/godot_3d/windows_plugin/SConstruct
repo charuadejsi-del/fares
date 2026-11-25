@@ -1,0 +1,8 @@
+#!/usr/bin/env python
+# يبني godot_agora_win.dll (ويندوز 64 بت) مقابل مكتبة Agora الموجودة في agora/
+env = SConscript("godot-cpp/SConstruct")
+env.Append(CPPPATH=["src/", "agora/include/"])
+env.Append(LIBPATH=["agora/lib/"])
+env.Append(LIBS=["agora_rtc_sdk"])
+library = env.SharedLibrary("bin/godot_agora_win.dll", source=Glob("src/*.cpp"))
+Default(library)

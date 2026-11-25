@@ -9,3 +9,8 @@ addons/godot_agora/bin/*.aar
 android/
 android_plugin/**/build/
 android_plugin/.gradle/
+addons/godot_agora_win/bin/*.dll
+windows_plugin/godot-cpp/
+windows_plugin/agora/
+windows_plugin/bin/
+windows_plugin/test/

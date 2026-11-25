@@ -35,8 +35,71 @@ jobs:
           name: godot-agora
           path: jeu-khazna/godot_3d/android_plugin/agora/build/outputs/aar/*.aar
 
+  agorawin:
+    # صوت Agora لنسخة ويندوز: إضافة GDExtension (C++) مبنية مقابل مكتبة Agora لويندوز، ثم اختبار حقيقي للدخول إلى القناة
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: jeu-khazna/godot_3d/windows_plugin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: مكتبة Agora لويندوز
+        run: |
+          for u in https://download.agora.io/sdk/release/Agora_Native_SDK_for_Windows_v4.5.2_VOICE.zip \
+                   https://download.agora.io/sdk/release/Agora_Native_SDK_for_Windows_v4.3.2_VOICE.zip \
+                   https://download.agora.io/sdk/release/Agora_Native_SDK_for_Windows_v4.7.0_FULL.zip; do
+            echo "تحميل $u"; curl -fsSL -o sdk.zip "$u" && break
+          done
+          test -f sdk.zip
+          mkdir -p sdk agora/include agora/lib bin && unzip -q sdk.zip -d sdk
+          H=$(dirname "$(find sdk -name IAgoraRtcEngine.h | grep -v x86/ | head -1)")
+          D=$(dirname "$(find sdk -name agora_rtc_sdk.dll -path '*x86_64*' | head -1)")
+          echo "headers=$H dlls=$D"; ls "$D"
+          cp -r "$H"/* agora/include/
+          cp "$D"/agora_rtc_sdk.dll.lib agora/lib/agora_rtc_sdk.lib 2>/dev/null || cp "$D"/agora_rtc_sdk.lib agora/lib/agora_rtc_sdk.lib
+          cp "$D"/agora_rtc_sdk.dll bin/
+          for f in "$D"/*aosl*.dll; do [ -f "$f" ] && cp "$f" bin/; done
+          ls -la bin
+      - name: بناء الإضافة
+        run: |
+          pip install scons
+          git clone -q --depth 1 -b godot-4.3-stable https://github.com/godotengine/godot-cpp
+          scons platform=windows target=template_release arch=x86_64 -j4
+          ls -la bin
+          test -f bin/godot_agora_win.dll
+      - name: اختبار حقيقي على ويندوز (تحميل المكتبة والدخول إلى قناة الصوت)
+        run: |
+          curl -fsSL -o godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_win64.exe.zip
+          unzip -q godot.zip -d gd
+          G=$(ls gd/*console*.exe | head -1)
+          mkdir -p test/addons/godot_agora_win/bin
+          printf '[application]\nconfig/name="t"\n[rendering]\nrenderer/rendering_method="gl_compatibility"\n' > test/project.godot
+          cp bin/*.dll test/addons/godot_agora_win/bin/
+          cp ../addons/godot_agora_win/godot_agora_win.gdextension test/addons/godot_agora_win/
+          python ci/deps.py test/addons/godot_agora_win
+          cp ci/test_voice.gd test/
+          KEY=$(grep -oE 'eyJ[A-Za-z0-9._-]+' ../net.gd | head -1)
+          export KHAZNA_CH=khazna-4321-$(printf "khazna3d-4321" | md5sum | cut -c1-8)
+          export KHAZNA_TOKEN=$(curl -s -X POST https://ubdamgzqqwgcxjvvegwk.supabase.co/functions/v1/agora-token -H "Content-Type: application/json" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -d "{\"channel\":\"$KHAZNA_CH\",\"appId\":\"9fd63619ac984e71b3c3eba6215b5a32\"}" | python -c "import sys,json;print(json.load(sys.stdin).get('token',''))")
+          echo "token length: ${#KHAZNA_TOKEN}"
+          "$G" --headless --path test --editor --quit > imp.log 2>&1 || true
+          "$G" --headless --path test -s test_voice.gd > run.log 2>&1 || true
+          cat run.log | tail -20
+          grep -q "WINVOICE: singleton ok" run.log || { echo "مكتبة الصوت لم تُحمَّل في ويندوز"; exit 1; }
+          grep -q "WINVOICE: join ok" run.log && echo "WINVOICE: دخول القناة نجح ✅" || echo "::warning::لم يُؤكَّد دخول القناة في بيئة الاختبار"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: godot-agora-win
+          path: jeu-khazna/godot_3d/windows_plugin/bin/*.dll
+
   build:
-    needs: agora
+    needs: [agora, agorawin]
+    if: ${{ !cancelled() && needs.agora.result == 'success' }}
     runs-on: ubuntu-latest
     container: barichello/godot-ci:4.3
     defaults:
@@ -59,11 +122,18 @@ jobs:
           name: godot-agora
           path: jeu-khazna/godot_3d/addons/godot_agora/bin
 
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: godot-agora-win
+          path: jeu-khazna/godot_3d/addons/godot_agora_win/bin
+
       - name: قالب بناء أندرويد (لإضافة الصوت)
         run: |
           mv addons/godot_agora/bin/*.aar addons/godot_agora/bin/GodotAgora.aar
           ls -la addons/godot_agora/bin
-          command -v unzip >/dev/null || (apt-get update -qq && apt-get install -y -qq unzip >/dev/null)
+          (command -v unzip >/dev/null && command -v zip >/dev/null) || (apt-get update -qq && apt-get install -y -qq unzip zip >/dev/null)
+          python3 windows_plugin/ci/deps.py addons/godot_agora_win 2>/dev/null || true; ls addons/godot_agora_win/bin
           mkdir -p android/build
           unzip -q -o ~/.local/share/godot/export_templates/4.3.stable/android_source.zip -d android/build
           echo -n "4.3.stable" > android/.build_version
@@ -142,7 +212,12 @@ jobs:
       - name: بناء ويندوز
         continue-on-error: true
         run: |
-          godot --headless --path . --export-release "Windows Desktop" build/khazna3d.exe 2>&1 | tail -20
+          python3 windows_plugin/ci/deps.py addons/godot_agora_win
+          mkdir -p build/win
+          godot --headless --path . --export-release "Windows Desktop" build/win/khazna3d.exe 2>&1 | tail -20
+          ls -la build/win
+          if ls build/win | grep -qi agora_rtc_sdk; then echo "WINVOICE: الصوت مضمّن في نسخة ويندوز ✅"; else echo "::warning::نسخة ويندوز بلا صوت"; fi
+          (cd build/win && zip -q -r ../khazna3d-windows.zip .)
           ls -la build
 
       - uses: softprops/action-gh-release@v2
@@ -151,7 +226,7 @@ jobs:
           name: الخزنة 3D — نموذج ${{ github.run_number }}
           prerelease: true
           target_commitish: ${{ github.sha }}
-          body: "نموذج تجريبي ثلاثي الأبعاد (Godot). khazna3d.apk للهاتف، khazna3d.exe للحاسوب."
+          body: "نموذج تجريبي ثلاثي الأبعاد (Godot). khazna3d.apk للهاتف، khazna3d-windows.zip للحاسوب (فكّه وشغّل khazna3d.exe)."
           files: |
             jeu-khazna/godot_3d/build/khazna3d.apk
-            jeu-khazna/godot_3d/build/khazna3d.exe
+            jeu-khazna/godot_3d/build/khazna3d-windows.zip

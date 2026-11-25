@@ -1,0 +1,12 @@
+; صوت Agora لنسخة ويندوز (الملفات تُبنى في CI وتوضع في bin/)
+[configuration]
+entry_symbol = "godot_agora_win_init"
+compatibility_minimum = "4.3"
+
+[libraries]
+windows.debug.x86_64 = "res://addons/godot_agora_win/bin/godot_agora_win.dll"
+windows.release.x86_64 = "res://addons/godot_agora_win/bin/godot_agora_win.dll"
+
+[dependencies]
+windows.debug.x86_64 = {  }
+windows.release.x86_64 = {  }

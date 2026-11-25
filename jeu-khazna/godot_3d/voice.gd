@@ -21,8 +21,16 @@ func _ready() -> void:
 		_agora = Engine.get_singleton("GodotAgora")
 		_agora.connect("joined", func():
 			joined = true
-			status.emit("🎙 الصوت متّصل"))
-		_agora.connect("users", func(n): status.emit("🎙 الصوت متّصل" if int(n) > 0 else "🎙 بانتظار صوت الشريك…"))
+			if _agora.has_method("has_mic") and not _agora.has_mic():
+				status.emit("🔈 تستمع فقط (لا يوجد ميكروفون)")
+			else:
+				status.emit("🎙 الصوت متّصل"))
+		_agora.connect("users", func(n):
+			var listen: bool = _agora.has_method("has_mic") and not _agora.has_mic()
+			if int(n) > 0:
+				status.emit("🔈 تستمع إلى الشريك" if listen else "🎙 الصوت متّصل")
+			else:
+				status.emit("🎙 بانتظار صوت الشريك…"))
 		_agora.connect("speaking", func(s):
 			var t := str(s)
 			speaking.emit(t.substr(0, 1) == "1", t.substr(1, 1) == "1"))
