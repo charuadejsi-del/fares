@@ -13,16 +13,22 @@ var sens := 1.0
 var active := true # اللاعب الذي يتحكّم فيه هذا الهاتف (في الوضع الفردي: أحد الاثنين)
 var locked := false # أمام قرص الخزنة: لا مشي، والكاميرا يحرّكها المشهد
 var _bob := 0.0
+var crouch := false # منحنٍ: أبطأ، أهدأ، أصعب رؤيةً، ويمرّ تحت الليزر العالي
+var _eye := 1.62
+var _col: CollisionShape3D
+var _cap: CapsuleShape3D
+const EYE_STAND := 1.62
+const EYE_CROUCH := 0.98
 
 
 func _ready() -> void:
-	var col := CollisionShape3D.new()
-	var cap := CapsuleShape3D.new()
-	cap.radius = 0.3
-	cap.height = 1.7
-	col.shape = cap
-	col.position.y = 0.85
-	add_child(col)
+	_col = CollisionShape3D.new()
+	_cap = CapsuleShape3D.new()
+	_cap.radius = 0.3
+	_cap.height = 1.7
+	_col.shape = _cap
+	_col.position.y = 0.85
+	add_child(_col)
 
 	cam = Camera3D.new()
 	cam.position = Vector3(0, 1.62, 0)
@@ -51,6 +57,8 @@ func _unhandled_input(event) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	elif event is InputEventKey and event.pressed and not event.echo and (event.keycode == KEY_C or event.keycode == KEY_CTRL):
+		set_crouch(not crouch)
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		look_delta += event.relative * 0.6
 
@@ -66,6 +74,13 @@ func _keys() -> Vector2:
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 		v.x += 1
 	return v
+
+
+func set_crouch(v: bool) -> void:
+	crouch = v
+	# الجسم أقصر عند الانحناء
+	_cap.height = 1.1 if v else 1.7
+	_col.position.y = 0.55 if v else 0.85
 
 
 func set_active(v: bool) -> void:
@@ -94,7 +109,7 @@ func _physics_process(delta: float) -> void:
 	var fwd := -transform.basis.z
 	var right := transform.basis.x
 	var dir := fwd * mv.y + right * mv.x
-	var speed := SPEED * (0.75 if mv.y < -0.3 else 1.0)
+	var speed := SPEED * (0.75 if mv.y < -0.3 else 1.0) * (0.5 if crouch else 1.0)
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 	if is_on_floor():
@@ -109,7 +124,8 @@ func _physics_process(delta: float) -> void:
 		_bob += delta * moving * 2.6
 	else:
 		_bob = lerpf(_bob, round(_bob / PI) * PI, delta * 6.0)
-	cam.position.y = 1.62 + sin(_bob * 2.0) * 0.035
+	_eye = lerpf(_eye, EYE_CROUCH if crouch else EYE_STAND, minf(1.0, delta * 10.0))
+	cam.position.y = _eye + sin(_bob * 2.0) * (0.02 if crouch else 0.035)
 	cam.position.x = cos(_bob) * 0.025
 	cam.rotation.x = pitch
 	cam.rotation.z = cos(_bob) * 0.006

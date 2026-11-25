@@ -24,6 +24,7 @@ var _lost := 0.0
 var _turn_t := 18.0
 # المزامنة: عند المحلّل يُحرَّك الحارس بما يرسله هاتف العميل (المرجع)
 var remote := false
+var sight := 1.0 # حدّة البصر حسب المرحلة
 var _r_pos := Vector3.ZERO
 var _r_rot := 0.0
 var _r_state := "walk"
@@ -473,9 +474,11 @@ func _steps_on(on: bool) -> void:
 ## هل يرى الحارس [player]؟ مخروط أمامي + لا جدار بينهما.
 func sees(player: Node3D, space: PhysicsDirectSpaceState3D) -> bool:
 	var eye := global_position + Vector3(0, 1.6, 0)
-	var tgt := player.global_position + Vector3(0, 1.2, 0)
+	var low: bool = player.get("crouch") == true
+	var tgt := player.global_position + Vector3(0, 0.7 if low else 1.2, 0)
 	var d := tgt - eye
-	var reach := RANGE * (1.25 if alarm else 1.0)
+	# المنحني أصعب رؤيةً (إلا عند الإنذار)، وحدّة البصر تختلف حسب المرحلة
+	var reach := RANGE * sight * (1.25 if alarm else (0.72 if low else 1.0))
 	if d.length() > reach:
 		return false
 	var fwd := -global_transform.basis.z

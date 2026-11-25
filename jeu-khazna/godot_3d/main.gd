@@ -15,8 +15,29 @@ const WIRES := [
 	["أخضر", Color(0.2, 0.72, 0.3)], ["أبيض", Color(0.92, 0.92, 0.92)],
 ]
 const VAULT_FRONT := Vector3(27.5, 0.0, 5.0) # دائرة الوقوف أمام الخزنة
+const Levels := preload("res://levels.gd")
+const LCOLORS := [["أحمر", Color(0.85, 0.15, 0.12)], ["أزرق", Color(0.15, 0.4, 0.9)], ["أخضر", Color(0.2, 0.7, 0.3)], ["أصفر", Color(0.95, 0.8, 0.2)]]
+const KILL_POS := Vector3(8.3, 0.0, 1.2) # قاطع الليزر على جدار الغرفة الثانية
+const LASER_OFF := 20.0
 
 var role := "solo" # agent | analyst | solo
+var level_i := 1
+var lv: Dictionary = {}
+var lasers: Array = []
+var cctvs: Array = []
+var htime := 0.0 # زمن العوائق المشترك (الليزر والكاميرات)
+var kill_node: Node3D
+var kill_lamp: OmniLight3D
+var laserdoc_node: Node3D
+var _laser_cd := 0.0
+var _laser_warned := false
+var _beep_t := 0.0
+var s_beep: AudioStreamPlayer
+var s_hazard_amb: AudioStreamPlayer
+var _tut := 0
+var _tut_moved := 0.0
+var _breath_t := 3.0
+var breath: CPUParticles3D
 var net
 var hud
 var menu
@@ -85,8 +106,8 @@ var blackout := 0.0
 var shutters_closed: Array = [false, false]
 var s_creep: AudioStreamPlayer3D
 var s_music: AudioStreamPlayer
-var tool_cd := {"mark": 0.0, "distract": 0.0, "warn": 0.0}
-const TOOL_CD := {"mark": 20.0, "distract": 25.0, "warn": 5.0}
+var tool_cd := {"mark": 0.0, "distract": 0.0, "freeze": 0.0, "warn": 0.0}
+const TOOL_CD := {"mark": 20.0, "distract": 25.0, "freeze": 30.0, "warn": 5.0}
 var steam: CPUParticles3D
 var _prop_log: Array = []
 # الأصوات
@@ -114,13 +135,24 @@ func _ready() -> void:
 		font3d = load("res://fonts/Tajawal-Bold.ttf")
 	menu = preload("res://menu.gd").new()
 	add_child(menu)
-	menu.solo.connect(func(): _start("solo", randi() % 1000000))
-	menu.host.connect(_host)
+	menu.solo.connect(func():
+		level_i = menu.level
+		_start("solo", randi() % 1000000))
+	menu.host.connect(func(r):
+		level_i = menu.level
+		_host(r))
 	menu.join.connect(_join)
 	# اختبار التشغيل في GitHub: يبدأ الوضع الفردي مباشرة ويجرّب الألغاز
 	if OS.get_environment("KHAZNA_SMOKE") == "1":
+		var lid := OS.get_environment("KHAZNA_LEVEL")
+		level_i = Levels.index_of(lid if lid != "" else "port")
 		_start("solo", 1234)
 		_smoke.call_deferred()
+	elif Levels.pending >= 0:
+		# «المرحلة التالية» من شاشة الفوز
+		level_i = Levels.pending
+		Levels.pending = -1
+		_start("solo", randi() % 1000000)
 
 
 func _smoke() -> void:
@@ -128,6 +160,8 @@ func _smoke() -> void:
 		await get_tree().process_frame
 	hud.close_panel()
 	await get_tree().create_timer(0.5).timeout
+	print("SMOKE level: ", lv.id, " guards=", guards.size(), " lasers=", lasers.size(), " cams=", cctvs.size())
+	await _smoke_hazards()
 	var space := get_world_3d().direct_space_state
 	var sh := SphereShape3D.new()
 	sh.radius = 0.25
@@ -209,6 +243,57 @@ func _smoke() -> void:
 
 
 ## يتحقّق أن العميل يستطيع المشي من البداية إلى كل جهاز وإلى الخزنة (بعد فتح الأبواب).
+## اختبارات العوائق: الليزر يلمس الواقف ويُعبَر (انحناء أو توقيت)، الكاميرا ترى ثم تعمى عند التجميد، والقاطع يطفئ الليزر.
+func _smoke_hazards() -> void:
+	var ok_l := true
+	for l in lasers:
+		var mid := Vector3(l.x, 0, (l.z0 + l.z1) * 0.5)
+		var touched := false
+		var passable := false
+		var tt := 0.0
+		while tt < 12.0:
+			l.update(tt, 0.0)
+			if l.hits(mid, false):
+				touched = true
+			if not l.hits(mid, true):
+				passable = true
+			tt += 0.05
+		print("SMOKE laser ", l.mode, " touch=", touched, " pass=", passable)
+		ok_l = ok_l and touched and passable
+	if not lasers.is_empty() and ok_l:
+		print("SMOKE laser ok")
+	if not cctvs.is_empty():
+		var c = cctvs[0]
+		c.update(0.0, 0.0)
+		await get_tree().physics_frame
+		var fwd: Vector3 = -(c._head.global_transform.basis.z)
+		var e: Vector3 = c.eye()
+		# نقطة على الأرض داخل المخروط
+		var hit := e + fwd * ((e.y - 1.2) / maxf(0.2, -fwd.y))
+		hit.y = 0.0
+		var space0 := get_world_3d().direct_space_state
+		var saw: bool = c.sees(hit, false, space0, [agent.get_rid()])
+		c.frozen_t = 3.0
+		var blind: bool = not c.sees(hit, false, space0, [agent.get_rid()])
+		c.frozen_t = 0.0
+		print("SMOKE cam saw=", saw, " blind=", blind, " at ", hit)
+		if saw and blind:
+			print("SMOKE cam ok")
+	if kill_node:
+		_submit_colors(["?", "?", "?"])
+		var wrong_blocked := _laser_off() <= 0.0
+		lockout = 0.0
+		_submit_colors(puzzle.laser.duplicate())
+		if wrong_blocked and _laser_off() > 15.0 and lasers[0].beams_at(htime).is_empty():
+			print("SMOKE killswitch ok")
+		hud.close_panel()
+	# بقية الاختبار تخصّ الألغاز: نوقف العوائق
+	for l in lasers:
+		l.off_t = 1e6
+	for c in cctvs:
+		c.frozen_t = 1e6
+
+
 func _reach_test() -> Dictionary:
 	var space := get_world_3d().direct_space_state
 	var sh := SphereShape3D.new()
@@ -286,15 +371,17 @@ func _on_msg(m: Dictionary) -> void:
 	_partner_seen = Time.get_ticks_msec() / 1000.0
 	var t := str(m.get("t", ""))
 	if t == "join" and host_role != "":
-		net.send({"t": "hello", "role": host_role, "seed": seed_value})
+		net.send({"t": "hello", "role": host_role, "seed": seed_value, "lv": level_i})
 		if not started:
 			_start(host_role, seed_value)
 	elif t == "hello" and host_role == "" and not started:
 		var r := "analyst" if str(m.get("role", "")) == "agent" else "agent"
+		level_i = int(m.get("lv", 1))
 		_start(r, int(m.get("seed", 0)))
 	elif t == "pos" and avatar:
 		avatar.set_meta("target", Vector3(float(m.get("x", 0)), 0, float(m.get("z", 0))))
 		avatar.set_meta("yaw", float(m.get("y", 0)))
+		_apply_hazard_sync(float(m.get("ht", htime)), float(m.get("lz", 0.0)), float(m.get("cf", 0.0)))
 		var gl = m.get("g", [])
 		if typeof(gl) == TYPE_ARRAY and ready_world:
 			for i in mini(gl.size(), guards.size()):
@@ -323,6 +410,8 @@ func _start(r: String, s: int) -> void:
 	started = true
 	role = r
 	seed_value = s
+	lv = Levels.get_level(level_i)
+	mission_left = float(lv.mission)
 	puzzle = _make_puzzle(s)
 	if menu:
 		menu.queue_free()
@@ -332,7 +421,8 @@ func _start(r: String, s: int) -> void:
 	# البناء على خطوات خلف شاشة تحميل (لا تتجمّد الشاشة)
 	var steps := [
 		["المواد والخامات", _materials], ["الخامات الواقعية", _realistic], ["الإضاءة والضباب", _environment],
-		["مبنى الميناء", _build_building], ["غرفة الأرشيف", _build_archive], ["الأثاث والأشياء", _props],
+		["المبنى: " + str(lv.name), _build_building], ["غرفة الأرشيف", _build_archive], ["الأثاث والأشياء", _props],
+		["الجوّ والطقس", _theme], ["الليزر والكاميرات", _build_hazards],
 		["الحرّاس", _spawn_guards], ["الأصوات", _sounds], ["اللمسات الأخيرة", _hints],
 	]
 	for i in steps.size():
@@ -342,6 +432,14 @@ func _start(r: String, s: int) -> void:
 	hud.interact_pressed.connect(_on_interact)
 	hud.tool_pressed.connect(_on_tool)
 	hud.switch_pressed.connect(_on_switch)
+	hud.crouch_pressed.connect(func():
+		if agent and active == agent and not vault_mode:
+			agent.set_crouch(not agent.crouch))
+	hud.next_pressed.connect(func():
+		Levels.pending = level_i + 1
+		get_tree().reload_current_scene())
+	if cctvs.is_empty():
+		hud.hide_tool("freeze")
 	hud.set_switch_visible(role == "solo")
 	if role != "analyst":
 		agent = _make_player(SPAWN, -PI / 2.0)
@@ -351,6 +449,8 @@ func _start(r: String, s: int) -> void:
 		_build_feeds()
 	_set_active(analyst if role == "analyst" else agent)
 	hud.set_status("وضع فردي" if net == null else "")
+	if Levels.low_quality() or OS.get_environment("KHAZNA_LOW") == "1":
+		_apply_low_quality()
 	# تحضير المؤثّرات خلف شاشة التحميل: الكاميرا تلتفت حولها فتُجهَّز كل المواد
 	hud.loading(true, 0.85, "تحضير المؤثّرات…")
 	if active:
@@ -384,12 +484,26 @@ func _start(r: String, s: int) -> void:
 func _intro() -> void:
 	var a := "أنت العميل داخل مخزن الميناء.\n\n١. اتبع السهم البرتقالي إلى الجهاز، وابتعد عن ضوء مصابيح الحرّاس.\n٢. الرموز والأجوبة ليست عندك: هي عند شريكك المحلّل. صِف له ما تراه واسأله.\n٣. افتح الخزنة، ثم اهرب إلى نقطة البداية قبل انتهاء الإنذار."
 	var b := "أنت المحلّل في غرفة الأرشيف.\n\n١. راقب العميل والحرّاس على شاشات المراقبة.\n٢. الشيء المضيء والسهم فوقه = ما تبحث فيه الآن (درج، دليل، حاسوب).\n٣. انظر إليه واضغط الزر، ثم أخبر العميل بما وجدت."
+	var title := "المرحلة: %s — %s" % [lv.name, lv.sub]
+	if lv.id == "tutorial":
+		hud.open_text("التدريب", "مرحباً بك في التدريب.\n\nستتعلّم: المشي والالتفات، الانحناء تحت الليزر، تجنّب الكاميرات، ولعب دور المحلّل.\nاتبع السطر الأخضر في أسفل الشاشة خطوة بخطوة.\n\nالحارس هنا بطيء وبصره ضعيف — لا تخف.")
+		return
+	if not lasers.is_empty() or not cctvs.is_empty():
+		var extra := "\n\n⚠ في هذه المرحلة:"
+		if not lasers.is_empty():
+			extra += "\n• ليزر: لا تلمسه. انحنِ (🧎) تحت العالي، وانتظر الفراغ في المتحرّك."
+		if lv.get("killswitch", false):
+			extra += "\n• قاطع الليزر قرب باب الغرفة الثانية: ترتيب ألوانه في «سجلّ الليزر» عند المحلّل."
+		if not cctvs.is_empty():
+			extra += "\n• كاميرات: ابقَ خارج المخروط الأحمر. المحلّل يستطيع تجميدها."
+		a += extra
+		b += extra
 	if role == "agent":
-		hud.open_text("مهمّتك", a)
+		hud.open_text(title, a)
 	elif role == "analyst":
-		hud.open_text("مهمّتك", b)
+		hud.open_text(title, b)
 	else:
-		hud.open_text("وضع التجربة", a + "\n\n(زر 👁 أعلى الشاشة يبدّلك إلى المحلّل)")
+		hud.open_text(title, a + "\n\n(زر 👁 أعلى الشاشة يبدّلك إلى المحلّل)")
 
 
 func _hints() -> void:
@@ -466,7 +580,18 @@ func _make_puzzle(s: int) -> Dictionary:
 		if not syms.has(k):
 			syms.append(k)
 	var combo := [r.randi_range(1, 39), r.randi_range(1, 39), r.randi_range(1, 39)]
-	return {"code": code, "serial": serial, "table": table, "answer": answer, "wires": wires, "symbols": syms, "combo": combo}
+	var r2 := RandomNumberGenerator.new()
+	r2.seed = s + 7919
+	var cl := [0, 1, 2, 3]
+	for i in range(cl.size() - 1, 0, -1):
+		var j := r2.randi_range(0, i)
+		var tmp = cl[i]
+		cl[i] = cl[j]
+		cl[j] = tmp
+	var laser := []
+	for i in 3:
+		laser.append(str(LCOLORS[cl[i]][0]))
+	return {"code": code, "serial": serial, "table": table, "answer": answer, "wires": wires, "symbols": syms, "combo": combo, "laser": laser}
 
 
 # ───────── المواد والجوّ ─────────
@@ -722,6 +847,7 @@ func _sounds() -> void:
 	s_creep = _snd3d("door", Vector3.ZERO, -2.0)
 	s_music = _snd("chase", true, -40.0)
 	s_vault = _snd3d("vault_open", Vector3(29.6, 1.5, 5), 4.0)
+	s_beep = _snd("cam_beep", false, -4.0)
 
 
 func _glow(color: Color, energy: float) -> StandardMaterial3D:
@@ -754,9 +880,346 @@ func _environment() -> void:
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.15
 	env.adjustment_saturation = 0.85
+	match str(lv.get("theme", "port")):
+		"river":
+			# رطوبة: ضباب مائل للأخضر، ضوء بارد خافت
+			env.fog_light_color = Color(0.02, 0.045, 0.05)
+			env.fog_density = 0.075
+			env.ambient_light_color = Color(0.25, 0.42, 0.45)
+			env.adjustment_saturation = 0.8
+		"mountain":
+			# برد: ضباب أزرق شاحب، ألوان باهتة
+			env.fog_light_color = Color(0.07, 0.085, 0.11)
+			env.fog_density = 0.05
+			env.ambient_light_color = Color(0.5, 0.6, 0.8)
+			env.ambient_light_energy = 0.17
+			env.adjustment_saturation = 0.62
+			env.adjustment_contrast = 1.2
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
+
+
+## الجودة المنخفضة: بلا ظلال ولا انعكاسات ولا توهّج، جزيئات أقلّ، ودقّة ثلاثية الأبعاد أقلّ قليلاً.
+func _apply_low_quality() -> void:
+	get_viewport().scaling_3d_scale = 0.72
+	for n in find_children("*", "Light3D", true, false):
+		(n as Light3D).shadow_enabled = false
+	for n in find_children("*", "ReflectionProbe", true, false):
+		n.queue_free()
+	for n in find_children("*", "CPUParticles3D", true, false):
+		(n as CPUParticles3D).amount = maxi(4, int((n as CPUParticles3D).amount / 2))
+	for n in find_children("*", "WorldEnvironment", true, false):
+		var env: Environment = (n as WorldEnvironment).environment
+		env.glow_enabled = false
+		env.fog_density *= 0.9
+	for f in feeds:
+		(f[0] as SubViewport).size = Vector2i(200, 112)
+	print("QUALITY: low")
+
+
+# ───────── جوّ المرحلة ─────────
+func _theme() -> void:
+	match str(lv.get("theme", "port")):
+		"river":
+			# أرض مبلّلة تلمع، برك ماء، قطرات من السقف، ومطر على السطح
+			mat_floor.roughness = 0.22
+			mat_floor.albedo_color = mat_floor.albedo_color.darkened(0.25)
+			var water := StandardMaterial3D.new()
+			water.albedo_color = Color(0.02, 0.03, 0.035, 0.9)
+			water.metallic = 0.4
+			water.roughness = 0.03
+			water.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			for pd in [Vector3(5.5, 0.005, 6.2), Vector3(12.5, 0.005, 3.0), Vector3(17.0, 0.005, 6.8), Vector3(24.0, 0.005, 7.5), Vector3(26.5, 0.005, 2.6)]:
+				var m := MeshInstance3D.new()
+				var pm := PlaneMesh.new()
+				pm.size = Vector2(randf_range(1.2, 2.2), randf_range(0.8, 1.6))
+				m.mesh = pm
+				m.material_override = water
+				m.position = pd
+				m.rotation.y = randf() * TAU
+				add_child(m)
+			for dp in [Vector3(5.5, WALL_H - 0.05, 6.2), Vector3(12.5, WALL_H - 0.05, 3.0), Vector3(17.0, WALL_H - 0.05, 6.8), Vector3(24.0, WALL_H - 0.05, 7.5)]:
+				_drips(dp)
+			s_hazard_amb = _snd("rain", true, -9.0)
+			if s_hazard_amb.stream:
+				s_hazard_amb.play()
+		"mountain":
+			# جدران مثلّجة، أكوام ثلج عند الجدران، ثلج يتطاير من شقوق السقف، وأنفاس تتبخّر
+			for m in [mat_wall, mat_wall_dark]:
+				(m as StandardMaterial3D).albedo_color = (m as StandardMaterial3D).albedo_color * Color(0.86, 0.92, 1.08)
+			mat_floor.albedo_color = mat_floor.albedo_color.lerp(Color(0.75, 0.8, 0.9), 0.35)
+			mat_floor.roughness = 0.35
+			var snow := StandardMaterial3D.new()
+			snow.albedo_color = Color(0.9, 0.93, 0.98)
+			snow.roughness = 0.95
+			var rng := RandomNumberGenerator.new()
+			rng.seed = 11
+			for i in 22:
+				var along := rng.randf_range(0.6, 29.0)
+				var side := 0.25 if rng.randf() < 0.5 else 9.75
+				if along < 8.0:
+					side = 0.25 if side < 5.0 else 7.75
+				var m := MeshInstance3D.new()
+				var sm := SphereMesh.new()
+				sm.radius = rng.randf_range(0.35, 0.7)
+				sm.height = sm.radius * 2.0
+				m.mesh = sm
+				m.material_override = snow
+				m.scale = Vector3(rng.randf_range(1.2, 2.0), 0.28, 0.8)
+				m.position = Vector3(along, 0.0, side)
+				m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				add_child(m)
+			for c in [Vector3(4, WALL_H - 0.1, 4), Vector3(14, WALL_H - 0.1, 5), Vector3(25, WALL_H - 0.1, 5)]:
+				_snowfall(c)
+			s_hazard_amb = _snd("wind", true, -8.0)
+			if s_hazard_amb.stream:
+				s_hazard_amb.play()
+
+
+func _drips(at: Vector3) -> void:
+	var p := CPUParticles3D.new()
+	p.position = at
+	p.amount = 10
+	p.lifetime = 1.1
+	p.direction = Vector3.DOWN
+	p.spread = 2.0
+	p.initial_velocity_min = 0.5
+	p.initial_velocity_max = 1.0
+	p.gravity = Vector3(0, -9.8, 0)
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(0.5, 0.02, 0.5)
+	var m := QuadMesh.new()
+	m.size = Vector2(0.012, 0.09)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.7, 0.8, 0.85, 0.55)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	m.material = mat
+	p.mesh = m
+	add_child(p)
+
+
+func _snowfall(at: Vector3) -> void:
+	var p := CPUParticles3D.new()
+	p.position = at
+	p.amount = 90
+	p.lifetime = 5.0
+	p.preprocess = 5.0
+	p.direction = Vector3(1, -0.4, 0)
+	p.spread = 25.0
+	p.initial_velocity_min = 0.3
+	p.initial_velocity_max = 0.9
+	p.gravity = Vector3(0.25, -0.35, 0)
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(4.5, 0.05, 4.0)
+	var m := QuadMesh.new()
+	m.size = Vector2(0.025, 0.025)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.95, 0.97, 1.0, 0.85)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	m.material = mat
+	p.mesh = m
+	add_child(p)
+
+
+# ───────── الليزر والكاميرات ─────────
+func _build_hazards() -> void:
+	var hum := _stream("laser", true)
+	for L in lv.get("lasers", []):
+		var l = preload("res://laser.gd").new()
+		add_child(l)
+		l.setup(float(L[0]), float(L[1]), float(L[2]), str(L[3]), L[4], float(L[5]), hum)
+		lasers.append(l)
+	for C in lv.get("cams", []):
+		var c = preload("res://cctv.gd").new()
+		add_child(c)
+		c.setup(C[0], float(C[1]), float(C[2]), float(C[3]))
+		cctvs.append(c)
+	if lv.get("killswitch", false):
+		# صندوق القاطع: لوح معدني على الجدار، أربعة أزرار ملوّنة، ولمبة تبيّن حالة الليزر
+		kill_node = _box(KILL_POS + Vector3(0.06, 1.25, 0), Vector3(0.12, 0.7, 0.55), mat_steel, false)
+		for k in LCOLORS.size():
+			_box(KILL_POS + Vector3(0.14, 1.36 - floor(k / 2.0) * 0.2, -0.1 + (k % 2) * 0.2), Vector3(0.04, 0.1, 0.1), _glow(LCOLORS[k][1], 1.6), false)
+		var lab := _label3d("قاطع الليزر", KILL_POS + Vector3(0.15, 1.72, 0), 26, Color(1.0, 0.4, 0.35))
+		lab.rotation_degrees.y = 90
+		kill_lamp = OmniLight3D.new()
+		kill_lamp.position = KILL_POS + Vector3(0.5, 1.4, 0)
+		kill_lamp.light_color = Color(1.0, 0.15, 0.1)
+		kill_lamp.light_energy = 0.8
+		kill_lamp.omni_range = 2.0
+		add_child(kill_lamp)
+
+
+func _laser_off() -> float:
+	var v := 0.0
+	for l in lasers:
+		v = maxf(v, l.off_t)
+	return v
+
+
+func _cam_frozen() -> float:
+	var v := 0.0
+	for c in cctvs:
+		v = maxf(v, c.frozen_t)
+	return v
+
+
+## المحلّل يتبع زمن العوائق عند العميل (المرجع).
+func _apply_hazard_sync(ht: float, lz: float, cf: float) -> void:
+	if role != "analyst":
+		return
+	htime = ht if absf(ht - htime) > 0.4 else lerpf(htime, ht, 0.3)
+	for l in lasers:
+		l.off_t = lz
+	for c in cctvs:
+		c.frozen_t = cf
+
+
+func _hazards_update(delta: float) -> void:
+	if role != "analyst":
+		htime += delta
+	for l in lasers:
+		l.update(htime, delta)
+	for c in cctvs:
+		c.update(htime, delta)
+	if kill_lamp:
+		var off := _laser_off() > 0.0
+		kill_lamp.light_color = Color(0.3, 1.0, 0.45) if off else Color(1.0, 0.15, 0.1)
+
+
+## العميل فقط: هل لمس الليزر؟ هل رأته كاميرا؟
+func _agent_hazards(delta: float) -> void:
+	_laser_cd = maxf(0.0, _laser_cd - delta)
+	var p: Vector3 = agent.global_position
+	if invuln <= 0.0 and _laser_cd <= 0.0 and stage < 4 and not vault_mode:
+		for l in lasers:
+			if l.hits(p, agent.crouch):
+				_laser_tripped()
+				break
+	var space := get_world_3d().direct_space_state
+	var top := 0.0
+	for c in cctvs:
+		if c.cooldown <= 0.0 and invuln <= 0.0 and c.sees(p, agent.crouch, space, [agent.get_rid()]):
+			c.fill = minf(1.0, c.fill + delta / (0.7 if stage >= 3 else 1.0))
+			if c.fill >= 1.0:
+				_cam_alarm(c)
+		else:
+			c.fill = maxf(0.0, c.fill - delta * 0.5)
+		top = maxf(top, c.fill)
+	if active == agent:
+		hud.set_cam_meter(top)
+		if top > 0.05:
+			_beep_t -= delta
+			if _beep_t <= 0.0 and s_click.stream:
+				_beep_t = lerpf(0.5, 0.12, top)
+				s_click.play()
+	# تحذير قبل أن يعود الليزر بعد القطع
+	var off := _laser_off()
+	if off > 0.0 and off < 5.0 and not _laser_warned and active == agent:
+		_laser_warned = true
+		hud.flash("⚠ الليزر يعود خلال 5 ثوانٍ!", Color(1.0, 0.63, 0.23))
+	elif off <= 0.0:
+		_laser_warned = false
+
+
+func _nearest_guard(p: Vector3):
+	var best = null
+	var bd := 1e9
+	for g in guards:
+		var d: float = (g.global_position as Vector3).distance_to(p)
+		if d < bd:
+			bd = d
+			best = g
+	return best
+
+
+func _laser_tripped() -> void:
+	_laser_cd = 4.0
+	if active == agent:
+		hud.flash("🚨 لمستَ الليزر! الحارس قادم — اختبئ", Color(0.9, 0.28, 0.3))
+		hud.hit()
+		Input.vibrate_handheld(250)
+	shake = 0.35
+	if s_beep.stream:
+		s_beep.play()
+	var g = _nearest_guard(agent.global_position)
+	if g and not g.is_chasing():
+		g.chase(agent)
+
+
+func _cam_alarm(c) -> void:
+	c.fill = 0.0
+	c.cooldown = 8.0
+	if active == agent:
+		hud.flash("📹 رصدتك الكاميرا! الحارس في الطريق", Color(0.9, 0.28, 0.3))
+		hud.hit()
+		Input.vibrate_handheld(200)
+	if s_beep.stream:
+		s_beep.play()
+	var g = _nearest_guard(agent.global_position)
+	if g and not g.is_chasing():
+		g.chase(agent)
+
+
+func _submit_colors(picked: Array) -> void:
+	if lockout > 0.0:
+		hud.flash("القاطع مقفل… انتظر", Color(0.9, 0.28, 0.3))
+		return
+	if picked == puzzle.laser:
+		hud.close_panel()
+		for l in lasers:
+			l.off_t = LASER_OFF
+		_laser_warned = false
+		hud.flash("✔ قُطع الليزر لمدّة %d ثانية — أسرع!" % int(LASER_OFF), Color(0.42, 0.85, 0.58))
+		if s_clunk.stream:
+			s_clunk.play()
+	else:
+		lockout = 4.0
+		hud.flash("✖ ترتيب خاطئ — القاطع مقفل 4 ثوانٍ", Color(0.9, 0.28, 0.3))
+		hud.hit()
+		if s_beep.stream:
+			s_beep.play()
+
+
+# ───────── التدريب: سطر إرشاد يتغيّر مع تقدّم اللاعب ─────────
+func _tutorial_update(delta: float) -> void:
+	if agent == null:
+		return
+	var p: Vector3 = agent.global_position
+	var tip := ""
+	if active == analyst:
+		match stage:
+			0:
+				tip = "أنت الآن المحلّل. انظر إلى الدرج المضيء واضغط الزر لتقرأ الرمز، ثم بدّل الدور (👁)"
+			1:
+				tip = "اقرأ «دليل الأسلاك» الأحمر: ابحث عن آخر رقم من الرقم التسلسلي. جرّب أيضاً «📹 جمّد الكاميرات»"
+			2:
+				tip = "شغّل الحاسوب وأدخل الرموز الثلاثة التي على باب الخزنة، واحفظ التركيبة"
+			_:
+				tip = "عُد إلى العميل (👁) واهرب!"
+		hud.set_tip(tip)
+		return
+	_tut_moved += Vector2(agent.velocity.x, agent.velocity.z).length() * delta
+	if _tut == 0:
+		tip = "١. حرّك العصا اليسرى للمشي، واسحب يمين الشاشة لتلتفت (على الحاسوب: WASD والفأرة)"
+		if _tut_moved > 3.0:
+			_tut = 1
+	if _tut == 1 and stage == 0:
+		if p.x < 5.8:
+			tip = "٢. 🔴 أمامك ليزر عالٍ! اضغط «🧎 انحنِ» (أو C) ومُرّ تحته ببطء" if p.x > 2.6 else "٢. تقدّم نحو الليزر الأحمر"
+		else:
+			tip = "٣. ممتاز! قِف واذهب إلى الجهاز (السهم البرتقالي). الرمز ليس عندك: اضغط «👁 بدّل الدور» لتصبح المحلّل"
+	elif stage == 1:
+		tip = "٤. 📹 كاميرا في الغرفة التالية: ابقَ خارج المخروط الأحمر، أو انحنِ وراء الصناديق. عدّاد أحمر = تراك"
+	elif stage == 2:
+		tip = "٥. صِف رموز باب الخزنة (أو بدّل الدور وأدخلها في الحاسوب)، ثم أدِر القرص على التركيبة"
+	elif stage >= 3:
+		tip = "٦. 🚨 اهرب إلى نقطة البداية! لا تنسَ الانحناء تحت الليزر"
+	hud.set_tip(tip)
 
 
 # ───────── أدوات البناء ─────────
@@ -1214,11 +1677,20 @@ func _spawn_guards() -> void:
 	add_child(g)
 	g.setup([Vector3(9.5, 0, 8.6), Vector3(18.5, 0, 8.6), Vector3(18.5, 0, 1.3), Vector3(9.5, 0, 1.3)], 1.25, Rect2(8.5, 0.5, 11.0, 9.0))
 	guards.append(g)
-	var g2 = preload("res://guard.gd").new()
-	add_child(g2)
-	g2.setup([Vector3(22, 0, 8.2), Vector3(27.2, 0, 8.2), Vector3(27.2, 0, 1.6), Vector3(22, 0, 1.6)], 1.0, Rect2(20.5, 0.5, 8.6, 9.0))
-	guards.append(g2)
+	if lv.id != "tutorial":
+		var g2 = preload("res://guard.gd").new()
+		add_child(g2)
+		g2.setup([Vector3(22, 0, 8.2), Vector3(27.2, 0, 8.2), Vector3(27.2, 0, 1.6), Vector3(22, 0, 1.6)], 1.0, Rect2(20.5, 0.5, 8.6, 9.0))
+		guards.append(g2)
+	if lv.get("extra_guard", false):
+		# حارس ثالث يدور في الغرفة الثانية بالاتّجاه المعاكس
+		var g3 = preload("res://guard.gd").new()
+		add_child(g3)
+		g3.setup([Vector3(18.5, 0, 1.3), Vector3(18.5, 0, 8.6), Vector3(9.5, 0, 8.6), Vector3(9.5, 0, 1.3)], 1.1, Rect2(8.5, 0.5, 11.0, 9.0))
+		guards.append(g3)
 	for gg in guards:
+		gg.speed *= float(lv.guard_speed)
+		gg.sight = float(lv.guard_sight)
 		gg.remote = role == "analyst"
 		gg.apply_remote(gg.position, gg.rotation.y, "walk")
 
@@ -1301,6 +1773,14 @@ func _build_archive() -> void:
 	paper.rotation_degrees = Vector3(-90, 90, 0)
 	paper.visible = false
 	paper.name = "Paper"
+	# سجلّ الليزر (في المراحل التي فيها قاطع): لوح على الجدار الشرقي
+	if lv.get("killswitch", false):
+		laserdoc_node = _box(o + Vector3(9.85, 1.6, 2.2), Vector3(0.08, 0.9, 1.2), _glow(Color(0.18, 0.05, 0.05), 0.6))
+		laserdoc_node.set_meta("kind", "laserdoc")
+		var ll := _label3d("سجلّ الليزر", o + Vector3(9.8, 2.2, 2.2), 30, Color(1.0, 0.35, 0.3))
+		ll.rotation_degrees.y = -90
+		for k in 3:
+			_box(o + Vector3(9.8, 1.35 + k * 0.22, 2.2), Vector3(0.02, 0.05, 0.9), _glow(Color(0.9, 0.85, 0.75), 0.25), false)
 	# لوحة «مطلوبون» على الجدار الغربي
 	_box(o + Vector3(0.2, 1.7, 4), Vector3(0.05, 1.3, 2.2), mat_wood, false)
 	var rng := RandomNumberGenerator.new()
@@ -1426,7 +1906,7 @@ func _process(delta: float) -> void:
 				for g in guards:
 					var gp: Vector3 = g.global_position
 					gl.append([snappedf(gp.x, 0.01), snappedf(gp.z, 0.01), snappedf(g.rotation.y, 0.01), g.state_name()])
-				net.send({"t": "pos", "x": snappedf(agent.global_position.x, 0.01), "z": snappedf(agent.global_position.z, 0.01), "y": snappedf(agent.yaw, 0.01), "g": gl})
+				net.send({"t": "pos", "x": snappedf(agent.global_position.x, 0.01), "z": snappedf(agent.global_position.z, 0.01), "y": snappedf(agent.yaw, 0.01), "g": gl, "ht": snappedf(htime, 0.01), "lz": snappedf(_laser_off(), 0.1), "cf": snappedf(_cam_frozen(), 0.1)})
 			_prog_t -= delta
 			if _prog_t <= 0.0:
 				_prog_t = 1.0
@@ -1438,6 +1918,7 @@ func _process(delta: float) -> void:
 				net.send({"t": "here"})
 		hud.set_status("🟢 الشريك متّصل" if t - _partner_seen < 5.0 else "🔴 بانتظار الشريك…")
 
+	_hazards_update(delta)
 	if result != "":
 		return
 
@@ -1459,6 +1940,11 @@ func _process(delta: float) -> void:
 		hud.set_timer(mission_left, mission_left < 60.0)
 
 	_hint_update(t)
+	if lv.id == "tutorial":
+		_tutorial_update(delta)
+	hud.set_crouch(agent != null and active == agent and not vault_mode and result == "", agent != null and agent.crouch)
+	if active != agent:
+		hud.set_cam_meter(0.0)
 	_audio_update(delta)
 	_fear_update(delta, t)
 	for k in tool_cd:
@@ -1566,9 +2052,12 @@ func _on_tool(kind: String) -> void:
 	if kind == "mark":
 		for g in guards:
 			g.mark(6.0)
+	if kind == "freeze":
+		for c in cctvs:
+			c.frozen_t = 8.0
 	if role == "analyst" and net:
 		net.send({"t": "tool", "k": kind})
-		hud.flash({"mark": "📍 حُدِّد الحرّاس للعميل", "distract": "🔊 شُتِّت أقرب حارس", "warn": "⚠ وصل التحذير"}[kind], Color(0.6, 0.95, 0.7))
+		hud.flash({"mark": "📍 حُدِّد الحرّاس للعميل", "distract": "🔊 شُتِّت أقرب حارس", "freeze": "📹 جُمّدت الكاميرات 8 ثوانٍ", "warn": "⚠ وصل التحذير"}[kind], Color(0.6, 0.95, 0.7))
 	else:
 		_do_tool(kind)
 
@@ -1590,6 +2079,11 @@ func _do_tool(kind: String) -> void:
 			if best:
 				best.distract()
 			hud.flash("🔊 المحلّل شتّت الحارس — تحرّك الآن!", Color(0.6, 0.95, 0.7))
+		"freeze":
+			for c in cctvs:
+				c.frozen_t = 8.0
+				c.fill = 0.0
+			hud.flash("📹 المحلّل جمّد الكاميرات — 8 ثوانٍ!", Color(0.6, 0.95, 0.7))
 		"warn":
 			hud.flash("⚠ المحلّل: حارس قريب منك!", Color(1.0, 0.63, 0.23))
 			hud.hit()
@@ -1644,6 +2138,7 @@ func _audio_update(delta: float) -> void:
 		s_heart.volume_db = move_toward(s_heart.volume_db, -40.0, delta * 30.0)
 		return
 	var moving: bool = Vector2(agent.velocity.x, agent.velocity.z).length() > 0.5
+	s_steps.volume_db = -20.0 if agent.crouch else -10.0
 	if s_steps.stream:
 		if moving and not s_steps.playing:
 			s_steps.play()
@@ -1709,6 +2204,7 @@ func _agent_logic(delta: float, t: float) -> void:
 		seen_time = maxf(0.0, seen_time - delta * 2.0)
 	if active == agent:
 		hud.set_alert(seen_time / 0.6)
+	_agent_hazards(delta)
 
 	if vault_mode:
 		agent.look_delta = Vector2.ZERO
@@ -1719,16 +2215,22 @@ func _agent_logic(delta: float, t: float) -> void:
 	if active != agent:
 		return
 	if stage >= 3:
-		hud.show_interact("")
+		hud.show_interact("قاطع الليزر" if _near_kill() and _laser_off() <= 0.0 else "")
 		if agent.global_position.distance_to(SPAWN) < 1.4:
 			_end(true)
 		return
-	if stage < 2:
+	if _near_kill():
+		hud.show_interact("قاطع الليزر" if _laser_off() <= 0.0 else "الليزر مقطوع (%d ث)" % int(ceil(_laser_off())))
+	elif stage < 2:
 		var near: bool = agent.global_position.distance_to(terminals[stage].pos) < 1.7
 		hud.show_interact(("استعمل " + str(terminals[stage].title)) if near else "")
 	else:
 		var near2: bool = Vector2(agent.global_position.x - VAULT_FRONT.x, agent.global_position.z - VAULT_FRONT.z).length() < 1.3
 		hud.show_interact("افتح الخزنة" if near2 else "")
+
+
+func _near_kill() -> bool:
+	return kill_node != null and Vector2(agent.global_position.x - KILL_POS.x, agent.global_position.z - KILL_POS.z).length() < 1.5
 
 
 func _analyst_logic() -> void:
@@ -1742,7 +2244,7 @@ func _analyst_logic() -> void:
 		if col is Node and (col as Node).has_meta("kind"):
 			obj = col
 	var kind := str((obj as Node).get_meta("kind")) if obj else ""
-	var labels := {"drawer": "اقرأ الورقة" if drawer_open else "افتح الدرج", "book": "اقرأ دليل الأسلاك", "computer": "شغّل الحاسوب", "monitor": "كبّر الشاشة"}
+	var labels := {"drawer": "اقرأ الورقة" if drawer_open else "افتح الدرج", "book": "اقرأ دليل الأسلاك", "computer": "شغّل الحاسوب", "monitor": "كبّر الشاشة", "laserdoc": "اقرأ سجلّ الليزر"}
 	hud.show_interact(str(labels.get(kind, "")))
 	analyst.set_meta("looking", obj)
 
@@ -1750,6 +2252,12 @@ func _analyst_logic() -> void:
 func _on_interact() -> void:
 	if active == analyst:
 		_analyst_interact()
+		return
+	if _near_kill():
+		if _laser_off() <= 0.0:
+			hud.open_colors("قاطع الليزر", LCOLORS, _submit_colors)
+		return
+	if stage >= 3:
 		return
 	if stage == 0:
 		hud.open_keypad("لوحة الأرقام — الرمز في درج مكتب المحلّل", _submit_code)
@@ -1784,6 +2292,12 @@ func _analyst_interact() -> void:
 		hud.open_table("دليل الأسلاك", rows)
 	elif kind == "computer":
 		hud.open_symbols(SYMBOLS, _check_symbols)
+	elif kind == "laserdoc":
+		var dots := {"أحمر": "🔴", "أزرق": "🔵", "أخضر": "🟢", "أصفر": "🟡"}
+		var seq := []
+		for c in puzzle.laser:
+			seq.append(str(dots.get(c, "")) + " " + str(c))
+		hud.open_text("سجلّ الليزر", "ترتيب أزرار قاطع الليزر اليوم:\n\n" + "   ←   ".join(seq) + "\n\nالقاطع يطفئ الليزر %d ثانية فقط. أمْلِ الترتيب على العميل حين يصل إلى القاطع." % int(LASER_OFF))
 	elif kind == "monitor":
 		var i := int(obj.get_meta("index"))
 		hud.open_feed(str(feeds[i][1]), (feeds[i][0] as SubViewport).get_texture())
@@ -1863,6 +2377,8 @@ func _update_objective() -> void:
 			txt = "٣. صِف لشريكك الرموز الثلاثة على باب الخزنة، ثم أدِر القرص على الأرقام التي يقولها" if agent_side else "٣. أدخل في الحاسوب المضيء الرموز التي يصفها العميل، وأمْلِه التركيبة"
 		_:
 			txt = "🚨 اهرب إلى نقطة البداية!" if agent_side else "🚨 وجّه العميل إلى المخرج عبر الكاميرات!"
+	if lv.get("killswitch", false) and stage == 1:
+		txt += "\n🔴 الليزر يسدّ الطريق: انحنِ وانتظر الفراغ، أو استعمل القاطع (الترتيب في «سجلّ الليزر» عند المحلّل)" if agent_side else "\n🔴 العميل يحتاج ترتيب قاطع الليزر: اقرأه من «سجلّ الليزر» على الجدار"
 	if role == "solo" and agent_side and stage < 3:
 		txt += "\n(وضع التجربة: اضغط «بدّل الدور» لتصبح المحلّل وتجد الجواب)"
 	hud.set_objective(txt)
@@ -1870,6 +2386,7 @@ func _update_objective() -> void:
 
 # ───────── الخزنة ─────────
 func _enter_vault() -> void:
+	agent.set_crouch(false)
 	vault_mode = true
 	agent.locked = true
 	dial_entered = []
@@ -2022,6 +2539,7 @@ func _spotted() -> void:
 		_reset_agent_cam()
 	agent.velocity = Vector3.ZERO
 	agent.move_input = Vector2.ZERO
+	agent.set_crouch(false)
 	hud.release_touches()
 	if stage >= 3:
 		escape_left = maxf(1.0, escape_left - 8.0)
@@ -2038,4 +2556,12 @@ func _end(won: bool) -> void:
 func _finish(won: bool) -> void:
 	result = "win" if won else "lose"
 	hud.show_interact("")
-	hud.end_screen(won)
+	hud.set_tip("")
+	hud.set_crouch(false, false)
+	hud.set_cam_meter(0.0)
+	var next_name := ""
+	if won:
+		Levels.complete(level_i)
+		if net == null and level_i + 1 < Levels.count():
+			next_name = str(Levels.get_level(level_i + 1).name)
+	hud.end_screen(won, next_name)

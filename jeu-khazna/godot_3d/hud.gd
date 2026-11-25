@@ -6,6 +6,8 @@ signal interact_pressed
 signal switch_pressed
 signal tool_pressed(kind: String)
 signal mic_pressed
+signal crouch_pressed
+signal next_pressed
 
 var player
 var look_only := false # وضع القرص: كل سحب = دوران
@@ -34,6 +36,9 @@ var _flash: Label
 var _timer: Label
 var _status: Label
 var _interact: Button
+var _crouch: Button
+var _cam_meter: ProgressBar
+var _tip: Label
 var _switch: Button
 var _alert_mat: ShaderMaterial
 var _hit := 0.0
@@ -138,6 +143,49 @@ void fragment() {
 	_switch.pressed.connect(func(): switch_pressed.emit())
 	_root.add_child(_switch)
 
+	# زرّ الانحناء (للعميل): فوق زرّ التفاعل
+	_crouch = _button("🧎 انحنِ", Color(0.12, 0.14, 0.17, 0.9), Color(0.9, 0.91, 0.92), 24)
+	_crouch.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_crouch.offset_left = -200
+	_crouch.offset_right = -36
+	_crouch.offset_top = -230
+	_crouch.offset_bottom = -150
+	_crouch.visible = false
+	_crouch.pressed.connect(func(): crouch_pressed.emit())
+	_root.add_child(_crouch)
+
+	# عدّاد الكاميرا: يمتلئ حين تراك كاميرا
+	_cam_meter = ProgressBar.new()
+	_cam_meter.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_cam_meter.offset_left = -150
+	_cam_meter.offset_right = 150
+	_cam_meter.offset_top = 96
+	_cam_meter.offset_bottom = 112
+	_cam_meter.show_percentage = false
+	_cam_meter.max_value = 1.0
+	var fg := StyleBoxFlat.new()
+	fg.bg_color = DANGER
+	fg.set_corner_radius_all(6)
+	var bgs := StyleBoxFlat.new()
+	bgs.bg_color = Color(0, 0, 0, 0.5)
+	bgs.set_corner_radius_all(6)
+	_cam_meter.add_theme_stylebox_override("fill", fg)
+	_cam_meter.add_theme_stylebox_override("background", bgs)
+	_cam_meter.visible = false
+	_cam_meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_cam_meter)
+
+	# نصيحة التدريب: سطر كبير في الأسفل
+	_tip = _label(26, Color(0.75, 1.0, 0.8))
+	_tip.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_tip.offset_left = -520
+	_tip.offset_right = 520
+	_tip.offset_top = -250
+	_tip.offset_bottom = -170
+	_tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_root.add_child(_tip)
+
 	# بوصلة الهدف: سهم يدور نحو الجهاز التالي، والمسافة بالأمتار
 	_compass = Polygon2D.new()
 	_compass.polygon = PackedVector2Array([Vector2(0, -26), Vector2(18, 14), Vector2(0, 5), Vector2(-18, 14)])
@@ -158,7 +206,7 @@ void fragment() {
 	_tools.add_theme_constant_override("separation", 10)
 	_tools.visible = false
 	_root.add_child(_tools)
-	for t in [["mark", "📍 علامة على الحرّاس"], ["distract", "🔊 شتّت الحارس"], ["warn", "⚠ حذّر العميل"]]:
+	for t in [["mark", "📍 علامة على الحرّاس"], ["distract", "🔊 شتّت الحارس"], ["freeze", "📹 جمّد الكاميرات"], ["warn", "⚠ حذّر العميل"]]:
 		var b := _button(t[1], Color(0.1, 0.16, 0.12, 0.92), Color(0.75, 1.0, 0.8), 20)
 		b.custom_minimum_size = Vector2(260, 64)
 		var k: String = t[0]
@@ -229,7 +277,7 @@ func _input(event) -> void:
 			for c2 in _tools.get_children():
 				if _tools.visible and (c2 as Control).get_global_rect().has_point(event.position):
 					return
-			for b in [_interact, _switch, _mic]:
+			for b in [_interact, _switch, _mic, _crouch]:
 				if b.visible and b.get_global_rect().has_point(event.position):
 					return
 			if _vault != null:
@@ -336,6 +384,69 @@ func set_compass(angle: float, dist: float, escape: bool) -> void:
 	_compass_d.text = "%d م" % int(round(dist))
 	_compass_d.position = Vector2(w / 2.0 - 30, 146)
 	_compass_d.add_theme_color_override("font_color", OK if escape else AMBER)
+
+
+func set_crouch(visible_: bool, on: bool) -> void:
+	_crouch.visible = visible_ and _panel == null
+	_crouch.text = "🧍 قِف" if on else "🧎 انحنِ"
+	var sb := StyleBoxFlat.new()
+	sb.set_corner_radius_all(10)
+	sb.bg_color = Color(0.2, 0.45, 0.28, 0.95) if on else Color(0.12, 0.14, 0.17, 0.9)
+	for st in ["normal", "hover", "pressed", "focus"]:
+		_crouch.add_theme_stylebox_override(st, sb)
+
+
+func set_cam_meter(v: float) -> void:
+	_cam_meter.visible = v > 0.02
+	_cam_meter.value = v
+
+
+func set_tip(t: String) -> void:
+	_tip.text = t
+
+
+func hide_tool(k: String) -> void:
+	if _tool_btns.has(k):
+		(_tool_btns[k][0] as Button).queue_free()
+		_tool_btns.erase(k)
+
+
+## قاطع الليزر: يُدخل العميل ترتيب ثلاثة ألوان يمليه المحلّل.
+func open_colors(title: String, colors: Array, on_submit: Callable) -> void:
+	var v := _open(title)
+	var hint := _label(20, Color(0.6, 0.64, 0.68))
+	hint.text = "اسأل المحلّل عن ترتيب الألوان في «سجلّ الليزر»، ثم اضغطها بالترتيب"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(hint)
+	var disp := _label(40, Color(0.9, 0.91, 0.92))
+	disp.text = "○ ○ ○"
+	disp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	disp.text_direction = Control.TEXT_DIRECTION_LTR
+	v.add_child(disp)
+	var picked := []
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 12)
+	v.add_child(grid)
+	for c in colors:
+		var col: Color = c[1]
+		var b := _button(str(c[0]), col, Color(0.05, 0.05, 0.05) if col.get_luminance() > 0.5 else Color.WHITE, 30)
+		b.custom_minimum_size = Vector2(250, 84)
+		var nm: String = c[0]
+		b.pressed.connect(func():
+			picked.append(nm)
+			var dots := []
+			for i in 3:
+				dots.append("●" if i < picked.size() else "○")
+			disp.text = " ".join(dots)
+			if picked.size() == 3:
+				on_submit.call(picked.duplicate())
+				picked.clear()
+				disp.text = "○ ○ ○"
+		)
+		grid.add_child(b)
 
 
 func set_tools(on: bool, cooldowns: Dictionary) -> void:
@@ -720,7 +831,7 @@ func loading(on: bool, progress := 0.0, text := "") -> void:
 	_load_txt.text = text
 
 
-func end_screen(won: bool) -> void:
+func end_screen(won: bool, next_name := "") -> void:
 	close_panel()
 	vault_ui(false, Callable(), Callable(), Callable())
 	_interact.visible = false
@@ -744,3 +855,12 @@ func end_screen(won: bool) -> void:
 	b.offset_bottom = 112
 	b.pressed.connect(func(): get_tree().reload_current_scene())
 	e.add_child(b)
+	if won and next_name != "":
+		var n := _button("  التالية: " + next_name + "  ▶", OK, Color(0.03, 0.08, 0.04), 28)
+		n.set_anchors_preset(Control.PRESET_CENTER)
+		n.offset_left = -220
+		n.offset_right = 220
+		n.offset_top = 128
+		n.offset_bottom = 200
+		n.pressed.connect(func(): next_pressed.emit())
+		e.add_child(n)

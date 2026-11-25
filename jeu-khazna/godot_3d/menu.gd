@@ -9,6 +9,12 @@ var _root: Control
 var _info: Label
 var _code: LineEdit
 var _box: VBoxContainer
+var _level_btns: Array = []
+var _level_sub: Label
+var level := 1
+var _quality: Button
+
+const Levels := preload("res://levels.gd")
 
 
 func _ready() -> void:
@@ -30,8 +36,9 @@ func _ready() -> void:
 
 	_box.add_child(_title("الخزنة 3D", 64, Color(0.91, 0.63, 0.23)))
 	_box.add_child(_title("عميل يتسلّل · محلّل يبحث · خزنة لا تُفتح إلا معاً", 22, Color(0.64, 0.67, 0.7)))
-	_box.add_child(_btn("🕵️  إنشاء غرفة — أنا العميل", func(): host.emit("agent")))
-	_box.add_child(_btn("🖥️  إنشاء غرفة — أنا المحلّل", func(): host.emit("analyst")))
+	_box.add_child(_levels_row())
+	_box.add_child(_btn("🕵️  إنشاء غرفة — أنا العميل", func(): _host_if_ok("agent")))
+	_box.add_child(_btn("🖥️  إنشاء غرفة — أنا المحلّل", func(): _host_if_ok("analyst")))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	_code = LineEdit.new()
@@ -48,8 +55,73 @@ func _ready() -> void:
 	row.add_child(jb)
 	_box.add_child(row)
 	_box.add_child(_btn("🎮  تجربة وحدي (أبدّل بين الدورين)", func(): solo.emit()))
+	_quality = _btn("", func():
+		Levels.set_low_quality(not Levels.low_quality())
+		_quality_text())
+	_quality.custom_minimum_size = Vector2(0, 56)
+	_quality.add_theme_font_size_override("font_size", 22)
+	_box.add_child(_quality)
+	_quality_text()
 	_info = _title("", 24, Color(0.42, 0.85, 0.58))
 	_box.add_child(_info)
+
+
+## اختيار المرحلة: المغلقة تظهر بقفل حتى تُنهى التي قبلها.
+func _levels_row() -> Control:
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_child(row)
+	_level_sub = _title("", 18, Color(0.64, 0.67, 0.7))
+	col.add_child(_level_sub)
+	var top: int = Levels.unlocked()
+	level = mini(top, Levels.count() - 1)
+	for i in Levels.count():
+		var lv: Dictionary = Levels.get_level(i)
+		var locked: bool = i > top
+		var b := Button.new()
+		b.text = ("🔒 " if locked else "") + str(lv.name)
+		b.disabled = locked
+		b.toggle_mode = true
+		b.custom_minimum_size = Vector2(150, 58)
+		b.add_theme_font_size_override("font_size", 22)
+		var idx := i
+		b.pressed.connect(func(): _pick(idx))
+		row.add_child(b)
+		_level_btns.append(b)
+	_pick(level)
+	return col
+
+
+func _quality_text() -> void:
+	_quality.text = "⚙ الجودة: منخفضة (أسرع للهواتف الضعيفة)" if Levels.low_quality() else "⚙ الجودة: عالية (ظلال وتوهّج كاملان)"
+
+
+func _pick(i: int) -> void:
+	level = i
+	for k in _level_btns.size():
+		var b: Button = _level_btns[k]
+		b.button_pressed = k == i
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(10)
+		sb.bg_color = Color(0.91, 0.63, 0.23) if k == i else Color(0.09, 0.1, 0.12)
+		sb.border_color = Color(0.91, 0.63, 0.23, 0.6)
+		sb.set_border_width_all(2)
+		for st in ["normal", "hover", "pressed", "focus", "disabled"]:
+			b.add_theme_stylebox_override(st, sb)
+		var fc := Color(0.07, 0.05, 0.01) if k == i else Color(0.9, 0.91, 0.92)
+		for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+			b.add_theme_color_override(c, fc)
+	_level_sub.text = str(Levels.get_level(i).sub)
+
+
+func _host_if_ok(r: String) -> void:
+	if Levels.get_level(level).get("solo_only", false):
+		show_info("التدريب يُلعب وحدك: اضغط «تجربة وحدي»", Color(0.91, 0.63, 0.23))
+		return
+	host.emit(r)
 
 
 func _title(t: String, size: int, c: Color) -> Label:
