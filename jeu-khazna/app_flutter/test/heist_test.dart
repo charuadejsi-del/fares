@@ -188,4 +188,32 @@ void main() {
     final early = GameState(seed: 6, rooms: const ['keypad'], phase: 'playing', startedAt: 1000, stage: 13, heist: true);
     expect(applyAction(early, p, {'type': 'power'}, 3000).power, 0);
   });
+
+  test('نقطة العودة بعد الاكتشاف آمنة (لا يُكشف العميل فور عودته)', () {
+    var unsafe = 0, total = 0;
+    for (int seed = 1; seed <= 60; seed++) {
+      for (final stage in [14, 26, 48]) {
+        final m = heistMap(seed * 6151, stage, 4 + seed % 3);
+        for (int solved = 1; solved < m.rooms.length; solved++) {
+          for (double t = 0; t < 30; t += 3.7) {
+            total++;
+            final p = m.safeCheckpoint(solved, t, const {});
+            if (m.seen(p, t, solved, const {}) || m.seen(p, t + 1, solved, const {})) unsafe++;
+          }
+        }
+      }
+    }
+    expect(unsafe / total < .02, true, reason: '$unsafe / $total');
+  });
+
+  test('العميل المنحني عند الجهاز لا تراه الكاميرا ولا الحارس البعيد', () {
+    final m = heistMap(31, 20, 5);
+    final g = m.guards.first;
+    final (gp, ga) = guardAt(g, 3);
+    final far = gp + Offset(cos(ga), sin(ga)) * 3.0;
+    if (m.lineOfSight(gp, far, 99)) {
+      expect(m.seen(far, 3, 99, const {}), true);
+      expect(m.seen(far, 3, 99, const {}, crouch: true), false);
+    }
+  });
 }

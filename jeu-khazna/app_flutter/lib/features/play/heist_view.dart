@@ -177,7 +177,7 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
     // اكتُشف العميل → العودة إلى نقطة الحفظ (أثناء الهروب: لا عودة، فقط العقوبة)
     if (s.spots != _spots) {
       _spots = s.spots;
-      if (!escaping) _pos = map.checkpoint(solved);
+      if (!escaping) _pos = map.safeCheckpoint(solved, t, s.camOff, power: power);
       _invulnUntil = nowMs + 2500;
       _seenFor = 0;
       _pick = 0;
@@ -209,9 +209,10 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
     if (watch && nowMs > _invulnUntil) {
       if (map.laserHit(_pos, t)) {
         _spot();
-      } else if (map.seen(_pos, t, solved, s.camOff, power: power, alarm: escaping, shut: shut)) {
+      } else if (map.seen(_pos, t, solved, s.camOff, power: power, alarm: escaping, crouch: _hacking, shut: shut)) {
+        // عند الجهاز: ثانية كاملة قبل الاكتشاف (وقت للهرب بعد التحذير)
         _seenFor += dt;
-        if (_seenFor >= .5) _spot();
+        if (_seenFor >= (_hacking ? 1.0 : .5)) _spot();
       } else {
         _seenFor = max(0, _seenFor - dt * 2);
       }
@@ -293,6 +294,7 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
               facing: () => _facing,
               mark: () => c.markX == null || DateTime.now().millisecondsSinceEpoch - c.markAt > 5000 ? null : Offset(c.markX!, c.markY!),
               alert: () => _seenFor,
+              ghost: () => DateTime.now().millisecondsSinceEpoch < _invulnUntil,
               agentMode: true,
               vision: vision,
               showGuards: true,
@@ -426,7 +428,7 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
               child: ValueListenableBuilder<int>(
                 valueListenable: _frame,
                 builder: (context, _, __) {
-                  final danger = footsteps && _nearGuard < 3.2;
+                  final danger = footsteps && (_nearGuard < kCrouchRange + 1 || _seenFor > 0);
                   return FloatingActionButton.extended(
                     heroTag: 'heist-map',
                     backgroundColor: danger ? K.danger : K.surface2,
@@ -551,7 +553,7 @@ class _Footsteps extends StatelessWidget {
     final k = (1 - (distance - 1) / 5.5).clamp(0.0, 1.0);
     final seen = seenFor > 0;
     final color = seen ? K.danger : Color.lerp(K.amber, K.danger, k)!;
-    final text = seen ? '👁 يراك الآن!' : (distance < 3.2 ? '🔊 حارس خلفك تماماً!' : '🔊 خطى تقترب…');
+    final text = seen ? '👁 لاحظك! ابتعد فوراً' : (distance < kCrouchRange + 1 ? '🔊 حارس خلفك تماماً!' : '🔊 خطى تقترب…');
     final bars = (1 + k * 4).round();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -789,6 +791,7 @@ class _AnalystMapState extends State<_AnalystMap> with SingleTickerProviderState
                   facing: () => 0,
                   mark: () => c.markX == null || DateTime.now().millisecondsSinceEpoch - c.markAt > 5000 ? null : Offset(c.markX!, c.markY!),
                   alert: () => 0,
+                  ghost: () => false,
                   agentMode: false,
                   vision: 0,
                   showGuards: analystSeesGuards(s.stage),
@@ -857,6 +860,7 @@ class HeistPainter extends CustomPainter {
   final double Function() facing;
   final Offset? Function() mark;
   final double Function() alert;
+  final bool Function() ghost;
   final bool agentMode;
   final double vision;
   final bool showGuards;
@@ -871,6 +875,7 @@ class HeistPainter extends CustomPainter {
     required this.facing,
     required this.mark,
     required this.alert,
+    required this.ghost,
     required this.agentMode,
     required this.vision,
     required this.showGuards,
@@ -1115,8 +1120,8 @@ class HeistPainter extends CustomPainter {
       canvas.drawCircle(p, scale * .14, Paint()..color = K.neon);
     }
 
-    // العميل
-    if (a != null) {
+    // العميل (يومض أثناء الحماية بعد العودة)
+    if (a != null && !(ghost() && (DateTime.now().millisecondsSinceEpoch ~/ 150).isOdd)) {
       final p = sc(a);
       final f = facing();
       canvas.drawCircle(p + Offset(scale * .05, scale * .08), scale * .3, Paint()..color = Colors.black.withAlpha(110));

@@ -148,6 +148,9 @@ const double kPowerSeconds = 15, kPowerCooldown = 35;
 /// كم يقترب العميل من ظهر الحارس ليسرق البطاقة، وكم يبقى خلفه.
 const double kPickRange = 1.15, kPickSeconds = .8;
 
+/// مدى ملاحظة الحارس للعميل المنحني عند الجهاز، ومدّة الأمان بعد العودة.
+const double kCrouchRange = 2.3, kSafeSeconds = 3.5;
+
 class HeistMap {
   final int w, h;
   final List<int> tiles;
@@ -279,14 +282,16 @@ class HeistMap {
 
   /// هل يُرى العميل الآن؟ [camOff]: الكاميرات المعطّلة (رقم ← حتى أيّ وقت).
   /// [power]: التيار مقطوع (لا كاميرات، مصابيح الحرّاس أقصر). [alarm]: الإنذار يعمل (الحرّاس أيقظ).
+  /// [crouch]: العميل منحنٍ عند الجهاز يخترقه — الكاميرات لا تميّزه، والحارس لا يلاحظه إلا من قريب.
   bool seen(Offset p, double t, int solved, Map<String, double> camOff,
-      {bool power = false, bool alarm = false, Set<int> shut = const {}}) {
-    final range = guardRange(power: power, alarm: alarm);
+      {bool power = false, bool alarm = false, bool crouch = false, Set<int> shut = const {}}) {
+    var range = guardRange(power: power, alarm: alarm);
+    if (crouch) range = min(range, kCrouchRange);
     for (final g in guards) {
       final (gp, ga) = guardAt(g, t);
       if (inCone(gp, ga, p, range, kGuardHalf) && lineOfSight(gp, p, solved, shut)) return true;
     }
-    if (power) return false;
+    if (power || crouch) return false;
     for (int i = 0; i < cams.length; i++) {
       if ((camOff['$i'] ?? -1) > t) continue;
       final c = cams[i];
@@ -314,6 +319,33 @@ class HeistMap {
       diff += 2 * pi;
     }
     return diff.abs() > pi / 2;
+  }
+
+  /// نقطة عودة آمنة بعد الاكتشاف: أقرب خلية إلى مدخل الغرفة لا يراها أحد الآن ولا خلال الثواني القادمة
+  /// (كي لا يعود العميل إلى عين الحارس مباشرة فيُكشف مرّة بعد مرّة).
+  Offset safeCheckpoint(int solved, double t, Map<String, double> camOff, {bool power = false}) {
+    final base = checkpoint(solved);
+    final ri = solved.clamp(0, rooms.length - 1);
+    final r = rooms[ri];
+    final cand = <Offset>[base];
+    for (int y = r.y0; y <= r.y1; y++) {
+      for (int x = r.x0; x <= r.x1; x++) {
+        if (at(x, y) == kFloor) cand.add(Offset(x + .5, y + .5));
+      }
+    }
+    cand.sort((a, b) => (a - base).distance.compareTo((b - base).distance));
+    bool safe(Offset p) {
+      if (laserHit(p, t)) return false;
+      for (double d = 0; d <= kSafeSeconds; d += .25) {
+        if (seen(p, t + d, solved, camOff, power: power) || laserHit(p, t + d)) return false;
+      }
+      return true;
+    }
+
+    for (final p in cand) {
+      if (safe(p)) return p;
+    }
+    return base;
   }
 
   /// أقرب حارس إلى [p] (للتحذير بوقع الخطى).
