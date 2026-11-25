@@ -1,49 +1,264 @@
-# نموذج «الخزنة 3D»: مبنى من ثلاث غرف في الميناء ليلاً.
-# اخترق جهاز كل غرفة ليُفتح الباب، تجنّب الحارس ومصباحه، افتح الخزنة ثم اهرب إلى نقطة البداية قبل انتهاء الإنذار.
-# كل المشهد يُبنى بالكود (لا مشاهد معقّدة) كي يسهل تطويره.
+# «الخزنة 3D» — لعب تعاوني بين هاتفين.
+# العميل يتسلّل في مبنى الميناء (ثلاث غرف + حجرة الكنز)، والمحلّل في غرفة أرشيف مظلمة بعيدة:
+# يرى العميل والحرّاس على شاشات المراقبة، ويجد نصف كل حلّ في الأدراج والدليل والحاسوب.
+# العميل يملك تقدّم المهمّة ويرسله؛ المحلّل يعكسه. الحرّاس يتحرّكون محلياً عند الاثنين.
 extends Node3D
 
 const WALL_H := 3.2
 const SPAWN := Vector3(2.0, 0.0, 6.0)
-const ESCAPE_SECONDS := 45.0
+const ARCHIVE := Vector3(100.0, 0.0, 0.0) # ركن غرفة المحلّل
+const ESCAPE_SECONDS := 50.0
+const MISSION_SECONDS := 720.0
+const SYMBOLS := ["▲", "●", "■", "★", "◆", "✚"]
+const WIRES := [
+	["أحمر", Color(0.85, 0.15, 0.15)], ["أزرق", Color(0.2, 0.42, 0.95)], ["أصفر", Color(0.95, 0.8, 0.15)],
+	["أخضر", Color(0.2, 0.72, 0.3)], ["أبيض", Color(0.92, 0.92, 0.92)],
+]
+const VAULT_FRONT := Vector3(29.0, 0.0, 5.0)
 
-var player
+var role := "solo" # agent | analyst | solo
+var net
 var hud
+var menu
+var agent # اللاعب داخل المبنى
+var analyst # اللاعب في غرفة الأرشيف
+var active
+var avatar: Node3D
+var font3d: Font
 var guards: Array = []
-var terminals: Array = [] # {pos, door, light, screen, done}
 var doors: Array = []
-var stage := 0
-var hacking := -1.0
+var terminals: Array = []
+var feeds: Array = []
+var puzzle := {}
+var host_role := ""
+var started := false
+var seed_value := 0
+
+# التقدّم (يملكه العميل)
+var stage := 0 # 0 لوحة الأرقام · 1 الأسلاك · 2 الخزنة · 3 الهروب
+var escape_left := -1.0
+var mission_left := MISSION_SECONDS
+var result := ""
+var _applied_stage := 0
+
 var seen_time := 0.0
 var invuln := 0.0
-var escape_left := -1.0
-var finished := false
-var alarm_lights: Array = []
+var lockout := 0.0
+var vault_mode := false
+var dial_angle := 0.0
+var dial_number := 0
+var dial_entered: Array = []
+var _cam_saved: Transform3D
+var _partner_seen := -100.0
+var _send_t := 0.0
+var _prog_t := 0.0
+var _ping_t := 0.0
+
+var vault_pivot: Node3D
+var vault_dial: Node3D
+var vault_wheel: Node3D
+var drawer: Node3D
+var drawer_open := false
 var marker: MeshInstance3D
-var flicker: OmniLight3D
+var flickers: Array = []
+var alarm_lights: Array = []
 
 var mat_wall: StandardMaterial3D
+var mat_wall_dark: StandardMaterial3D
 var mat_floor: StandardMaterial3D
 var mat_ceil: StandardMaterial3D
 var mat_crate: StandardMaterial3D
+var mat_rust: StandardMaterial3D
 var mat_steel: StandardMaterial3D
 var mat_dark: StandardMaterial3D
+var mat_wood: StandardMaterial3D
 
 
 func _ready() -> void:
+	if ResourceLoader.exists("res://fonts/Tajawal-Bold.ttf"):
+		font3d = load("res://fonts/Tajawal-Bold.ttf")
+	menu = preload("res://menu.gd").new()
+	add_child(menu)
+	menu.solo.connect(func(): _start("solo", randi() % 1000000))
+	menu.host.connect(_host)
+	menu.join.connect(_join)
+	# اختبار التشغيل في GitHub: يبدأ الوضع الفردي مباشرة ويجرّب الألغاز
+	if OS.get_environment("KHAZNA_SMOKE") == "1":
+		_start("solo", 1234)
+		_smoke.call_deferred()
+
+
+func _smoke() -> void:
+	await get_tree().create_timer(0.5).timeout
+	_submit_code(str(puzzle.code))
+	_cut_wire(str(WIRES[int(puzzle.answer)][0]))
+	print("SMOKE stage after puzzles: ", stage)
+	_on_switch()
+	analyst.set_meta("looking", drawer)
+	_analyst_interact()
+	_analyst_interact()
+	print("SMOKE symbols: ", _check_symbols(puzzle.symbols.duplicate()))
+	hud.close_panel()
+	_on_switch()
+	_enter_vault()
+	for n in puzzle.combo:
+		dial_number = int(n)
+		_record_number()
+	await get_tree().create_timer(2.0).timeout
+	print("SMOKE final stage: ", stage, " escape: ", escape_left)
+
+
+# ───────── الشبكة ─────────
+func _net() -> void:
+	net = preload("res://net.gd").new()
+	add_child(net)
+	net.message.connect(_on_msg)
+	net.status.connect(_on_status)
+
+
+func _on_status(t: String) -> void:
+	if hud:
+		hud.set_status(t)
+	elif menu:
+		menu.show_info(t, Color(0.6, 0.64, 0.68))
+
+
+func _host(r: String) -> void:
+	host_role = r
+	seed_value = randi() % 1000000
+	var code := str(randi_range(1000, 9999))
+	_net()
+	net.open(code)
+	menu.waiting(code, r)
+
+
+func _join(code: String) -> void:
+	_net()
+	net.open(code)
+	menu.show_info("جارٍ الانضمام إلى الغرفة %s…" % code)
+
+
+func _on_msg(m: Dictionary) -> void:
+	_partner_seen = Time.get_ticks_msec() / 1000.0
+	var t := str(m.get("t", ""))
+	if t == "join" and host_role != "":
+		net.send({"t": "hello", "role": host_role, "seed": seed_value})
+		if not started:
+			_start(host_role, seed_value)
+	elif t == "hello" and host_role == "" and not started:
+		var r := "analyst" if str(m.get("role", "")) == "agent" else "agent"
+		_start(r, int(m.get("seed", 0)))
+	elif t == "pos" and avatar:
+		avatar.set_meta("target", Vector3(float(m.get("x", 0)), 0, float(m.get("z", 0))))
+		avatar.set_meta("yaw", float(m.get("y", 0)))
+	elif t == "prog" and role == "analyst":
+		stage = int(m.get("stage", 0))
+		escape_left = float(m.get("esc", -1))
+		mission_left = float(m.get("left", mission_left))
+		var res := str(m.get("res", ""))
+		_apply_stage()
+		if res != "" and result == "":
+			_finish(res == "win")
+
+
+func _send_prog() -> void:
+	if net and role == "agent":
+		net.send({"t": "prog", "stage": stage, "esc": escape_left, "left": mission_left, "res": result})
+
+
+# ───────── البداية ─────────
+func _start(r: String, s: int) -> void:
+	started = true
+	role = r
+	seed_value = s
+	puzzle = _make_puzzle(s)
+	if menu:
+		menu.queue_free()
+		menu = null
 	_materials()
 	_environment()
-	_build_level()
-	_spawn_player()
+	_build_building()
+	_build_archive()
 	_spawn_guards()
 	hud = preload("res://hud.gd").new()
-	hud.player = player
 	add_child(hud)
-	hud.hack_pressed.connect(_on_hack)
-	hud.set_objective("اخترق الجهاز المضيء لفتح الباب")
+	hud.interact_pressed.connect(_on_interact)
+	hud.switch_pressed.connect(_on_switch)
+	hud.set_switch_visible(role == "solo")
+	if role != "analyst":
+		agent = _make_player(SPAWN, -PI / 2.0)
+	if role != "agent":
+		analyst = _make_player(ARCHIVE + Vector3(5, 0, 6.2), 0.0)
+		avatar = _make_avatar()
+		_build_feeds()
+	_set_active(analyst if role == "analyst" else agent)
+	hud.set_status("وضع فردي" if net == null else "")
 
 
-# ───────── المواد ─────────
+func _make_player(at: Vector3, yaw: float):
+	var p = preload("res://player.gd").new()
+	p.position = at
+	add_child(p)
+	p.yaw = yaw
+	p.rotation.y = yaw
+	return p
+
+
+func _set_active(p) -> void:
+	for q in [agent, analyst]:
+		if q:
+			q.set_active(q == p)
+	active = p
+	hud.player = p
+	hud.release_touches()
+	hud.close_panel()
+	_update_objective()
+
+
+func _on_switch() -> void:
+	if vault_mode:
+		_exit_vault()
+	_set_active(analyst if active == agent else agent)
+
+
+# ───────── اللغز (مشترك بالبذرة) ─────────
+func _make_puzzle(s: int) -> Dictionary:
+	var r := RandomNumberGenerator.new()
+	r.seed = s
+	var code := str(r.randi_range(1000, 9999))
+	var digit := r.randi_range(0, 9)
+	var serial := "KZ-%d%d%d" % [r.randi_range(1, 9), r.randi_range(0, 9), digit]
+	var table := []
+	for i in 10:
+		table.append(r.randi_range(0, WIRES.size() - 1))
+	var answer: int = table[digit]
+	var order := []
+	for i in WIRES.size():
+		order.append(i)
+	for i in range(order.size() - 1, 0, -1):
+		var j := r.randi_range(0, i)
+		var tmp = order[i]
+		order[i] = order[j]
+		order[j] = tmp
+	var wires := [answer]
+	for w in order:
+		if wires.size() < 4 and w != answer:
+			wires.append(w)
+	for i in range(wires.size() - 1, 0, -1):
+		var j := r.randi_range(0, i)
+		var tmp = wires[i]
+		wires[i] = wires[j]
+		wires[j] = tmp
+	var syms := []
+	while syms.size() < 3:
+		var k: String = SYMBOLS[r.randi_range(0, SYMBOLS.size() - 1)]
+		if not syms.has(k):
+			syms.append(k)
+	var combo := [r.randi_range(1, 39), r.randi_range(1, 39), r.randi_range(1, 39)]
+	return {"code": code, "serial": serial, "table": table, "answer": answer, "wires": wires, "symbols": syms, "combo": combo}
+
+
+# ───────── المواد والجوّ ─────────
 func _tex(path: String) -> Texture2D:
 	if ResourceLoader.exists(path):
 		return load(path)
@@ -64,51 +279,85 @@ func _noise_normal(freq: float, strength: float) -> NoiseTexture2D:
 	return t
 
 
+func _noise_tex(freq: float, a: Color, b: Color) -> NoiseTexture2D:
+	var n := FastNoiseLite.new()
+	n.frequency = freq
+	n.fractal_octaves = 4
+	var g := Gradient.new()
+	g.set_color(0, a)
+	g.set_color(1, b)
+	var t := NoiseTexture2D.new()
+	t.width = 512
+	t.height = 512
+	t.seamless = true
+	t.noise = n
+	t.color_ramp = g
+	return t
+
+
 func _materials() -> void:
+	# جدران خرسانية قديمة ومتّسخة (أغمق من الأصل لجوّ مخيف)
 	mat_wall = StandardMaterial3D.new()
 	mat_wall.albedo_texture = _tex("res://textures/wall_port.jpg")
+	mat_wall.albedo_color = Color(0.62, 0.64, 0.66)
 	mat_wall.uv1_triplanar = true
 	mat_wall.uv1_world_triplanar = true
 	mat_wall.uv1_scale = Vector3.ONE / WALL_H
-	mat_wall.roughness = 0.88
+	mat_wall.roughness = 0.9
 	mat_wall.normal_enabled = true
-	mat_wall.normal_texture = _noise_normal(0.03, 3.0)
-	mat_wall.normal_scale = 0.6
+	mat_wall.normal_texture = _noise_normal(0.03, 4.0)
+	mat_wall.normal_scale = 0.8
 
-	# أرضية خرسانية مبلّلة: خشونة منخفضة لتعكس الأضواء
+	mat_wall_dark = mat_wall.duplicate()
+	mat_wall_dark.albedo_color = Color(0.38, 0.36, 0.34)
+
 	mat_floor = StandardMaterial3D.new()
-	mat_floor.albedo_texture = _tex("res://textures/floor_port.jpg")
-	mat_floor.albedo_color = Color(0.55, 0.58, 0.62)
+	mat_floor.albedo_texture = _noise_tex(0.02, Color(0.09, 0.095, 0.1), Color(0.24, 0.24, 0.23))
 	mat_floor.uv1_triplanar = true
 	mat_floor.uv1_world_triplanar = true
-	mat_floor.uv1_scale = Vector3.ONE / 2.5
-	mat_floor.roughness = 0.28
-	mat_floor.metallic = 0.15
+	mat_floor.uv1_scale = Vector3.ONE / 6.0
+	mat_floor.roughness = 0.25
+	mat_floor.metallic = 0.2
 	mat_floor.normal_enabled = true
 	mat_floor.normal_texture = _noise_normal(0.05, 5.0)
-	mat_floor.normal_scale = 0.35
+	mat_floor.normal_scale = 0.4
 
 	mat_ceil = StandardMaterial3D.new()
-	mat_ceil.albedo_color = Color(0.09, 0.1, 0.11)
+	mat_ceil.albedo_color = Color(0.07, 0.075, 0.08)
 	mat_ceil.roughness = 1.0
 
 	mat_crate = StandardMaterial3D.new()
-	mat_crate.albedo_color = Color(0.42, 0.29, 0.16)
-	mat_crate.roughness = 0.8
+	mat_crate.albedo_texture = _noise_tex(0.08, Color(0.25, 0.16, 0.08), Color(0.46, 0.32, 0.18))
+	mat_crate.roughness = 0.85
 	mat_crate.normal_enabled = true
 	mat_crate.normal_texture = _noise_normal(0.12, 6.0)
 
+	# حديد صدئ للأبواب
+	mat_rust = StandardMaterial3D.new()
+	mat_rust.albedo_texture = _noise_tex(0.06, Color(0.2, 0.1, 0.05), Color(0.48, 0.3, 0.18))
+	mat_rust.uv1_triplanar = true
+	mat_rust.uv1_world_triplanar = true
+	mat_rust.metallic = 0.55
+	mat_rust.roughness = 0.75
+	mat_rust.normal_enabled = true
+	mat_rust.normal_texture = _noise_normal(0.15, 5.0)
+
 	mat_steel = StandardMaterial3D.new()
-	mat_steel.albedo_color = Color(0.42, 0.45, 0.49)
-	mat_steel.metallic = 0.85
-	mat_steel.roughness = 0.32
+	mat_steel.albedo_color = Color(0.34, 0.36, 0.39)
+	mat_steel.metallic = 0.9
+	mat_steel.roughness = 0.38
 	mat_steel.normal_enabled = true
-	mat_steel.normal_texture = _noise_normal(0.2, 1.5)
+	mat_steel.normal_texture = _noise_normal(0.25, 2.5)
 
 	mat_dark = StandardMaterial3D.new()
 	mat_dark.albedo_color = Color(0.05, 0.055, 0.06)
 	mat_dark.metallic = 0.6
 	mat_dark.roughness = 0.4
+
+	mat_wood = StandardMaterial3D.new()
+	mat_wood.albedo_texture = _noise_tex(0.05, Color(0.16, 0.1, 0.06), Color(0.3, 0.2, 0.12))
+	mat_wood.uv1_triplanar = true
+	mat_wood.roughness = 0.7
 
 
 func _glow(color: Color, energy: float) -> StandardMaterial3D:
@@ -124,29 +373,29 @@ func _glow(color: Color, energy: float) -> StandardMaterial3D:
 func _environment() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.008, 0.01, 0.013)
+	env.background_color = Color(0.004, 0.005, 0.007)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.32, 0.38, 0.48)
-	env.ambient_light_energy = 0.18
+	env.ambient_light_color = Color(0.3, 0.36, 0.46)
+	env.ambient_light_energy = 0.12
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.1
+	env.tonemap_exposure = 1.05
 	env.glow_enabled = true
-	env.glow_intensity = 0.9
-	env.glow_strength = 1.1
-	env.glow_bloom = 0.12
-	env.glow_hdr_threshold = 0.85
+	env.glow_intensity = 1.0
+	env.glow_strength = 1.15
+	env.glow_bloom = 0.15
+	env.glow_hdr_threshold = 0.8
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.04, 0.05, 0.065)
-	env.fog_density = 0.045
+	env.fog_light_color = Color(0.03, 0.035, 0.045)
+	env.fog_density = 0.06
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.12
-	env.adjustment_saturation = 0.92
+	env.adjustment_contrast = 1.15
+	env.adjustment_saturation = 0.85
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 
 
-# ───────── البناء ─────────
+# ───────── أدوات البناء ─────────
 func _box(center: Vector3, size: Vector3, mat: Material, collide := true) -> Node3D:
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
@@ -169,99 +418,113 @@ func _box(center: Vector3, size: Vector3, mat: Material, collide := true) -> Nod
 	return body
 
 
-func _wall_x(z: float, x0: float, x1: float) -> void:
-	_box(Vector3((x0 + x1) / 2.0, WALL_H / 2.0, z), Vector3(x1 - x0 + 0.3, WALL_H, 0.3), mat_wall)
+func _wall_x(z: float, x0: float, x1: float, mat: Material = null) -> void:
+	_box(Vector3((x0 + x1) / 2.0, WALL_H / 2.0, z), Vector3(x1 - x0 + 0.3, WALL_H, 0.3), mat if mat else mat_wall)
 
 
-func _wall_z(x: float, z0: float, z1: float) -> void:
-	_box(Vector3(x, WALL_H / 2.0, (z0 + z1) / 2.0), Vector3(0.3, WALL_H, z1 - z0 + 0.3), mat_wall)
+func _wall_z(x: float, z0: float, z1: float, mat: Material = null) -> void:
+	_box(Vector3(x, WALL_H / 2.0, (z0 + z1) / 2.0), Vector3(0.3, WALL_H, z1 - z0 + 0.3), mat if mat else mat_wall)
 
 
-func _lamp(pos: Vector3, color := Color(1.0, 0.86, 0.62)) -> OmniLight3D:
-	_box(pos + Vector3(0, -0.03, 0), Vector3(1.2, 0.06, 0.25), _glow(color, 3.0), false)
+func _lamp(pos: Vector3, color: Color, energy: float, flicker := false) -> OmniLight3D:
+	_box(pos + Vector3(0, -0.03, 0), Vector3(1.1, 0.06, 0.22), _glow(color, 2.5), false)
 	var l := OmniLight3D.new()
 	l.position = pos + Vector3(0, -0.35, 0)
 	l.light_color = color
-	l.light_energy = 1.3
-	l.omni_range = 7.5
-	l.omni_attenuation = 1.4
+	l.light_energy = energy
+	l.omni_range = 7.0
+	l.omni_attenuation = 1.5
 	add_child(l)
+	if flicker:
+		flickers.append(l)
 	return l
 
 
-func _build_level() -> void:
-	# الأرضية والسقف
-	_box(Vector3(15, -0.1, 5), Vector3(30.6, 0.2, 10.6), mat_floor)
-	_box(Vector3(15, WALL_H + 0.1, 5), Vector3(30.6, 0.2, 10.6), mat_ceil)
+func _label3d(text: String, at: Vector3, size: int, color: Color, parent: Node3D = null) -> Label3D:
+	var l := Label3D.new()
+	l.text = text
+	l.font_size = size
+	l.pixel_size = 0.004
+	l.modulate = color
+	l.outline_size = 0
+	l.position = at
+	if font3d:
+		l.font = font3d
+	if parent:
+		parent.add_child(l)
+	else:
+		add_child(l)
+	return l
+
+
+# ───────── مبنى العميل ─────────
+func _build_building() -> void:
+	_box(Vector3(16.5, -0.1, 5), Vector3(33.6, 0.2, 10.6), mat_floor)
+	_box(Vector3(16.5, WALL_H + 0.1, 5), Vector3(33.6, 0.2, 10.6), mat_ceil)
 	# الغرفة 1 (البداية): x 0..8، z 0..8
 	_wall_x(0, 0, 8)
 	_wall_x(8, 0, 8)
 	_wall_z(0, 0, 8)
-	# الجدار المشترك x=8 بفتحة باب z 3.5..5.5
 	_wall_z(8, 0, 3.5)
 	_wall_z(8, 5.5, 10)
-	# الغرفة 2: x 8..20، z 0..10
+	_box(Vector3(4, WALL_H / 2.0, 9.15), Vector3(8.3, WALL_H, 1.9), mat_wall)
+	# الغرفة 2: x 8..20
 	_wall_x(0, 8, 20)
 	_wall_x(10, 8, 20)
 	_wall_z(20, 0, 4)
 	_wall_z(20, 6, 10)
-	# الغرفة 3 (الخزنة): x 20..30
+	# الغرفة 3 (قاعة الخزنة): x 20..30، وفتحة الخزنة z 3.6..6.4
 	_wall_x(0, 20, 30)
 	_wall_x(10, 20, 30)
-	_wall_z(30, 0, 10)
-	# حشو خلف الغرفة الأولى (z 8..10) حتى لا تظهر فجوة
-	_box(Vector3(4, WALL_H / 2.0, 9.15), Vector3(8.3, WALL_H, 1.9), mat_wall)
+	_wall_z(30, 0, 3.6)
+	_wall_z(30, 6.4, 10)
+	_box(Vector3(30, 2.95, 5), Vector3(0.3, 0.5, 2.8), mat_wall)
+	# حجرة الكنز خلف الباب: x 30..33
+	_wall_x(3.4, 30, 33.3, mat_steel)
+	_wall_x(6.6, 30, 33.3, mat_steel)
+	_wall_z(33.3, 3.4, 6.6, mat_steel)
+	for i in 6:
+		var gold := _box(Vector3(31.4 + (i % 3) * 0.45, 0.08 + float(i / 3) * 0.16, 4.85 + (i % 2) * 0.3), Vector3(0.4, 0.15, 0.22), _glow(Color(1.0, 0.75, 0.25), 1.6), false)
+		gold.rotation.y = 0.05 * i
+	var treasure := OmniLight3D.new()
+	treasure.position = Vector3(31.8, 1.2, 5)
+	treasure.light_color = Color(1.0, 0.78, 0.35)
+	treasure.light_energy = 2.5
+	treasure.omni_range = 4.0
+	add_child(treasure)
 
-	# الأبواب الفولاذية
 	doors.append(_door(Vector3(8, 0, 4.5)))
 	doors.append(_door(Vector3(20, 0, 5)))
 
-	# الصناديق (مخابئ)
-	for p in [Vector3(11, 0, 2), Vector3(11.9, 0, 2), Vector3(11.45, 0.9, 2), Vector3(16, 0, 7.5), Vector3(14, 0, 4.8), Vector3(24, 0, 2.5), Vector3(4.5, 0, 1.2)]:
+	for p in [Vector3(11, 0, 2), Vector3(11.9, 0, 2), Vector3(11.45, 0.9, 2), Vector3(16, 0, 7.5), Vector3(14, 0, 4.8), Vector3(23.5, 0, 2.2), Vector3(4.5, 0, 1.2), Vector3(24.4, 0, 2.2)]:
 		_box(p + Vector3(0, 0.45, 0), Vector3(0.9, 0.9, 0.9), mat_crate)
 
-	# الأجهزة
-	terminals.append(_terminal(Vector3(7.4, 0, 1.3), 0))
-	terminals.append(_terminal(Vector3(19.4, 0, 8.7), 1))
-	terminals.append(_terminal(Vector3(28.6, 0, 8.6), -1))
+	terminals.append(_terminal(Vector3(7.4, 0, 1.3), "لوحة الأرقام"))
+	terminals.append(_terminal(Vector3(19.4, 0, 8.7), "لوحة الأسلاك"))
 
-	# باب الخزنة الدائري على الجدار الأخير
-	var vault := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 1.2
-	cyl.bottom_radius = 1.2
-	cyl.height = 0.3
-	vault.mesh = cyl
-	vault.material_override = mat_steel
-	vault.position = Vector3(29.7, 1.4, 5)
-	vault.rotation_degrees = Vector3(0, 0, 90)
-	add_child(vault)
-	var ring := MeshInstance3D.new()
-	var tor := TorusMesh.new()
-	tor.inner_radius = 1.15
-	tor.outer_radius = 1.28
-	ring.mesh = tor
-	ring.material_override = _glow(Color(1.0, 0.62, 0.2), 2.0)
-	ring.position = Vector3(29.52, 1.4, 5)
-	ring.rotation_degrees = Vector3(0, 0, 90)
-	add_child(ring)
+	_build_vault()
 
-	# الإضاءة: مصابيح سقف، واحد يرتعش في غرفة الحارس
-	_lamp(Vector3(4, WALL_H, 4))
-	flicker = _lamp(Vector3(14, WALL_H, 5))
-	_lamp(Vector3(25, WALL_H, 5), Color(0.75, 0.85, 1.0))
+	# إضاءة مخيفة: مصباح خافت، مصابيح ترتعش، ومصباح طوارئ أحمر
+	_lamp(Vector3(4, WALL_H, 4), Color(1.0, 0.82, 0.58), 1.0)
+	_lamp(Vector3(14, WALL_H, 5), Color(1.0, 0.86, 0.62), 1.2, true)
+	_lamp(Vector3(25, WALL_H, 5), Color(0.6, 0.75, 1.0), 0.8, true)
+	var red := OmniLight3D.new()
+	red.position = Vector3(19.6, 2.6, 1.0)
+	red.light_color = Color(1.0, 0.12, 0.08)
+	red.light_energy = 1.4
+	red.omni_range = 5.0
+	add_child(red)
+	_box(Vector3(19.8, 2.6, 1.0), Vector3(0.12, 0.18, 0.18), _glow(Color(1.0, 0.15, 0.1), 3.0), false)
 
-	# مجسّات الانعكاس: الأرضية المبلّلة تعكس الأضواء
 	for c in [Vector3(4, 1.6, 4), Vector3(14, 1.6, 5), Vector3(25, 1.6, 5)]:
 		var rp := ReflectionProbe.new()
 		rp.position = c
 		rp.size = Vector3(12, WALL_H, 10.5)
 		rp.box_projection = true
 		rp.update_mode = ReflectionProbe.UPDATE_ONCE
-		rp.intensity = 0.8
+		rp.intensity = 0.7
 		add_child(rp)
 
-	# علامة الهدف العائمة
 	marker = MeshInstance3D.new()
 	var pm := PrismMesh.new()
 	pm.size = Vector3(0.22, 0.3, 0.22)
@@ -270,14 +533,17 @@ func _build_level() -> void:
 	marker.rotation_degrees.x = 180
 	add_child(marker)
 
-	# غبار يتطاير في الهواء
+	_dust(Vector3(15, 1.6, 5), Vector3(15, 1.5, 5))
+
+
+func _dust(center: Vector3, extents: Vector3) -> void:
 	var dust := CPUParticles3D.new()
-	dust.amount = 220
+	dust.amount = 200
 	dust.lifetime = 9.0
 	dust.preprocess = 9.0
 	dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	dust.emission_box_extents = Vector3(15, 1.5, 5)
-	dust.position = Vector3(15, 1.6, 5)
+	dust.emission_box_extents = extents
+	dust.position = center
 	dust.direction = Vector3(0.3, 0.1, 0.2)
 	dust.spread = 180
 	dust.gravity = Vector3.ZERO
@@ -288,7 +554,7 @@ func _build_level() -> void:
 	var dm := StandardMaterial3D.new()
 	dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	dm.albedo_color = Color(1, 0.95, 0.85, 0.35)
+	dm.albedo_color = Color(1, 0.95, 0.85, 0.3)
 	dm.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	q.material = dm
 	dust.mesh = q
@@ -296,25 +562,23 @@ func _build_level() -> void:
 
 
 func _door(base: Vector3) -> Dictionary:
-	var body := _box(base + Vector3(0, WALL_H / 2.0, 0), Vector3(0.22, WALL_H, 2.05), mat_steel)
+	var body := _box(base + Vector3(0, WALL_H / 2.0, 0), Vector3(0.22, WALL_H, 2.05), mat_rust)
 	var stripe := MeshInstance3D.new()
 	var bm := BoxMesh.new()
-	bm.size = Vector3(0.24, 0.08, 2.0)
+	bm.size = Vector3(0.24, 0.07, 2.0)
 	stripe.mesh = bm
-	stripe.material_override = _glow(Color(0.95, 0.25, 0.25), 2.5)
-	stripe.position = Vector3(0, 0, 0)
+	stripe.material_override = _glow(Color(0.95, 0.2, 0.2), 2.5)
 	body.add_child(stripe)
-	return {"body": body, "stripe": stripe}
+	return {"body": body, "stripe": stripe, "open": false}
 
 
-func _terminal(pos: Vector3, door_index: int) -> Dictionary:
+func _terminal(pos: Vector3, title: String) -> Dictionary:
 	var root := _box(pos + Vector3(0, 0.75, 0), Vector3(0.6, 1.5, 0.45), mat_dark)
 	var screen := MeshInstance3D.new()
 	var qm := QuadMesh.new()
 	qm.size = Vector2(0.44, 0.3)
 	screen.mesh = qm
 	screen.material_override = _glow(Color(1.0, 0.63, 0.23), 3.0)
-	# الشاشة على الوجه المقابل لمركز الغرفة
 	var face := Vector3(0, 0.35, 0.231) if pos.z < 5 else Vector3(0, 0.35, -0.231)
 	screen.position = face
 	if pos.z >= 5:
@@ -326,15 +590,88 @@ func _terminal(pos: Vector3, door_index: int) -> Dictionary:
 	l.omni_range = 2.6
 	l.position = face * 1.8
 	root.add_child(l)
-	return {"pos": pos, "door": door_index, "light": l, "screen": screen, "done": false}
+	return {"pos": pos, "light": l, "screen": screen, "title": title}
 
 
-func _spawn_player() -> void:
-	player = preload("res://player.gd").new()
-	player.position = SPAWN
-	add_child(player)
-	player.yaw = -PI / 2.0
-	player.rotation.y = player.yaw
+func _build_vault() -> void:
+	# باب فولاذي ضخم على الجدار x=30، يُفتح على مفصّل في طرفه
+	_box(Vector3(29.8, 1.4, 3.55), Vector3(0.5, 2.8, 0.3), mat_steel)
+	_box(Vector3(29.8, 1.4, 6.45), Vector3(0.5, 2.8, 0.3), mat_steel)
+	vault_pivot = Node3D.new()
+	vault_pivot.position = Vector3(29.85, 0, 3.7)
+	add_child(vault_pivot)
+	var door := StaticBody3D.new()
+	door.position = Vector3(0, 1.4, 1.3)
+	vault_pivot.add_child(door)
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(0.35, 2.7, 2.55)
+	cs.shape = bs
+	door.add_child(cs)
+	var mesh := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = bs.size
+	mesh.mesh = bm
+	mesh.material_override = mat_steel
+	door.add_child(mesh)
+	var ring := MeshInstance3D.new()
+	var tor := TorusMesh.new()
+	tor.inner_radius = 0.98
+	tor.outer_radius = 1.08
+	ring.mesh = tor
+	ring.material_override = _glow(Color(0.85, 0.5, 0.15), 1.4)
+	ring.position = Vector3(-0.19, 0, 0)
+	ring.rotation_degrees = Vector3(0, 0, 90)
+	door.add_child(ring)
+	# الرموز المنقوشة (العميل يصفها للمحلّل)
+	var syms := "   ".join(PackedStringArray(puzzle.symbols))
+	var sl := _label3d(syms, Vector3(-0.19, 0.95, 0), 110, Color(1.0, 0.75, 0.35), door)
+	sl.rotation_degrees.y = -90
+	# القرص (فوق) والمقبض الدوّار (تحت)
+	vault_dial = Node3D.new()
+	vault_dial.position = Vector3(-0.2, 0.35, 0)
+	door.add_child(vault_dial)
+	var dial := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.32
+	cyl.bottom_radius = 0.34
+	cyl.height = 0.1
+	dial.mesh = cyl
+	dial.material_override = mat_dark
+	dial.rotation_degrees = Vector3(0, 0, 90)
+	vault_dial.add_child(dial)
+	for n in 8:
+		var a := n * TAU / 8.0
+		var num := _label3d(str(n * 5), Vector3(-0.06, cos(a) * 0.24, sin(a) * 0.24), 40, Color(0.9, 0.9, 0.85), vault_dial)
+		num.rotation_degrees.y = -90
+	var mark := MeshInstance3D.new()
+	var mb := BoxMesh.new()
+	mb.size = Vector3(0.05, 0.08, 0.03)
+	mark.mesh = mb
+	mark.material_override = _glow(Color(1.0, 0.2, 0.15), 3.0)
+	mark.position = Vector3(-0.2, 0.75, 0)
+	door.add_child(mark)
+	vault_wheel = Node3D.new()
+	vault_wheel.position = Vector3(-0.22, -0.45, 0)
+	door.add_child(vault_wheel)
+	for k in 3:
+		var spoke := MeshInstance3D.new()
+		var sm := CylinderMesh.new()
+		sm.top_radius = 0.03
+		sm.bottom_radius = 0.03
+		sm.height = 0.8
+		spoke.mesh = sm
+		spoke.material_override = mat_steel
+		spoke.rotation.x = k * PI / 3.0
+		vault_wheel.add_child(spoke)
+	var light := SpotLight3D.new()
+	add_child(light)
+	light.look_at_from_position(Vector3(26.5, 3.0, 5), Vector3(29.8, 1.3, 5))
+	light.light_color = Color(0.8, 0.88, 1.0)
+	light.light_energy = 2.5
+	light.spot_angle = 28
+	light.spot_range = 8
+	light.shadow_enabled = true
 
 
 func _spawn_guards() -> void:
@@ -344,97 +681,480 @@ func _spawn_guards() -> void:
 	guards.append(g)
 	var g2 = preload("res://guard.gd").new()
 	add_child(g2)
-	g2.setup([Vector3(22, 0, 5), Vector3(27.5, 0, 5)], 1.0)
+	g2.setup([Vector3(22, 0, 8.2), Vector3(27.2, 0, 8.2), Vector3(27.2, 0, 1.6), Vector3(22, 0, 1.6)], 1.0)
 	guards.append(g2)
+
+
+func _make_avatar() -> Node3D:
+	var a := Node3D.new()
+	var body := MeshInstance3D.new()
+	var cap := CapsuleMesh.new()
+	cap.radius = 0.28
+	cap.height = 1.75
+	body.mesh = cap
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.08, 0.1, 0.12)
+	m.roughness = 0.6
+	body.material_override = m
+	body.position.y = 0.88
+	body.layers = 2
+	a.add_child(body)
+	if agent == null:
+		var lamp := SpotLight3D.new()
+		lamp.position = Vector3(0.15, 1.4, -0.3)
+		lamp.light_color = Color(1.0, 0.94, 0.82)
+		lamp.light_energy = 2.5
+		lamp.spot_range = 9.0
+		lamp.spot_angle = 25.0
+		a.add_child(lamp)
+	a.position = SPAWN
+	add_child(a)
+	return a
+
+
+# ───────── غرفة المحلّل (الأرشيف) ─────────
+func _build_archive() -> void:
+	var o := ARCHIVE
+	_box(o + Vector3(5, -0.1, 4), Vector3(10.6, 0.2, 8.6), mat_wood)
+	_box(o + Vector3(5, WALL_H + 0.1, 4), Vector3(10.6, 0.2, 8.6), mat_ceil)
+	_wall_x(o.z + 0, o.x, o.x + 10, mat_wall_dark)
+	_wall_x(o.z + 8, o.x, o.x + 10, mat_wall_dark)
+	_wall_z(o.x + 0, o.z, o.z + 8, mat_wall_dark)
+	_wall_z(o.x + 10, o.z, o.z + 8, mat_wall_dark)
+	# المكتب أمام جدار الشاشات
+	_box(o + Vector3(5, 0.76, 1.15), Vector3(6.2, 0.07, 1.1), mat_wood)
+	for x in [2.1, 7.9]:
+		_box(o + Vector3(x, 0.38, 1.15), Vector3(0.08, 0.76, 1.0), mat_wood, false)
+	# الحاسوب
+	var pc := _box(o + Vector3(5, 1.05, 1.0), Vector3(0.7, 0.48, 0.08), mat_dark)
+	pc.set_meta("kind", "computer")
+	var scr := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(0.62, 0.4)
+	scr.mesh = q
+	scr.material_override = _glow(Color(0.2, 0.6, 0.32), 1.6)
+	scr.position = Vector3(0, 0, 0.045)
+	pc.add_child(scr)
+	_label3d("> ARCHIVE_", o + Vector3(5, 1.08, 1.06), 28, Color(0.75, 1.0, 0.8))
+	# دليل الأسلاك (كتاب أحمر)
+	var book := _box(o + Vector3(3.2, 0.83, 1.3), Vector3(0.38, 0.07, 0.5), _glow(Color(0.45, 0.06, 0.05), 0.4))
+	book.set_meta("kind", "book")
+	var bl := _label3d("دليل الأسلاك", o + Vector3(3.2, 0.875, 1.3), 24, Color(1.0, 0.9, 0.8))
+	bl.rotation_degrees.x = -90
+	# خزانة الأدراج: الدرج العلوي يُفتح وفيه ورقة
+	_box(o + Vector3(9.4, 0.6, 4.5), Vector3(0.7, 1.2, 0.9), mat_rust)
+	drawer = _box(o + Vector3(9.1, 1.0, 4.5), Vector3(0.12, 0.3, 0.8), mat_steel)
+	drawer.set_meta("kind", "drawer")
+	var sheet := MeshInstance3D.new()
+	var sq := QuadMesh.new()
+	sq.size = Vector2(0.5, 0.35)
+	sheet.mesh = sq
+	var pm := StandardMaterial3D.new()
+	pm.albedo_color = Color(0.88, 0.84, 0.72)
+	sheet.material_override = pm
+	sheet.rotation_degrees = Vector3(-90, 90, 0)
+	sheet.position = Vector3(-0.35, 0.16, 0)
+	sheet.visible = false
+	sheet.name = "Sheet"
+	drawer.add_child(sheet)
+	var paper := _label3d("رمز باب المخزن\n" + str(puzzle.code), Vector3(-0.35, 0.17, 0), 34, Color(0.15, 0.12, 0.08), drawer)
+	paper.rotation_degrees = Vector3(-90, 90, 0)
+	paper.visible = false
+	paper.name = "Paper"
+	# لوحة «مطلوبون» على الجدار الغربي
+	_box(o + Vector3(0.2, 1.7, 4), Vector3(0.05, 1.3, 2.2), mat_wood, false)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	for i in 7:
+		var c := Color(0.75, 0.72, 0.66) if i % 2 == 0 else Color(0.5, 0.48, 0.45)
+		var ph := _box(o + Vector3(0.24, 1.25 + rng.randf() * 0.9, 3.1 + rng.randf() * 1.8), Vector3(0.02, 0.22, 0.18), _glow(c, 0.15), false)
+		ph.rotation.x = rng.randf_range(-0.2, 0.2)
+	var wanted := _label3d("مطلوبون", o + Vector3(0.25, 2.45, 4), 40, Color(0.75, 0.15, 0.12))
+	wanted.rotation_degrees.y = 90
+	# الإضاءة: مصباح مكتب خافت + مصباح سقف يرتعش + ضوء أحمر
+	var desk := SpotLight3D.new()
+	add_child(desk)
+	desk.look_at_from_position(o + Vector3(3.6, 1.7, 1.6), o + Vector3(3.4, 0.7, 1.3))
+	desk.light_color = Color(1.0, 0.8, 0.55)
+	desk.light_energy = 2.0
+	desk.spot_range = 3.0
+	desk.spot_angle = 45
+	desk.shadow_enabled = true
+	_lamp(o + Vector3(5, WALL_H, 5), Color(0.75, 0.82, 1.0), 0.7, true)
+	var red := OmniLight3D.new()
+	red.position = o + Vector3(9.5, 2.7, 7.5)
+	red.light_color = Color(1.0, 0.1, 0.08)
+	red.light_energy = 1.0
+	red.omni_range = 4.0
+	add_child(red)
+	_dust(o + Vector3(5, 1.5, 4), Vector3(5, 1.4, 4))
+
+
+func _build_feeds() -> void:
+	# ثلاث كاميرات مراقبة حيّة في المبنى، معروضة على شاشات الأرشيف بفلتر قديم
+	var sh := Shader.new()
+	sh.code = """
+shader_type spatial;
+render_mode unshaded;
+uniform sampler2D feed : source_color;
+void fragment() {
+	vec3 c = texture(feed, UV).rgb;
+	float g = dot(c, vec3(0.3, 0.59, 0.11)) * 1.8;
+	g *= 0.86 + 0.14 * sin(UV.y * 420.0 + TIME * 9.0);
+	float n = fract(sin(dot(UV * (TIME + 1.0), vec2(12.9898, 78.233))) * 43758.5453);
+	g += (n - 0.5) * 0.09;
+	vec2 d = UV - 0.5;
+	g *= 1.0 - dot(d, d) * 1.4;
+	ALBEDO = vec3(g * 0.7, g * 1.0, g * 0.75);
+}
+"""
+	var cams := [
+		[Vector3(0.6, 2.9, 0.6), Vector3(5, 0.8, 5), "كاميرا 1 · المدخل"],
+		[Vector3(8.6, 2.9, 9.4), Vector3(15, 0.6, 3), "كاميرا 2 · المخزن"],
+		[Vector3(20.6, 2.9, 0.6), Vector3(28, 0.8, 6), "كاميرا 3 · الخزنة"],
+	]
+	for i in cams.size():
+		var sv := SubViewport.new()
+		sv.size = Vector2i(320, 180)
+		sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		add_child(sv)
+		var cam := Camera3D.new()
+		cam.fov = 80
+		sv.add_child(cam)
+		cam.look_at_from_position(cams[i][0], cams[i][1])
+		feeds.append([sv, cams[i][2]])
+		var mon := _box(ARCHIVE + Vector3(2.6 + i * 2.4, 1.95, 0.3), Vector3(2.0, 1.15, 0.1), mat_dark)
+		mon.set_meta("kind", "monitor")
+		mon.set_meta("index", i)
+		var quad := MeshInstance3D.new()
+		var qm := QuadMesh.new()
+		qm.size = Vector2(1.86, 1.02)
+		quad.mesh = qm
+		var mm := ShaderMaterial.new()
+		mm.shader = sh
+		mm.set_shader_parameter("feed", sv.get_texture())
+		quad.material_override = mm
+		quad.position = Vector3(0, 0, 0.055)
+		mon.add_child(quad)
+		_label3d(cams[i][2], ARCHIVE + Vector3(2.6 + i * 2.4, 1.28, 0.37), 26, Color(0.6, 0.9, 0.65))
+		var glow := OmniLight3D.new()
+		glow.position = ARCHIVE + Vector3(2.6 + i * 2.4, 1.9, 0.9)
+		glow.light_color = Color(0.5, 0.9, 0.6)
+		glow.light_energy = 0.5
+		glow.omni_range = 2.5
+		add_child(glow)
 
 
 # ───────── اللعب ─────────
 func _process(delta: float) -> void:
+	if not started:
+		# المنضمّ يطلب الانضمام حتى يردّ القائد
+		if net and host_role == "" and net.joined:
+			_ping_t -= delta
+			if _ping_t <= 0.0:
+				_ping_t = 1.5
+				net.send({"t": "join"})
+		return
 	var t := Time.get_ticks_msec() / 1000.0
-	if flicker:
-		flicker.light_energy = 1.3 if fmod(t, 3.7) > 0.25 or fmod(t * 13.0, 1.0) > 0.5 else 0.15
-	if finished:
+	for i in flickers.size():
+		var l: OmniLight3D = flickers[i]
+		var base := 1.1 if i == 0 else 0.8
+		l.light_energy = base if fmod(t + i * 1.7, 3.9) > 0.3 or fmod(t * 13.0, 1.0) > 0.5 else 0.08
+
+	# جسم العميل كما يظهر في كاميرات المراقبة
+	if avatar:
+		if agent:
+			avatar.position = agent.global_position
+			avatar.rotation.y = agent.yaw
+		elif avatar.has_meta("target"):
+			avatar.position = avatar.position.lerp(avatar.get_meta("target"), minf(1.0, delta * 8.0))
+			avatar.rotation.y = lerp_angle(avatar.rotation.y, float(avatar.get_meta("yaw")), minf(1.0, delta * 8.0))
+
+	if net:
+		if role == "agent" and agent:
+			_send_t -= delta
+			if _send_t <= 0.0:
+				_send_t = 0.1
+				net.send({"t": "pos", "x": snappedf(agent.global_position.x, 0.01), "z": snappedf(agent.global_position.z, 0.01), "y": snappedf(agent.yaw, 0.01)})
+			_prog_t -= delta
+			if _prog_t <= 0.0:
+				_prog_t = 1.0
+				_send_prog()
+		else:
+			_ping_t -= delta
+			if _ping_t <= 0.0:
+				_ping_t = 2.0
+				net.send({"t": "here"})
+		hud.set_status("🟢 الشريك متّصل" if t - _partner_seen < 5.0 else "🔴 بانتظار الشريك…")
+
+	if result != "":
 		return
 
-	# الهدف الحالي
-	var goal := SPAWN if escape_left >= 0.0 else (terminals[stage].pos as Vector3)
+	if role != "analyst":
+		mission_left -= delta
+		if mission_left <= 0.0:
+			_end(false)
+			return
+	if escape_left >= 0.0:
+		if role != "analyst":
+			escape_left -= delta
+			if escape_left <= 0.0:
+				_end(false)
+				return
+		hud.set_timer(escape_left, true)
+		for i in alarm_lights.size():
+			(alarm_lights[i] as SpotLight3D).rotation.y = t * 4.0 + i * PI
+	else:
+		hud.set_timer(mission_left, mission_left < 60.0)
+
+	if agent:
+		_agent_logic(delta, t)
+	if analyst and active == analyst:
+		_analyst_logic()
+	_apply_stage()
+
+
+func _agent_logic(delta: float, t: float) -> void:
+	var goal: Vector3 = SPAWN if stage >= 3 else (VAULT_FRONT if stage == 2 else (terminals[stage].pos as Vector3))
 	marker.position = goal + Vector3(0, 2.1 + 0.08 * sin(t * 3.0), 0)
 	marker.rotation.y = t * 1.5
+	marker.visible = active == agent
 
-	# الحارس يراك؟
-	invuln = max(0.0, invuln - delta)
+	invuln = maxf(0.0, invuln - delta)
+	lockout = maxf(0.0, lockout - delta)
 	var space := get_world_3d().direct_space_state
 	var seen := false
 	for g in guards:
-		if g.sees(player, space):
+		if g.sees(agent, space):
 			seen = true
 	if seen and invuln <= 0.0:
-		seen_time += delta * (2.0 if hacking >= 0.0 else 1.0)
-		if seen_time > 0.55:
+		seen_time += delta * (1.6 if (active == agent and hud.panel_open()) or vault_mode else 1.0)
+		if seen_time > 0.6:
 			_spotted()
 	else:
-		seen_time = max(0.0, seen_time - delta * 2.0)
-	hud.set_alert(seen_time / 0.55)
+		seen_time = maxf(0.0, seen_time - delta * 2.0)
+	if active == agent:
+		hud.set_alert(seen_time / 0.6)
 
-	# الاختراق: ثلاث ثوانٍ عند الجهاز (والحارس يواصل دورته)
-	var near: bool = escape_left < 0.0 and player.global_position.distance_to(terminals[stage].pos) < 1.7
-	if hacking >= 0.0:
-		if not near:
-			hacking = -1.0
-			hud.set_progress(-1.0)
+	if vault_mode:
+		var dx: float = agent.look_delta.x
+		agent.look_delta = Vector2.ZERO
+		dial_angle += dx * 0.0035
+		var n := posmod(int(round(-dial_angle / (TAU / 40.0))), 40)
+		if n != dial_number:
+			dial_number = n
+			Input.vibrate_handheld(8)
+		vault_dial.rotation.x = dial_angle
+		hud.vault_state(dial_number, dial_entered)
+		return
+
+	if active != agent:
+		return
+	if stage >= 3:
+		hud.show_interact("")
+		if agent.global_position.distance_to(SPAWN) < 1.4:
+			_end(true)
+		return
+	if stage < 2:
+		var near: bool = agent.global_position.distance_to(terminals[stage].pos) < 1.7
+		hud.show_interact(("استعمل " + str(terminals[stage].title)) if near else "")
+	else:
+		var near2: bool = agent.global_position.distance_to(VAULT_FRONT) < 1.6
+		hud.show_interact("اقترب من قرص الخزنة" if near2 else "")
+
+
+func _analyst_logic() -> void:
+	var cam: Camera3D = analyst.cam
+	var from := cam.global_position
+	var to := from - cam.global_transform.basis.z * 2.6
+	var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, to))
+	var obj: Object = null
+	if not hit.is_empty():
+		var col = hit.get("collider")
+		if col is Node and (col as Node).has_meta("kind"):
+			obj = col
+	var kind := str((obj as Node).get_meta("kind")) if obj else ""
+	var labels := {"drawer": "اقرأ الورقة" if drawer_open else "افتح الدرج", "book": "اقرأ دليل الأسلاك", "computer": "شغّل الحاسوب", "monitor": "كبّر الشاشة"}
+	hud.show_interact(str(labels.get(kind, "")))
+	analyst.set_meta("looking", obj)
+
+
+func _on_interact() -> void:
+	if active == analyst:
+		_analyst_interact()
+		return
+	if stage == 0:
+		hud.open_keypad("لوحة الأرقام — باب المخزن", _submit_code)
+	elif stage == 1:
+		var wl := []
+		for w in puzzle.wires:
+			wl.append(WIRES[w])
+		hud.open_wires(str(puzzle.serial), wl, _cut_wire)
+	elif stage == 2:
+		_enter_vault()
+
+
+func _analyst_interact() -> void:
+	var obj = analyst.get_meta("looking", null)
+	if obj == null:
+		return
+	var kind := str(obj.get_meta("kind"))
+	if kind == "drawer":
+		if not drawer_open:
+			drawer_open = true
+			var tw := create_tween()
+			tw.tween_property(drawer, "position:x", drawer.position.x - 0.55, 0.6).set_trans(Tween.TRANS_BACK)
+			(drawer.get_node("Paper") as Node3D).visible = true
+			(drawer.get_node("Sheet") as Node3D).visible = true
 		else:
-			hacking += delta
-			hud.set_progress(hacking / 3.0)
-			if hacking >= 3.0:
-				_hacked()
-	hud.show_hack(near and hacking < 0.0)
-
-	# الهروب
-	if escape_left >= 0.0:
-		escape_left -= delta
-		hud.set_timer(escape_left)
-		for i in alarm_lights.size():
-			var a: SpotLight3D = alarm_lights[i]
-			a.rotation.y = t * 4.0 + i * PI
-		if player.global_position.distance_to(SPAWN) < 1.4:
-			_finish(true)
-		elif escape_left <= 0.0:
-			_finish(false)
+			hud.open_text("ورقة مدسوسة في الدرج", "رمز باب المخزن:\n" + str(puzzle.code))
+	elif kind == "book":
+		var rows := []
+		for d in 10:
+			var w: Array = WIRES[int(puzzle.table[d])]
+			rows.append([d, w[0], w[1]])
+		hud.open_table("دليل الأسلاك", rows)
+	elif kind == "computer":
+		hud.open_symbols(SYMBOLS, _check_symbols)
+	elif kind == "monitor":
+		var i := int(obj.get_meta("index"))
+		hud.open_feed(str(feeds[i][1]), (feeds[i][0] as SubViewport).get_texture())
 
 
-func _on_hack() -> void:
-	if hacking < 0.0:
-		hacking = 0.0
+func _check_symbols(picked: Array) -> String:
+	if picked == puzzle.symbols:
+		var c: Array = puzzle.combo
+		return "> تمّ فكّ التشفير ✔\nتركيبة القرص:  %02d  —  %02d  —  %02d" % [c[0], c[1], c[2]]
+	return "> رموز خاطئة ✖  حاول مرّة أخرى"
 
 
-func _hacked() -> void:
-	hacking = -1.0
-	hud.set_progress(-1.0)
-	var term: Dictionary = terminals[stage]
-	term.done = true
+func _submit_code(v: String) -> void:
+	if lockout > 0.0:
+		hud.flash("اللوحة مقفلة… انتظر", Color(0.9, 0.28, 0.3))
+		return
+	if v == str(puzzle.code):
+		hud.close_panel()
+		_advance()
+	else:
+		lockout = 3.0
+		hud.flash("✖ رمز خاطئ", Color(0.9, 0.28, 0.3))
+		hud.hit()
+
+
+func _cut_wire(wire_name: String) -> void:
+	var right := str(WIRES[int(puzzle.answer)][0])
+	if wire_name == right:
+		hud.close_panel()
+		_advance()
+	else:
+		hud.flash("✖ سلك خاطئ — الحرّاس انتبهوا!", Color(0.9, 0.28, 0.3))
+		hud.hit()
+		for g in guards:
+			g.speed *= 1.15
+
+
+func _advance() -> void:
+	stage += 1
+	var term: Dictionary = terminals[stage - 1]
 	(term.light as OmniLight3D).light_color = Color(0.42, 0.85, 0.58)
 	(term.screen as MeshInstance3D).material_override = _glow(Color(0.42, 0.85, 0.58), 3.0)
-	if term.door >= 0:
-		var d: Dictionary = doors[term.door]
-		(d.stripe as MeshInstance3D).material_override = _glow(Color(0.42, 0.85, 0.58), 2.5)
+	hud.flash("🔓 فُتح الباب", Color(0.42, 0.85, 0.58))
+	_apply_stage()
+	_send_prog()
+
+
+func _apply_stage() -> void:
+	for i in doors.size():
+		var d: Dictionary = doors[i]
+		if stage > i and not d.open:
+			d.open = true
+			(d.stripe as MeshInstance3D).material_override = _glow(Color(0.42, 0.85, 0.58), 2.5)
+			var tw := create_tween()
+			tw.tween_property(d.body, "position:y", WALL_H * 1.5, 1.8).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	if stage >= 3 and _applied_stage < 3:
+		_open_vault_door()
+		_alarm()
+	if stage != _applied_stage:
+		_applied_stage = stage
+		_update_objective()
+
+
+func _update_objective() -> void:
+	if hud == null:
+		return
+	var agent_side: bool = active == agent
+	var txt := ""
+	match stage:
+		0:
+			txt = "اذهب إلى لوحة الأرقام — الرمز عند شريكك" if agent_side else "ابحث عن رمز باب المخزن في الأدراج وأخبر العميل"
+		1:
+			txt = "لوحة الأسلاك: أعطِ الرقم التسلسلي لشريكك" if agent_side else "اسأل العميل عن الرقم التسلسلي، واقرأ دليل الأسلاك"
+		2:
+			txt = "صِف لشريكك الرموز على باب الخزنة، ثم أدِر القرص" if agent_side else "أدخل رموز الخزنة في الحاسوب وأعطِ العميل التركيبة"
+		_:
+			txt = "🚨 اهرب إلى نقطة البداية!" if agent_side else "🚨 وجّه العميل إلى المخرج عبر الكاميرات!"
+	hud.set_objective(txt)
+
+
+# ───────── الخزنة ─────────
+func _enter_vault() -> void:
+	vault_mode = true
+	agent.locked = true
+	dial_entered = []
+	_cam_saved = agent.cam.global_transform
+	var target := Transform3D.IDENTITY.looking_at(Vector3(1, 0, 0), Vector3.UP)
+	target.origin = Vector3(29.05, 1.75, 5.0)
+	var tw := create_tween()
+	tw.tween_property(agent.cam, "global_transform", target, 0.6).set_trans(Tween.TRANS_CUBIC)
+	hud.vault_ui(true, _record_number, _exit_vault)
+	hud.vault_state(dial_number, dial_entered)
+
+
+func _exit_vault() -> void:
+	if not vault_mode:
+		return
+	vault_mode = false
+	hud.vault_ui(false, Callable(), Callable())
+	var tw := create_tween()
+	tw.tween_property(agent.cam, "global_transform", _cam_saved, 0.4)
+	tw.tween_callback(func(): agent.locked = false)
+
+
+func _record_number() -> void:
+	dial_entered.append(dial_number)
+	hud.vault_state(dial_number, dial_entered)
+	if dial_entered.size() < 3:
+		return
+	if dial_entered == puzzle.combo:
+		hud.flash("✔ التركيبة صحيحة", Color(0.42, 0.85, 0.58))
 		var tw := create_tween()
-		tw.tween_property(d.body, "position:y", WALL_H * 1.5, 1.6).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-		stage += 1
-		hud.flash("🔓 فُتح الباب", Color(0.42, 0.85, 0.58))
-		hud.set_objective("الجهاز التالي في الغرفة المجاورة" if stage == 1 else "افتح الخزنة في الغرفة الأخيرة")
+		tw.tween_property(vault_wheel, "rotation:x", vault_wheel.rotation.x + TAU, 1.4).set_trans(Tween.TRANS_CUBIC)
+		tw.tween_callback(_vault_opened)
 	else:
-		_start_escape()
+		hud.flash("✖ تركيبة خاطئة", Color(0.9, 0.28, 0.3))
+		hud.hit()
+		dial_entered = []
 
 
-func _start_escape() -> void:
+func _vault_opened() -> void:
+	_exit_vault()
+	stage = 3
 	escape_left = ESCAPE_SECONDS
+	_apply_stage()
+	_send_prog()
+
+
+func _open_vault_door() -> void:
+	var tw := create_tween()
+	tw.tween_property(vault_pivot, "rotation:y", deg_to_rad(-105), 3.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+func _alarm() -> void:
 	hud.flash("🚨 الخزنة مفتوحة — الإنذار!", Color(0.9, 0.28, 0.3))
-	hud.set_objective("اهرب إلى نقطة البداية قبل انتهاء الوقت!")
 	for g in guards:
 		g.speed *= 1.6
 		g.alarm = true
-	# أضواء إنذار حمراء دوّارة في كل غرفة
-	for c in [Vector3(4, WALL_H - 0.2, 4), Vector3(14, WALL_H - 0.2, 5), Vector3(25, WALL_H - 0.2, 5)]:
+	for c in [Vector3(4, WALL_H - 0.2, 4), Vector3(14, WALL_H - 0.2, 5), Vector3(25, WALL_H - 0.2, 5), ARCHIVE + Vector3(5, WALL_H - 0.2, 4)]:
 		for k in 2:
 			var s := SpotLight3D.new()
 			s.position = c
@@ -450,20 +1170,25 @@ func _start_escape() -> void:
 func _spotted() -> void:
 	seen_time = 0.0
 	invuln = 2.5
-	hud.flash("👁 رآك الحارس!", Color(0.9, 0.28, 0.3))
-	hud.hit()
-	hacking = -1.0
-	hud.set_progress(-1.0)
-	if escape_left >= 0.0:
-		escape_left = max(1.0, escape_left - 8.0)
+	if active == agent:
+		hud.flash("👁 رآك الحارس!", Color(0.9, 0.28, 0.3))
+		hud.hit()
+		hud.close_panel()
+	if vault_mode:
+		_exit_vault()
+	if stage >= 3:
+		escape_left = maxf(1.0, escape_left - 8.0)
 		return
-	# العودة إلى مدخل الغرفة الحالية
-	var back := SPAWN if stage == 0 else (Vector3(9.2, 0, 4.5) if stage == 1 else Vector3(21.2, 0, 5))
-	player.global_position = back
+	agent.global_position = SPAWN if stage == 0 else (Vector3(9.2, 0, 4.5) if stage == 1 else Vector3(21.2, 0, 5))
+
+
+func _end(won: bool) -> void:
+	result = "win" if won else "lose"
+	_send_prog()
+	_finish(won)
 
 
 func _finish(won: bool) -> void:
-	finished = true
-	hud.show_hack(false)
-	hud.set_progress(-1.0)
+	result = "win" if won else "lose"
+	hud.show_interact("")
 	hud.end_screen(won)

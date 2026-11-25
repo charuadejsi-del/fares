@@ -47,8 +47,9 @@ jobs:
 
       - name: اختبار تشغيل (أخطاء السكربت توقف البناء)
         run: |
-          timeout 120 godot --headless --path . --quit-after 400 > run.log 2>&1 || true
-          tail -60 run.log
+          KHAZNA_SMOKE=1 timeout 120 godot --headless --path . --quit-after 600 > run.log 2>&1 || true
+          grep -v "Parameter \"m\" is null\|mesh_storage.h" run.log | tail -60
+          grep -q "SMOKE final stage: 3" run.log || { echo "اختبار الألغاز لم يصل إلى الهروب"; exit 1; }
           if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Invalid (call|get|set)" run.log; then exit 1; fi
 
       - name: بناء أندرويد

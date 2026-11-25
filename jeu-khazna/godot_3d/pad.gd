@@ -8,6 +8,8 @@ func _draw() -> void:
 	if hud == null:
 		return
 	var st: Dictionary = hud.pad_state()
+	if st.hidden:
+		return
 	var vp := get_viewport_rect().size
 	var o: Vector2 = st.origin if st.active else Vector2(140, vp.y - 150)
 	var a := 0.55 if st.active else 0.25

@@ -10,6 +10,8 @@ var pitch := 0.0
 var move_input := Vector2.ZERO # من العصا: x جانبي، y أمام
 var look_delta := Vector2.ZERO # من سحب الإصبع أو الفأرة (يُطبَّق بنعومة)
 var sens := 1.0
+var active := true # اللاعب الذي يتحكّم فيه هذا الهاتف (في الوضع الفردي: أحد الاثنين)
+var locked := false # أمام قرص الخزنة: لا مشي، والكاميرا يحرّكها المشهد
 var _bob := 0.0
 
 
@@ -27,6 +29,7 @@ func _ready() -> void:
 	cam.fov = 72
 	cam.near = 0.05
 	cam.far = 60
+	cam.cull_mask = cam.cull_mask & ~2 # الطبقة 2 = جسم العميل (يظهر في كاميرات المراقبة فقط)
 	add_child(cam)
 	cam.current = true
 
@@ -42,7 +45,7 @@ func _ready() -> void:
 
 
 func _unhandled_input(event) -> void:
-	if OS.has_feature("mobile"):
+	if OS.has_feature("mobile") or not active:
 		return
 	if event is InputEventMouseButton and event.pressed:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -65,7 +68,18 @@ func _keys() -> Vector2:
 	return v
 
 
+func set_active(v: bool) -> void:
+	active = v
+	cam.current = v
+	flash.visible = v
+	move_input = Vector2.ZERO
+	look_delta = Vector2.ZERO
+
+
 func _physics_process(delta: float) -> void:
+	if not active or locked:
+		velocity = Vector3.ZERO
+		return
 	var mv := move_input + _keys()
 	if mv.length() > 1.0:
 		mv = mv.normalized()
