@@ -147,6 +147,18 @@ jobs:
           unzip -q -o ~/.local/share/godot/export_templates/4.3.stable/android_source.zip -d android/build
           echo -n "4.3.stable" > android/.build_version
           touch android/build/.gdignore
+          # رابط khazna3d:// (من تطبيق الخزنة الأصلي) يُضاف إلى نشاط Godot في قالب البناء
+          python3 - <<'PY'
+          import glob, re
+          f = '<intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="khazna3d" /></intent-filter>'
+          for m in glob.glob("android/build/**/AndroidManifest.xml", recursive=True):
+              s = open(m, encoding="utf-8").read()
+              if "GodotApp" in s and "khazna3d" not in s:
+                  i = s.find("</activity>", s.find("GodotApp"))
+                  s = s[:i] + f + s[i:]
+                  open(m, "w", encoding="utf-8").write(s)
+                  print("DEEPLINK added to", m)
+          PY
           SDK=${ANDROID_HOME:-/usr/lib/android-sdk}
           echo "SDK=$SDK"; ls $SDK || true
           (yes | $SDK/cmdline-tools/*/bin/sdkmanager --licenses >/dev/null 2>&1) || (yes | sdkmanager --licenses >/dev/null 2>&1) || true
