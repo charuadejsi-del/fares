@@ -19,6 +19,7 @@ void paintAll(HeistMap m, GameState s) {
         agent: () => i == 0 ? m.spawn : m.checkpoint(i),
         facing: () => a,
         alert: () => .3,
+        mark: () => const Offset(3, 3),
         vision: 3.8,
       );
       final rec = ui.PictureRecorder();
@@ -36,6 +37,7 @@ void main() {
     await tester.runAsync(FpsTextures.load);
     expect(FpsTextures.wallFor(18), isNotNull);
     expect(FpsTextures.get('term_on'), isNotNull);
+    expect(FpsTextures.get('guard_front_0'), isNotNull);
     paintAll(m, s);
     paintAll(m, s.copyWith(escape: 3, power: 20, room: 4));
     paintAll(heistMap(99, 50, 7), GameState(seed: 99, rooms: List.filled(7, 'keypad'), phase: 'playing', stage: 50, heist: true));

@@ -92,7 +92,11 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
   final _frame = ValueNotifier<int>(0);
   late Offset _pos;
   Offset _stick = Offset.zero;
-  double _look = 0; // دوران متراكم من سحب الإصبع (3D)
+  double _look = 0; // دوران متراكم من سحب الإصبع (3D) يُطبَّق بنعومة
+  Offset? _padOrigin; // مركز العصا العائمة (3D)
+  Offset _padKnob = Offset.zero;
+  static double _sens = 1.0;
+  static bool _sensLoaded = false;
   double _facing = 0;
   double _seenFor = 0;
   int _invulnUntil = 0;
@@ -121,6 +125,10 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
     // بعد تبادل الأدوار: نبدأ من آخر موقع للشريك
     _pos = c.partnerX != null && s.room > 0 ? Offset(c.partnerX!, c.partnerY!) : widget.map.checkpoint(s.room);
     if (s.room > 0 || s.spots > 0) _help = false;
+    if (!_sensLoaded) {
+      _sensLoaded = true;
+      SharedPreferences.getInstance().then((p) => _sens = p.getDouble('look_sens') ?? 1.0);
+    }
     _intro = _introFor(s.stage);
     if (_intro != null) {
       Future.delayed(const Duration(seconds: 9), () {
@@ -214,17 +222,18 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
 
     if (!_hacking && view3d.value) {
       // 3D: العصا للأمام/الخلف والدوران، السحب على يمين الشاشة للالتفات، والأسهم/WASD من لوحة المفاتيح
+      // العصا العائمة: مشي للأمام/الخلف والجانبين (لا تدير الكاميرا). الالتفات بالسحب على اليمين.
       final (fwdK, strafeK, turnK) = _fpsKeys();
-      final sy = _stick.dy.abs() > .18 ? -_stick.dy : 0.0;
-      final sx = _stick.dx.abs() > .22 ? _stick.dx : 0.0;
-      final fwd = (sy + fwdK).clamp(-1.0, 1.0), strafe = strafeK, turn = (sx + turnK).clamp(-1.0, 1.0);
-      _facing += turn * 2.4 * dt + _look;
-      _look = 0;
+      final st = _stick.distance > .12 ? _stick : Offset.zero;
+      final fwd = (-st.dy + fwdK).clamp(-1.0, 1.0), strafe = (st.dx + strafeK).clamp(-1.0, 1.0);
+      final applied = _look * min(1.0, dt * 22);
+      _look -= applied;
+      _facing += applied + turnK * 2.4 * dt;
       final dir = Offset(cos(_facing), sin(_facing));
       var v = dir * fwd + Offset(-dir.dy, dir.dx) * strafe;
       if (v.distance > 1) v = v / v.distance;
       if (v.distance > .05) {
-        _pos = map.move(_pos, v * kAgentSpeed * (fwd < 0 ? .7 : 1) * dt, solved, shut: shut);
+        _pos = map.move(_pos, v * kAgentSpeed * (fwd < -.3 ? .75 : 1) * dt, solved, shut: shut);
         if (_help) setState(() => _help = false);
       }
     } else if (!_hacking) {
@@ -329,6 +338,7 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
                     agent: () => _pos,
                     facing: () => _facing,
                     alert: () => _seenFor,
+                    mark: () => c.markX == null || DateTime.now().millisecondsSinceEpoch - c.markAt > 5000 ? null : Offset(c.markX!, c.markY!),
                     vision: vision,
                   ),
                 )
@@ -360,7 +370,73 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
           width: MediaQuery.sizeOf(context).width * .55,
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onPanUpdate: (d) => _look += d.delta.dx * .0085,
+            onPanUpdate: (d) => _look += d.delta.dx * .0072 * _sens,
+          ),
+        ),
+      if (fps && !_hacking)
+        Positioned(
+          left: 0,
+          bottom: 0,
+          top: 120,
+          width: MediaQuery.sizeOf(context).width * .45,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onPanStart: (d) => setState(() {
+              _padOrigin = d.localPosition;
+              _padKnob = Offset.zero;
+            }),
+            onPanUpdate: (d) {
+              if (_padOrigin == null) return;
+              var v = d.localPosition - _padOrigin!;
+              if (v.distance > 56) v = v / v.distance * 56;
+              setState(() => _padKnob = v);
+              _stick = v / 56;
+            },
+            onPanEnd: (_) => setState(() {
+              _padOrigin = null;
+              _stick = Offset.zero;
+            }),
+            onPanCancel: () => setState(() {
+              _padOrigin = null;
+              _stick = Offset.zero;
+            }),
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final o = _padOrigin ?? Offset(84, box.maxHeight - 110);
+                final active = _padOrigin != null;
+                return Stack(children: [
+                  Positioned(
+                    left: o.dx - 60,
+                    top: o.dy - 60,
+                    child: IgnorePointer(
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.black.withAlpha(active ? 70 : 35),
+                          border: Border.all(color: Colors.white.withAlpha(active ? 90 : 40), width: 1.5),
+                        ),
+                        child: Center(
+                          child: Transform.translate(
+                            offset: active ? _padKnob : Offset.zero,
+                            child: Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withAlpha(active ? 60 : 25),
+                                border: Border.all(color: K.neon.withAlpha(active ? 200 : 90), width: 2),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ]);
+              },
+            ),
           ),
         ),
       // 3D: رادار صغير (المخطّط من الأعلى حول العميل: الحرّاس والكاميرات والإشارة)
@@ -421,6 +497,29 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
             ),
           ),
         ),
+      if (!_hacking && fps)
+        Positioned(
+          top: 248,
+          right: 12,
+          child: Material(
+            color: const Color(0xCC121518),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: K.borderStrong)),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () {
+                setState(() => _sens = _sens < .8 ? 1.0 : (_sens < 1.3 ? 1.6 : .6));
+                SharedPreferences.getInstance().then((p) => p.setDouble('look_sens', _sens));
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.threesixty, size: 16, color: K.text2),
+                  Text(_sens < .8 ? 'بطيء' : (_sens < 1.3 ? 'متوسّط' : 'سريع'), style: const TextStyle(fontSize: 10.5, color: K.text2, fontWeight: FontWeight.w700)),
+                ]),
+              ),
+            ),
+          ),
+        ),
       // الشريط العلوي
       Positioned(
         top: 0,
@@ -442,8 +541,8 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
           right: 156,
           child: _Banner(
             text: view3d.value
-                ? 'العصا: للأمام والخلف وللدوران. اسحب على يمين الشاشة لتلتفت. الرادار أعلى اليمين يُظهر الحرّاس، '
-                    'والماسة الخضراء فوق الجهاز الذي تقصده. شريكك يرى المخطّط كاملاً.'
+                ? 'الإبهام الأيسر: المس في أيّ مكان يساراً وحرّك للمشي. الإبهام الأيمن: اسحب لتنظر حولك. '
+                    'الماسة فوق الجهاز الذي تقصده، والرادار يُظهر الحرّاس. شريكك يرى المخطّط كاملاً.'
                 : 'تحرّك بالعصا (أو الأسهم). رؤيتك محدودة: شريكك يرى المخطّط والحرّاس. '
                     'اذهب إلى الجهاز المضيء واخترقه. إن رآك حارس أو كاميرا تعود إلى نقطة الحفظ.',
           ),
@@ -483,7 +582,7 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
         ),
       ),
       // عصا التحكّم
-      if (!_hacking)
+      if (!_hacking && !fps)
         Positioned(
           left: 22,
           bottom: 26,
