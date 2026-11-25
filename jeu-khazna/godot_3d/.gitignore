@@ -2,4 +2,6 @@
 build/
 fonts/
 models/
+sounds/
+ph/
 *.log

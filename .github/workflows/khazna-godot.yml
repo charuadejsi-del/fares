@@ -33,11 +33,13 @@ jobs:
 
       - name: الأصول (خطّ عربي ونموذج الحارس)
         run: |
-          command -v curl >/dev/null || (apt-get update -qq && apt-get install -y -qq curl >/dev/null)
+          (command -v curl >/dev/null && command -v python3 >/dev/null) || (apt-get update -qq && apt-get install -y -qq curl python3 >/dev/null)
           mkdir -p fonts models
           curl -fsSL -o fonts/Tajawal-Bold.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/tajawal/Tajawal-Bold.ttf
           curl -fsSL -o models/CesiumMan.glb https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/CesiumMan/glTF-Binary/CesiumMan.glb
-          ls -la fonts models
+          python3 tools/fetch_assets.py
+          ls -la fonts models sounds ph/tex | head -60
+          ls ph/models
 
       - name: استيراد الملفّات
         run: |

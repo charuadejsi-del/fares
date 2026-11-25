@@ -59,9 +59,23 @@ var vault_dial: Node3D
 var vault_wheel: Node3D
 var drawer: Node3D
 var drawer_open := false
+var book_node: Node3D
+var pc_node: Node3D
 var marker: MeshInstance3D
 var flickers: Array = []
 var alarm_lights: Array = []
+var vault_bolts: Array = []
+var hint_light: OmniLight3D
+var hint_arrow: MeshInstance3D
+var _seer = null
+# الأصوات
+var s_amb: AudioStreamPlayer
+var s_heart: AudioStreamPlayer
+var s_steps: AudioStreamPlayer
+var s_alarm: AudioStreamPlayer
+var s_click: AudioStreamPlayer
+var s_door: AudioStreamPlayer3D
+var s_vault: AudioStreamPlayer3D
 
 var mat_wall: StandardMaterial3D
 var mat_wall_dark: StandardMaterial3D
@@ -177,10 +191,14 @@ func _start(r: String, s: int) -> void:
 		menu.queue_free()
 		menu = null
 	_materials()
+	_realistic()
 	_environment()
 	_build_building()
 	_build_archive()
+	_props()
 	_spawn_guards()
+	_sounds()
+	_hints()
 	hud = preload("res://hud.gd").new()
 	add_child(hud)
 	hud.interact_pressed.connect(_on_interact)
@@ -194,6 +212,32 @@ func _start(r: String, s: int) -> void:
 		_build_feeds()
 	_set_active(analyst if role == "analyst" else agent)
 	hud.set_status("وضع فردي" if net == null else "")
+	_intro()
+
+
+func _intro() -> void:
+	var a := "أنت العميل داخل مخزن الميناء.\n\n١. اتبع السهم البرتقالي إلى الجهاز، وابتعد عن ضوء مصابيح الحرّاس.\n٢. الرموز والأجوبة ليست عندك: هي عند شريكك المحلّل. صِف له ما تراه واسأله.\n٣. افتح الخزنة، ثم اهرب إلى نقطة البداية قبل انتهاء الإنذار."
+	var b := "أنت المحلّل في غرفة الأرشيف.\n\n١. راقب العميل والحرّاس على شاشات المراقبة.\n٢. الشيء المضيء والسهم فوقه = ما تبحث فيه الآن (درج، دليل، حاسوب).\n٣. انظر إليه واضغط الزر، ثم أخبر العميل بما وجدت."
+	if role == "agent":
+		hud.open_text("مهمّتك", a)
+	elif role == "analyst":
+		hud.open_text("مهمّتك", b)
+	else:
+		hud.open_text("وضع التجربة", a + "\n\n(زر 👁 أعلى الشاشة يبدّلك إلى المحلّل)")
+
+
+func _hints() -> void:
+	hint_light = OmniLight3D.new()
+	hint_light.light_color = Color(1.0, 0.63, 0.23)
+	hint_light.omni_range = 1.6
+	add_child(hint_light)
+	hint_arrow = MeshInstance3D.new()
+	var pm := PrismMesh.new()
+	pm.size = Vector3(0.16, 0.22, 0.16)
+	hint_arrow.mesh = pm
+	hint_arrow.material_override = _glow(Color(1.0, 0.63, 0.23), 4.0)
+	hint_arrow.rotation_degrees.x = 180
+	add_child(hint_arrow)
 
 
 func _make_player(at: Vector3, yaw: float):
@@ -359,6 +403,149 @@ func _materials() -> void:
 	mat_wood.albedo_texture = _noise_tex(0.05, Color(0.16, 0.1, 0.06), Color(0.3, 0.2, 0.12))
 	mat_wood.uv1_triplanar = true
 	mat_wood.roughness = 0.7
+
+
+func _pbr(id: String, fb: StandardMaterial3D, uv: float, tint := Color.WHITE) -> StandardMaterial3D:
+	var d := "res://ph/tex/%s_diff.jpg" % id
+	if not ResourceLoader.exists(d):
+		return fb
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = load(d)
+	m.albedo_color = tint
+	var n := "res://ph/tex/%s_nor_gl.jpg" % id
+	if ResourceLoader.exists(n):
+		m.normal_enabled = true
+		m.normal_texture = load(n)
+	var r := "res://ph/tex/%s_rough.jpg" % id
+	if ResourceLoader.exists(r):
+		m.roughness_texture = load(r)
+	m.roughness = fb.roughness
+	m.metallic = fb.metallic
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE / uv
+	return m
+
+
+func _realistic() -> void:
+	mat_wall = _pbr("concrete_wall_008", mat_wall, 3.0, Color(0.78, 0.78, 0.8))
+	mat_wall_dark = _pbr("concrete_wall_005", mat_wall_dark, 3.0, Color(0.5, 0.48, 0.46))
+	mat_floor = _pbr("damaged_concrete_floor_02", mat_floor, 3.0, Color(0.75, 0.76, 0.78))
+	mat_floor.roughness = 0.55 # مبلّلة قليلاً
+	mat_ceil = _pbr("concrete_floor_01", mat_ceil, 3.0, Color(0.3, 0.3, 0.32))
+	mat_rust = _pbr("rusty_metal_shutter", mat_rust, 2.0)
+	mat_steel = _pbr("metal_plate", mat_steel, 1.2, Color(0.75, 0.78, 0.82))
+	mat_steel.metallic = 0.85
+	mat_wood = _pbr("old_wooden_floor_02", mat_wood, 2.0, Color(0.8, 0.75, 0.7))
+	mat_crate = _pbr("rusty_metal_02", mat_crate, 1.0)
+
+
+## نموذج Poly Haven: قاعدته على الأرض ومركزه في [pos]، مع جسم تصادم اختياري.
+func _prop(id: String, pos: Vector3, rot := 0.0, collide := true) -> Node3D:
+	var p := "res://ph/models/%s/%s.gltf" % [id, id]
+	if not ResourceLoader.exists(p):
+		return null
+	var scn = load(p)
+	if not scn is PackedScene:
+		return null
+	var n := (scn as PackedScene).instantiate() as Node3D
+	if n == null:
+		return null
+	add_child(n)
+	n.rotation_degrees.y = rot
+	n.global_position = pos
+	var box := _aabb(n)
+	if box.size == Vector3.ZERO:
+		return n
+	var c := box.get_center()
+	n.global_position += Vector3(pos.x - c.x, pos.y - box.position.y, pos.z - c.z)
+	if collide:
+		var body := StaticBody3D.new()
+		var cs := CollisionShape3D.new()
+		var sh := BoxShape3D.new()
+		sh.size = box.size
+		cs.shape = sh
+		body.add_child(cs)
+		add_child(body)
+		body.global_position = Vector3(pos.x, pos.y + box.size.y / 2.0, pos.z)
+	return n
+
+
+func _aabb(n: Node3D) -> AABB:
+	var box := AABB()
+	var first := true
+	for mi in n.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		var b := m.global_transform * m.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	return box
+
+
+func _props() -> void:
+	# المبنى: براميل وصناديق ورفوف وكاميرات حقيقية وطفّاية حريق
+	_prop("Barrel_01", Vector3(15.6, 0, 1.0))
+	_prop("Barrel_01", Vector3(16.4, 0, 1.25), 40)
+	_prop("barrel_03", Vector3(26.6, 0, 9.2))
+	_prop("cardboard_box_01", Vector3(5.6, 0, 7.4))
+	_prop("cardboard_box_01", Vector3(6.3, 0, 7.5), 25)
+	_prop("cardboard_box_01", Vector3(17.6, 0, 9.4), -15)
+	_prop("steel_frame_shelves_01", Vector3(12.5, 0, 9.45))
+	_prop("steel_frame_shelves_01", Vector3(2.6, 0, 0.55), 180)
+	_prop("korean_fire_extinguisher_01", Vector3(7.6, 0, 7.6))
+	_prop("metal_trash_can", Vector3(9.0, 0, 0.6))
+	_prop("power_box_01", Vector3(19.75, 1.1, 2.6), -90, false)
+	for c in [Vector3(0.6, 2.7, 0.6), Vector3(8.6, 2.7, 9.4), Vector3(20.6, 2.7, 0.6)]:
+		_prop("security_camera_01", c, 0, false)
+	for l in [Vector3(4, 2.75, 4), Vector3(14, 2.75, 5), Vector3(25, 2.75, 5), ARCHIVE + Vector3(5, 2.75, 5)]:
+		_prop("caged_hanging_light", l, 0, false)
+	# الأرشيف
+	_prop("modern_arm_chair_01", ARCHIVE + Vector3(5, 0, 2.4), 180)
+	_prop("wooden_bookshelf_worn", ARCHIVE + Vector3(0.6, 0, 7.0), 90)
+	_prop("vintage_cabinet_01", ARCHIVE + Vector3(8.6, 0, 7.4), 180)
+	_prop("vintage_wooden_drawer_01", ARCHIVE + Vector3(9.3, 0, 2.2), -90)
+
+
+# ───────── الأصوات ─────────
+func _snd(sound_name: String, loop := false, db := 0.0) -> AudioStreamPlayer:
+	var p := AudioStreamPlayer.new()
+	p.stream = _stream(sound_name, loop)
+	p.volume_db = db
+	add_child(p)
+	return p
+
+
+func _snd3d(sound_name: String, at: Vector3, db := 0.0) -> AudioStreamPlayer3D:
+	var p := AudioStreamPlayer3D.new()
+	p.stream = _stream(sound_name, false)
+	p.volume_db = db
+	p.unit_size = 6.0
+	p.max_distance = 40.0
+	add_child(p)
+	p.global_position = at
+	return p
+
+
+func _stream(sound_name: String, loop: bool) -> AudioStream:
+	var path_s := "res://sounds/%s.mp3" % sound_name
+	if not ResourceLoader.exists(path_s):
+		return null
+	var st = load(path_s)
+	if st is AudioStreamMP3:
+		(st as AudioStreamMP3).loop = loop
+	return st
+
+
+func _sounds() -> void:
+	s_amb = _snd("ambience", true, -8.0)
+	if s_amb.stream:
+		s_amb.play()
+	s_heart = _snd("heartbeat", true, -40.0)
+	s_steps = _snd("steps", true, -10.0)
+	s_alarm = _snd("alarm", true, -6.0)
+	s_click = _snd("click", false, -4.0)
+	s_door = _snd3d("door", Vector3(8, 1.5, 4.5), 2.0)
+	s_vault = _snd3d("vault_open", Vector3(29.6, 1.5, 5), 4.0)
 
 
 func _glow(color: Color, energy: float) -> StandardMaterial3D:
@@ -595,81 +782,190 @@ func _terminal(pos: Vector3, title: String) -> Dictionary:
 
 
 func _build_vault() -> void:
-	# باب فولاذي ضخم على الجدار x=30، يُفتح على مفصّل في طرفه
-	_box(Vector3(29.8, 1.4, 3.55), Vector3(0.5, 2.8, 0.3), mat_steel)
-	_box(Vector3(29.8, 1.4, 6.45), Vector3(0.5, 2.8, 0.3), mat_steel)
+	# إطار فولاذي سميك بفتحة دائرية (CSG)
+	var frame := CSGCombiner3D.new()
+	frame.use_collision = true
+	frame.position = Vector3(29.9, 1.5, 5)
+	add_child(frame)
+	var plate := CSGBox3D.new()
+	plate.size = Vector3(0.55, 3.0, 3.0)
+	plate.material = mat_steel
+	frame.add_child(plate)
+	var hole := CSGCylinder3D.new()
+	hole.radius = 1.16
+	hole.height = 1.0
+	hole.sides = 48
+	hole.operation = CSGShape3D.OPERATION_SUBTRACTION
+	hole.rotation_degrees.z = 90
+	frame.add_child(hole)
+	# براغي الإطار
+	for i in 16:
+		var a := i * TAU / 16.0
+		var b := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.045
+		cm.bottom_radius = 0.05
+		cm.height = 0.06
+		b.mesh = cm
+		b.material_override = mat_steel
+		b.rotation_degrees.z = 90
+		b.position = Vector3(29.6, 1.5 + cos(a) * 1.36, 5 + sin(a) * 1.36)
+		add_child(b)
+	# المفصلات
+	for y in [0.75, 2.25]:
+		var h := MeshInstance3D.new()
+		var hm := CylinderMesh.new()
+		hm.top_radius = 0.09
+		hm.bottom_radius = 0.09
+		hm.height = 0.45
+		h.mesh = hm
+		h.material_override = mat_steel
+		h.position = Vector3(29.55, y, 3.8)
+		add_child(h)
+
 	vault_pivot = Node3D.new()
-	vault_pivot.position = Vector3(29.85, 0, 3.7)
+	vault_pivot.position = Vector3(29.62, 1.5, 3.84)
 	add_child(vault_pivot)
 	var door := StaticBody3D.new()
-	door.position = Vector3(0, 1.4, 1.3)
+	door.position = Vector3(0, 0, 1.16)
 	vault_pivot.add_child(door)
 	var cs := CollisionShape3D.new()
-	var bs := BoxShape3D.new()
-	bs.size = Vector3(0.35, 2.7, 2.55)
-	cs.shape = bs
+	var shape := CylinderShape3D.new()
+	shape.radius = 1.12
+	shape.height = 0.42
+	cs.shape = shape
+	cs.rotation_degrees.z = 90
 	door.add_child(cs)
-	var mesh := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = bs.size
-	mesh.mesh = bm
-	mesh.material_override = mat_steel
-	door.add_child(mesh)
+	var body := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 1.12
+	cyl.bottom_radius = 1.12
+	cyl.height = 0.42
+	cyl.radial_segments = 64
+	body.mesh = cyl
+	body.material_override = mat_steel
+	body.rotation_degrees.z = 90
+	door.add_child(body)
+	var face := MeshInstance3D.new()
+	var fm := CylinderMesh.new()
+	fm.top_radius = 0.92
+	fm.bottom_radius = 0.95
+	fm.height = 0.05
+	fm.radial_segments = 64
+	face.mesh = fm
+	face.material_override = mat_steel
+	face.rotation_degrees.z = 90
+	face.position = Vector3(-0.23, 0, 0)
+	door.add_child(face)
 	var ring := MeshInstance3D.new()
 	var tor := TorusMesh.new()
-	tor.inner_radius = 0.98
-	tor.outer_radius = 1.08
+	tor.inner_radius = 0.97
+	tor.outer_radius = 1.03
 	ring.mesh = tor
-	ring.material_override = _glow(Color(0.85, 0.5, 0.15), 1.4)
-	ring.position = Vector3(-0.19, 0, 0)
+	ring.material_override = _glow(Color(0.85, 0.5, 0.15), 0.9)
+	ring.position = Vector3(-0.22, 0, 0)
 	ring.rotation_degrees = Vector3(0, 0, 90)
 	door.add_child(ring)
+	# أقفال الباب (تنسحب عند الفتح)
+	for i in 10:
+		var a := i * TAU / 10.0
+		var bolt := MeshInstance3D.new()
+		var bm := CylinderMesh.new()
+		bm.top_radius = 0.06
+		bm.bottom_radius = 0.06
+		bm.height = 0.3
+		bolt.mesh = bm
+		bolt.material_override = mat_steel
+		bolt.rotation.x = a
+		bolt.position = Vector3(0, cos(a) * 1.18, sin(a) * 1.18)
+		door.add_child(bolt)
+		vault_bolts.append([bolt, a])
 	# الرموز المنقوشة (العميل يصفها للمحلّل)
 	var syms := "   ".join(PackedStringArray(puzzle.symbols))
-	var sl := _label3d(syms, Vector3(-0.19, 0.95, 0), 110, Color(1.0, 0.75, 0.35), door)
+	var sl := _label3d(syms, Vector3(-0.27, 0.68, 0), 110, Color(1.0, 0.75, 0.35), door)
 	sl.rotation_degrees.y = -90
-	# القرص (فوق) والمقبض الدوّار (تحت)
+	# القرص المحفور: 40 تدريجة وأرقام كل 5
 	vault_dial = Node3D.new()
-	vault_dial.position = Vector3(-0.2, 0.35, 0)
+	vault_dial.position = Vector3(-0.27, 0.2, 0)
 	door.add_child(vault_dial)
 	var dial := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.32
-	cyl.bottom_radius = 0.34
-	cyl.height = 0.1
-	dial.mesh = cyl
+	var dm := CylinderMesh.new()
+	dm.top_radius = 0.28
+	dm.bottom_radius = 0.31
+	dm.height = 0.09
+	dm.radial_segments = 48
+	dial.mesh = dm
 	dial.material_override = mat_dark
 	dial.rotation_degrees = Vector3(0, 0, 90)
 	vault_dial.add_child(dial)
-	for n in 8:
-		var a := n * TAU / 8.0
-		var num := _label3d(str(n * 5), Vector3(-0.06, cos(a) * 0.24, sin(a) * 0.24), 40, Color(0.9, 0.9, 0.85), vault_dial)
-		num.rotation_degrees.y = -90
+	for n in 40:
+		var a := n * TAU / 40.0
+		var tick := MeshInstance3D.new()
+		var tm := BoxMesh.new()
+		tm.size = Vector3(0.01, 0.05 if n % 5 == 0 else 0.025, 0.008)
+		tick.mesh = tm
+		tick.material_override = _glow(Color(0.85, 0.85, 0.8), 0.6)
+		tick.rotation.x = a
+		tick.position = Vector3(-0.05, cos(a) * 0.255, sin(a) * 0.255)
+		vault_dial.add_child(tick)
+		if n % 5 == 0:
+			var num := _label3d(str(n), Vector3(-0.05, cos(a) * 0.19, sin(a) * 0.19), 34, Color(0.92, 0.92, 0.88), vault_dial)
+			num.rotation_degrees.y = -90
+	var knob := MeshInstance3D.new()
+	var km := CylinderMesh.new()
+	km.top_radius = 0.07
+	km.bottom_radius = 0.09
+	km.height = 0.12
+	knob.mesh = km
+	knob.material_override = mat_steel
+	knob.rotation_degrees.z = 90
+	knob.position = Vector3(-0.08, 0, 0)
+	vault_dial.add_child(knob)
 	var mark := MeshInstance3D.new()
 	var mb := BoxMesh.new()
-	mb.size = Vector3(0.05, 0.08, 0.03)
+	mb.size = Vector3(0.02, 0.07, 0.03)
 	mark.mesh = mb
 	mark.material_override = _glow(Color(1.0, 0.2, 0.15), 3.0)
-	mark.position = Vector3(-0.2, 0.75, 0)
+	mark.position = Vector3(-0.27, 0.55, 0)
 	door.add_child(mark)
+	# المقبض الدوّار بأربع أذرع ومقابض كروية
 	vault_wheel = Node3D.new()
-	vault_wheel.position = Vector3(-0.22, -0.45, 0)
+	vault_wheel.position = Vector3(-0.3, -0.42, 0)
 	door.add_child(vault_wheel)
-	for k in 3:
+	var hub := MeshInstance3D.new()
+	var hm2 := CylinderMesh.new()
+	hm2.top_radius = 0.1
+	hm2.bottom_radius = 0.12
+	hm2.height = 0.14
+	hub.mesh = hm2
+	hub.material_override = mat_steel
+	hub.rotation_degrees.z = 90
+	vault_wheel.add_child(hub)
+	for k in 4:
+		var a := k * PI / 2.0
 		var spoke := MeshInstance3D.new()
 		var sm := CylinderMesh.new()
-		sm.top_radius = 0.03
+		sm.top_radius = 0.025
 		sm.bottom_radius = 0.03
-		sm.height = 0.8
+		sm.height = 0.36
 		spoke.mesh = sm
 		spoke.material_override = mat_steel
-		spoke.rotation.x = k * PI / 3.0
+		spoke.rotation.x = a
+		spoke.position = Vector3(0, cos(a) * 0.18, sin(a) * 0.18)
 		vault_wheel.add_child(spoke)
+		var ball := MeshInstance3D.new()
+		var sp := SphereMesh.new()
+		sp.radius = 0.045
+		sp.height = 0.09
+		ball.mesh = sp
+		ball.material_override = mat_dark
+		ball.position = Vector3(0, cos(a) * 0.37, sin(a) * 0.37)
+		vault_wheel.add_child(ball)
 	var light := SpotLight3D.new()
 	add_child(light)
 	light.look_at_from_position(Vector3(26.5, 3.0, 5), Vector3(29.8, 1.3, 5))
 	light.light_color = Color(0.8, 0.88, 1.0)
-	light.light_energy = 2.5
+	light.light_energy = 3.0
 	light.spot_angle = 28
 	light.spot_range = 8
 	light.shadow_enabled = true
@@ -729,6 +1025,7 @@ func _build_archive() -> void:
 	# الحاسوب
 	var pc := _box(o + Vector3(5, 1.05, 1.0), Vector3(0.7, 0.48, 0.08), mat_dark)
 	pc.set_meta("kind", "computer")
+	pc_node = pc
 	var scr := MeshInstance3D.new()
 	var q := QuadMesh.new()
 	q.size = Vector2(0.62, 0.4)
@@ -740,10 +1037,11 @@ func _build_archive() -> void:
 	# دليل الأسلاك (كتاب أحمر)
 	var book := _box(o + Vector3(3.2, 0.83, 1.3), Vector3(0.38, 0.07, 0.5), _glow(Color(0.45, 0.06, 0.05), 0.4))
 	book.set_meta("kind", "book")
+	book_node = book
 	var bl := _label3d("دليل الأسلاك", o + Vector3(3.2, 0.875, 1.3), 24, Color(1.0, 0.9, 0.8))
 	bl.rotation_degrees.x = -90
 	# خزانة الأدراج: الدرج العلوي يُفتح وفيه ورقة
-	_box(o + Vector3(9.4, 0.6, 4.5), Vector3(0.7, 1.2, 0.9), mat_rust)
+	_box(o + Vector3(9.4, 0.6, 4.5), Vector3(0.7, 1.2, 0.9), mat_crate)
 	drawer = _box(o + Vector3(9.1, 1.0, 4.5), Vector3(0.12, 0.3, 0.8), mat_steel)
 	drawer.set_meta("kind", "drawer")
 	var sheet := MeshInstance3D.new()
@@ -908,11 +1206,57 @@ func _process(delta: float) -> void:
 	else:
 		hud.set_timer(mission_left, mission_left < 60.0)
 
+	_hint_update(t)
+	_audio_update(delta)
 	if agent:
 		_agent_logic(delta, t)
 	if analyst and active == analyst:
 		_analyst_logic()
 	_apply_stage()
+
+
+func _hint_update(t: float) -> void:
+	var target: Node3D = null
+	if stage == 0:
+		target = drawer
+	elif stage == 1:
+		target = book_node
+	elif stage == 2:
+		target = pc_node
+	var on: bool = target != null and analyst != null and active == analyst and not hud.panel_open()
+	hint_light.visible = on
+	hint_arrow.visible = on
+	if on:
+		var p := target.global_position
+		hint_light.global_position = p + Vector3(0, 0.4, 0)
+		hint_light.light_energy = 1.2 + 0.8 * sin(t * 5.0)
+		hint_arrow.global_position = p + Vector3(0, 0.6 + 0.08 * sin(t * 4.0), 0)
+		hint_arrow.rotation.y = t * 2.0
+
+
+func _audio_update(delta: float) -> void:
+	if agent == null or active != agent:
+		if s_steps.playing:
+			s_steps.stop()
+		s_heart.volume_db = move_toward(s_heart.volume_db, -40.0, delta * 30.0)
+		return
+	var moving: bool = Vector2(agent.velocity.x, agent.velocity.z).length() > 0.5
+	if s_steps.stream:
+		if moving and not s_steps.playing:
+			s_steps.play()
+		elif not moving and s_steps.playing:
+			s_steps.stop()
+	# نبض القلب يعلو كلّما اقترب الحارس أو لمحك
+	var near := 99.0
+	for g in guards:
+		near = minf(near, (g.global_position as Vector3).distance_to(agent.global_position))
+	var danger := clampf(maxf(seen_time / 0.6, (6.0 - near) / 4.0), 0.0, 1.0)
+	if s_heart.stream:
+		if danger > 0.05 and not s_heart.playing:
+			s_heart.play()
+		s_heart.volume_db = lerpf(-30.0, 2.0, danger)
+		if danger <= 0.05 and s_heart.playing:
+			s_heart.stop()
 
 
 func _agent_logic(delta: float, t: float) -> void:
@@ -925,9 +1269,13 @@ func _agent_logic(delta: float, t: float) -> void:
 	lockout = maxf(0.0, lockout - delta)
 	var space := get_world_3d().direct_space_state
 	var seen := false
+	_seer = null
 	for g in guards:
-		if g.sees(agent, space):
+		var sees_now: bool = g.sees(agent, space)
+		if sees_now:
 			seen = true
+			_seer = g
+		g.set_alert(sees_now and seen_time > 0.15, agent.global_position)
 	if seen and invuln <= 0.0:
 		seen_time += delta * (1.6 if (active == agent and hud.panel_open()) or vault_mode else 1.0)
 		if seen_time > 0.6:
@@ -945,6 +1293,8 @@ func _agent_logic(delta: float, t: float) -> void:
 		if n != dial_number:
 			dial_number = n
 			Input.vibrate_handheld(8)
+			if s_click.stream:
+				s_click.play()
 		vault_dial.rotation.x = dial_angle
 		hud.vault_state(dial_number, dial_entered)
 		return
@@ -985,7 +1335,7 @@ func _on_interact() -> void:
 		_analyst_interact()
 		return
 	if stage == 0:
-		hud.open_keypad("لوحة الأرقام — باب المخزن", _submit_code)
+		hud.open_keypad("لوحة الأرقام — الرمز في درج مكتب المحلّل", _submit_code)
 	elif stage == 1:
 		var wl := []
 		for w in puzzle.wires:
@@ -1070,6 +1420,9 @@ func _apply_stage() -> void:
 		if stage > i and not d.open:
 			d.open = true
 			(d.stripe as MeshInstance3D).material_override = _glow(Color(0.42, 0.85, 0.58), 2.5)
+			if s_door.stream:
+				s_door.global_position = (d.body as Node3D).global_position
+				s_door.play()
 			var tw := create_tween()
 			tw.tween_property(d.body, "position:y", WALL_H * 1.5, 1.8).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	if stage >= 3 and _applied_stage < 3:
@@ -1087,11 +1440,11 @@ func _update_objective() -> void:
 	var txt := ""
 	match stage:
 		0:
-			txt = "اذهب إلى لوحة الأرقام — الرمز عند شريكك" if agent_side else "ابحث عن رمز باب المخزن في الأدراج وأخبر العميل"
+			txt = "١. اذهب إلى الجهاز (السهم البرتقالي) — رمزه المكوّن من 4 أرقام في درج المحلّل، اطلبه منه" if agent_side else "١. افتح الدرج المضيء (على يمينك)، اقرأ الرمز وأمْلِه على العميل"
 		1:
-			txt = "لوحة الأسلاك: أعطِ الرقم التسلسلي لشريكك" if agent_side else "اسأل العميل عن الرقم التسلسلي، واقرأ دليل الأسلاك"
+			txt = "٢. افتح لوحة الأسلاك، اقرأ الرقم التسلسلي لشريكك، واقطع السلك الذي يقوله" if agent_side else "٢. اسأل العميل عن آخر رقم في الرقم التسلسلي، وابحث عنه في الدليل الأحمر المضيء"
 		2:
-			txt = "صِف لشريكك الرموز على باب الخزنة، ثم أدِر القرص" if agent_side else "أدخل رموز الخزنة في الحاسوب وأعطِ العميل التركيبة"
+			txt = "٣. صِف لشريكك الرموز الثلاثة على باب الخزنة، ثم أدِر القرص على الأرقام التي يقولها" if agent_side else "٣. أدخل في الحاسوب المضيء الرموز التي يصفها العميل، وأمْلِه التركيبة"
 		_:
 			txt = "🚨 اهرب إلى نقطة البداية!" if agent_side else "🚨 وجّه العميل إلى المخرج عبر الكاميرات!"
 	hud.set_objective(txt)
@@ -1104,7 +1457,7 @@ func _enter_vault() -> void:
 	dial_entered = []
 	_cam_saved = agent.cam.global_transform
 	var target := Transform3D.IDENTITY.looking_at(Vector3(1, 0, 0), Vector3.UP)
-	target.origin = Vector3(29.05, 1.75, 5.0)
+	target.origin = Vector3(28.75, 1.72, 5.0)
 	var tw := create_tween()
 	tw.tween_property(agent.cam, "global_transform", target, 0.6).set_trans(Tween.TRANS_CUBIC)
 	hud.vault_ui(true, _record_number, _exit_vault)
@@ -1146,12 +1499,22 @@ func _vault_opened() -> void:
 
 
 func _open_vault_door() -> void:
+	if s_vault.stream:
+		s_vault.play()
 	var tw := create_tween()
-	tw.tween_property(vault_pivot, "rotation:y", deg_to_rad(-105), 3.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.set_parallel(true)
+	for b in vault_bolts:
+		var a: float = b[1]
+		tw.tween_property(b[0], "position", Vector3(0, cos(a) * 0.86, sin(a) * 0.86), 0.7).set_trans(Tween.TRANS_BACK)
+	tw.set_parallel(false)
+	tw.tween_interval(0.2)
+	tw.tween_property(vault_pivot, "rotation:y", deg_to_rad(-100), 3.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
 func _alarm() -> void:
 	hud.flash("🚨 الخزنة مفتوحة — الإنذار!", Color(0.9, 0.28, 0.3))
+	if s_alarm.stream:
+		s_alarm.play()
 	for g in guards:
 		g.speed *= 1.6
 		g.alarm = true
@@ -1170,6 +1533,8 @@ func _alarm() -> void:
 
 func _spotted() -> void:
 	seen_time = 0.0
+	if _seer:
+		_seer.attack()
 	invuln = 2.5
 	if active == agent:
 		hud.flash("👁 رآك الحارس!", Color(0.9, 0.28, 0.3))

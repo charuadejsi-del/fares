@@ -1,0 +1,16 @@
+{
+  "_doc": "أصول تُحمَّل في GitHub Actions قبل البناء: أصوات Creative Claw، وخامات ونماذج Poly Haven (CC0، مجانية).",
+  "sounds": {
+    "ambience": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/d96ae00d-2471-4d97-a6b2-57689f8f7b45.mp3",
+    "alarm": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/c4f12c0e-1ccb-4c5f-afb1-5b29c0c273ce.mp3",
+    "vault_open": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/6312823f-b80d-4eb7-8a85-ac7a0f3fefcb.mp3",
+    "door": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/7702ee52-fbc1-4ab8-9c9c-35e52ccb6e31.mp3",
+    "radio": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/e8724977-0f51-497c-ace1-c3fc3f724aba.mp3",
+    "heartbeat": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/41b5755a-c9b5-49cc-a81f-223ff257377d.mp3",
+    "steps": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/8768cecd-cca1-4c86-b34f-d2d18db9243a.mp3",
+    "guard_steps": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/5f261346-04cf-4c25-9b06-79aada8a2525.mp3",
+    "click": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/d8b137d5-4ad6-4397-804d-83f379f5c7db.mp3"
+  },
+  "textures": ["concrete_wall_008", "damaged_concrete_floor_02", "concrete_floor_01", "rusty_metal_shutter", "metal_plate", "rusty_metal_02", "old_wooden_floor_02", "concrete_wall_005"],
+  "models": ["Barrel_01", "barrel_03", "cardboard_box_01", "steel_frame_shelves_01", "security_camera_01", "korean_fire_extinguisher_01", "power_box_01", "metal_trash_can", "caged_hanging_light", "metal_office_desk", "vintage_wooden_drawer_01", "modern_arm_chair_01", "wooden_bookshelf_worn", "vintage_cabinet_01"]
+}
