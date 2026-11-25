@@ -106,6 +106,7 @@ func _smoke() -> void:
 		_record_number()
 	await get_tree().create_timer(2.0).timeout
 	print("SMOKE final stage: ", stage, " escape: ", escape_left)
+	get_tree().quit()
 
 
 # ───────── الشبكة ─────────
