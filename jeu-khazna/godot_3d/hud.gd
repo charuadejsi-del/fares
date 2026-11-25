@@ -7,6 +7,10 @@ signal switch_pressed
 
 var player
 var look_only := false # وضع القرص: كل سحب = دوران
+var dial_center := Vector2(-1, -1) # موضع القرص على الشاشة
+var dial_delta := 0.0 # دوران الإصبع حول القرص (راديان، موجب = مع عقارب الساعة)
+var _ring: Line2D
+var _vault_hint: Label
 var _move_touch := -1
 var _move_origin := Vector2.ZERO
 var _move_pos := Vector2.ZERO
@@ -205,7 +209,13 @@ func _input(event) -> void:
 			player.move_input = Vector2(v.x, -v.y)
 			_pad.queue_redraw()
 		elif event.index == _look_touch:
-			player.look_delta += event.relative * 1.5
+			if look_only and dial_center.x >= 0.0:
+				var p1: Vector2 = event.position - dial_center
+				var p0: Vector2 = p1 - event.relative
+				if p1.length() > 25.0 and p0.length() > 25.0:
+					dial_delta += wrapf(p1.angle() - p0.angle(), -PI, PI)
+			else:
+				player.look_delta += event.relative * 1.5
 
 
 func release_touches() -> void:
@@ -462,51 +472,63 @@ func open_feed(title: String, tex: Texture2D) -> void:
 
 
 # ───────── قرص الخزنة ─────────
-func vault_ui(on: bool, on_record: Callable, on_exit: Callable) -> void:
+func vault_ui(on: bool, on_pull: Callable, on_exit: Callable) -> void:
 	look_only = on
+	dial_delta = 0.0
 	release_touches()
 	if _vault:
 		_vault.queue_free()
 		_vault = null
 	if not on:
+		dial_center = Vector2(-1, -1)
 		return
 	_interact.visible = false
 	_vault = Control.new()
 	_vault.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_vault.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_vault)
-	_vault_num = _label(72, AMBER)
-	_vault_num.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_vault_num.offset_left = -200
-	_vault_num.offset_right = 200
-	_vault_num.offset_top = 60
+	# حلقة إرشاد حول القرص: أدِر إصبعك عليها
+	_ring = Line2D.new()
+	var pts := PackedVector2Array()
+	for i in 65:
+		var a := i * TAU / 64.0
+		pts.append(Vector2(cos(a), sin(a)) * 190.0)
+	_ring.points = pts
+	_ring.width = 3.0
+	_ring.default_color = Color(0.91, 0.63, 0.23, 0.35)
+	_vault.add_child(_ring)
+	_vault_num = _label(64, AMBER)
+	_vault_num.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_vault_num.offset_left = -230
+	_vault_num.offset_right = -40
+	_vault_num.offset_top = 110
 	_vault_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_vault_num.text_direction = Control.TEXT_DIRECTION_LTR
 	_vault.add_child(_vault_num)
-	_vault_seq = _label(30, Color(0.9, 0.91, 0.92))
-	_vault_seq.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_vault_seq.offset_left = -300
-	_vault_seq.offset_right = 300
-	_vault_seq.offset_top = 150
+	_vault_seq = _label(40, Color(0.9, 0.91, 0.92))
+	_vault_seq.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_vault_seq.offset_left = -230
+	_vault_seq.offset_right = -40
+	_vault_seq.offset_top = 200
 	_vault_seq.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_vault_seq.text_direction = Control.TEXT_DIRECTION_LTR
 	_vault.add_child(_vault_seq)
-	var tip := _label(20, Color(0.7, 0.73, 0.76))
-	tip.text = "اسحب يميناً ويساراً لتدير القرص، ثم سجّل الرقم"
-	tip.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	tip.offset_left = -400
-	tip.offset_right = 400
-	tip.offset_top = -170
-	tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_vault.add_child(tip)
-	var rec := _button("  سجّل الرقم  ", AMBER, Color(0.07, 0.05, 0.01), 30)
-	rec.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	rec.offset_left = -330
-	rec.offset_top = -120
-	rec.offset_right = -36
-	rec.offset_bottom = -36
-	rec.pressed.connect(on_record)
-	_vault.add_child(rec)
+	_vault_hint = _label(22, Color(0.85, 0.87, 0.9))
+	_vault_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_vault_hint.offset_left = -520
+	_vault_hint.offset_right = 520
+	_vault_hint.offset_top = -190
+	_vault_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_vault_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_vault.add_child(_vault_hint)
+	var pull := _button("  اسحب المقبض  ", AMBER, Color(0.07, 0.05, 0.01), 30)
+	pull.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	pull.offset_left = -340
+	pull.offset_top = -120
+	pull.offset_right = -36
+	pull.offset_bottom = -36
+	pull.pressed.connect(on_pull)
+	_vault.add_child(pull)
 	var ex := _button("  ابتعد  ", Color(0.15, 0.16, 0.18), Color.WHITE, 24)
 	ex.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	ex.offset_left = 36
@@ -517,16 +539,24 @@ func vault_ui(on: bool, on_record: Callable, on_exit: Callable) -> void:
 	_vault.add_child(ex)
 
 
-func vault_state(number: int, entered: Array) -> void:
+func vault_state(number: int, done: int) -> void:
 	if _vault == null:
 		return
 	_vault_num.text = "%02d" % number
-	var t := ""
+	var leds := ""
 	for i in 3:
-		t += ("%02d" % int(entered[i])) if i < entered.size() else "—"
-		if i < 2:
-			t += "   ·   "
-	_vault_seq.text = t
+		leds += ("●" if i < done else "○") + " "
+	_vault_seq.text = leds.strip_edges()
+	_vault_seq.add_theme_color_override("font_color", OK if done > 0 else Color(0.55, 0.58, 0.62))
+	match done:
+		0:
+			_vault_hint.text = "الخطوة ١ من ٣: أدِر القرص بإصبعك يميناً (مع عقارب الساعة) حتى الرقم الأول، ثم اعكس الاتجاه"
+		1:
+			_vault_hint.text = "الخطوة ٢ من ٣: الآن يساراً (عكس عقارب الساعة) حتى الرقم الثاني، ثم اعكس الاتجاه"
+		_:
+			_vault_hint.text = "الخطوة ٣ من ٣: يميناً حتى الرقم الأخير، ثم اسحب المقبض"
+	if _ring and dial_center.x >= 0.0:
+		_ring.position = dial_center
 
 
 func end_screen(won: bool) -> void:

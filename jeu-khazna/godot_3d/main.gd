@@ -47,7 +47,11 @@ var lockout := 0.0
 var vault_mode := false
 var dial_angle := 0.0
 var dial_number := 0
-var dial_entered: Array = []
+var dial_entered: Array = [] # [{n, d}] الأرقام المسجّلة باتجاهها
+var _dial_dir := 0
+var _dial_travel := 0.0
+const DIAL_DIRS := [1, -1, 1] # يمين ← يسار ← يمين (كالخزنات الحقيقية)
+var s_clunk: AudioStreamPlayer
 var _cam_saved: Transform3D
 var _partner_seen := -100.0
 var _send_t := 0.0
@@ -148,9 +152,12 @@ func _smoke() -> void:
 	hud.close_panel()
 	_on_switch()
 	_enter_vault()
-	for n in puzzle.combo:
-		dial_number = int(n)
-		_record_number()
+	var c: Array = puzzle.combo
+	_dial_register(int(c[0]), 1)
+	_dial_register(int(c[1]), -1)
+	dial_number = int(c[2])
+	_dial_dir = 1
+	_pull_handle()
 	await get_tree().create_timer(3.5).timeout
 	print("SMOKE final stage: ", stage, " escape: ", escape_left, " door=", rad_to_deg(vault_pivot.rotation.y))
 	get_tree().quit()
@@ -337,7 +344,7 @@ func _set_active(p) -> void:
 
 func _on_switch() -> void:
 	if vault_mode:
-		_exit_vault()
+		_reset_agent_cam()
 	_set_active(analyst if active == agent else agent)
 
 
@@ -617,6 +624,8 @@ func _sounds() -> void:
 	s_steps = _snd("steps", true, -10.0)
 	s_alarm = _snd("alarm", true, -6.0)
 	s_click = _snd("click", false, -4.0)
+	s_clunk = _snd("click", false, 4.0)
+	s_clunk.pitch_scale = 0.45
 	s_door = _snd3d("door", Vector3(8, 1.5, 4.5), 2.0)
 	s_vault = _snd3d("vault_open", Vector3(29.6, 1.5, 5), 4.0)
 
@@ -1431,17 +1440,16 @@ func _agent_logic(delta: float, t: float) -> void:
 		hud.set_alert(seen_time / 0.6)
 
 	if vault_mode:
-		var dx: float = agent.look_delta.x
+		hud.dial_center = agent.cam.unproject_position(vault_dial.global_position)
+		var dd: float = hud.dial_delta + agent.look_delta.x * 0.004
+		hud.dial_delta = 0.0
 		agent.look_delta = Vector2.ZERO
-		dial_angle += dx * 0.0035
-		var n := posmod(int(round(-dial_angle / (TAU / 40.0))), 40)
-		if n != dial_number:
-			dial_number = n
-			Input.vibrate_handheld(8)
-			if s_click.stream:
-				s_click.play()
-		vault_dial.rotation.x = dial_angle
-		hud.vault_state(dial_number, dial_entered)
+		if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_E):
+			dd += delta * 1.1
+		if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_Q) or Input.is_key_pressed(KEY_A):
+			dd -= delta * 1.1
+		_dial_turn(dd)
+		hud.vault_state(dial_number, dial_entered.size())
 		return
 
 	if active != agent:
@@ -1520,7 +1528,7 @@ func _analyst_interact() -> void:
 func _check_symbols(picked: Array) -> String:
 	if picked == puzzle.symbols:
 		var c: Array = puzzle.combo
-		return "> تمّ فكّ التشفير ✔\nتركيبة القرص:  %02d  —  %02d  —  %02d" % [c[0], c[1], c[2]]
+		return "> تمّ فكّ التشفير ✔\nتركيبة القرص:\n١) يميناً إلى %02d   ٢) يساراً إلى %02d   ٣) يميناً إلى %02d" % [c[0], c[1], c[2]]
 	return "> رموز خاطئة ✖  حاول مرّة أخرى"
 
 
@@ -1606,8 +1614,10 @@ func _enter_vault() -> void:
 	target.origin = Vector3(28.75, 1.72, 5.0)
 	var tw := create_tween()
 	tw.tween_property(agent.cam, "global_transform", target, 0.6).set_trans(Tween.TRANS_CUBIC)
-	hud.vault_ui(true, _record_number, _exit_vault)
-	hud.vault_state(dial_number, dial_entered)
+	_dial_dir = 0
+	_dial_travel = 0.0
+	hud.vault_ui(true, _pull_handle, _exit_vault)
+	hud.vault_state(dial_number, 0)
 
 
 func _exit_vault() -> void:
@@ -1616,22 +1626,70 @@ func _exit_vault() -> void:
 	vault_mode = false
 	hud.vault_ui(false, Callable(), Callable())
 	var tw := create_tween()
-	tw.tween_property(agent.cam, "global_transform", _cam_saved, 0.4)
+	tw.tween_property(agent.cam, "position", Vector3(0, 1.62, 0), 0.35).set_trans(Tween.TRANS_CUBIC)
+	tw.parallel().tween_property(agent.cam, "rotation", Vector3(agent.pitch, 0, 0), 0.35)
 	tw.tween_callback(func(): agent.locked = false)
 
 
-func _record_number() -> void:
-	dial_entered.append(dial_number)
-	hud.vault_state(dial_number, dial_entered)
-	if dial_entered.size() < 3:
+## إعادة الكاميرا فوراً (عند الإمساك بالعميل أو تبديل الدور).
+func _reset_agent_cam() -> void:
+	vault_mode = false
+	hud.vault_ui(false, Callable(), Callable())
+	agent.cam.position = Vector3(0, 1.62, 0)
+	agent.cam.rotation = Vector3(agent.pitch, 0, 0)
+	agent.locked = false
+
+
+func _dial_turn(dd: float) -> void:
+	if absf(dd) < 0.0004:
 		return
-	if dial_entered == puzzle.combo:
-		hud.flash("✔ التركيبة صحيحة", Color(0.42, 0.85, 0.58))
+	var dir := 1 if dd > 0.0 else -1
+	if dir != _dial_dir:
+		# عكس الاتجاه بعد دوران كافٍ = تسجيل الرقم الحالي (كما في الخزنات الحقيقية)
+		if _dial_dir != 0 and _dial_travel > TAU / 40.0 * 1.5 and dial_entered.size() < 2:
+			_dial_register(dial_number, _dial_dir)
+		_dial_dir = dir
+		_dial_travel = 0.0
+	_dial_travel += absf(dd)
+	dial_angle += dd
+	var n := posmod(int(round(-dial_angle / (TAU / 40.0))), 40)
+	if n != dial_number:
+		dial_number = n
+		Input.vibrate_handheld(6)
+		if s_click.stream:
+			s_click.play()
+	vault_dial.rotation.x = dial_angle
+
+
+func _dial_register(n: int, dir: int) -> void:
+	dial_entered.append({"n": n, "d": dir})
+	Input.vibrate_handheld(40)
+	if s_clunk.stream:
+		s_clunk.play()
+	shake = 0.12
+
+
+func _pull_handle() -> void:
+	var ok := dial_entered.size() == 2
+	if ok:
+		var seq: Array = dial_entered + [{"n": dial_number, "d": _dial_dir}]
+		for i in 3:
+			if int(seq[i].n) != int(puzzle.combo[i]) or int(seq[i].d) != int(DIAL_DIRS[i]):
+				ok = false
+	if ok:
+		hud.flash("✔ الأقفال تتحرّك…", Color(0.42, 0.85, 0.58))
+		hud.vault_ui(false, Callable(), Callable())
 		_spin_wheel()
 	else:
-		hud.flash("✖ تركيبة خاطئة", Color(0.9, 0.28, 0.3))
+		hud.flash("✖ لم ينفتح — ابدأ من جديد: يمين ثم يسار ثم يمين", Color(0.9, 0.28, 0.3))
 		hud.hit()
+		shake = 0.3
+		var tw := create_tween()
+		tw.tween_property(vault_wheel, "rotation:x", vault_wheel.rotation.x + 0.25, 0.08)
+		tw.tween_property(vault_wheel, "rotation:x", vault_wheel.rotation.x, 0.12)
 		dial_entered = []
+		_dial_dir = 0
+		_dial_travel = 0.0
 
 
 func _spin_wheel() -> void:
@@ -1714,8 +1772,11 @@ func _spotted() -> void:
 		hud.hit()
 		hud.close_panel()
 	shake = 0.5
-	if vault_mode:
-		_exit_vault()
+	if vault_mode or agent.locked:
+		_reset_agent_cam()
+	agent.velocity = Vector3.ZERO
+	agent.move_input = Vector2.ZERO
+	hud.release_touches()
 	if stage >= 3:
 		escape_left = maxf(1.0, escape_left - 8.0)
 		return
