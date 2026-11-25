@@ -1,6 +1,7 @@
 // وضع الخريطة 2D: العميل يتحرّك داخل المبنى برؤية محدودة، والمحلّل يرى المخطّط كاملاً.
 // الوصول إلى جهاز الغرفة يفتح القفل نفسه (كل الأقفال الثلاثين كما هي).
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -12,6 +13,36 @@ import '../../core/game.dart';
 import '../../core/heist.dart';
 import '../../core/stages.dart';
 import '../../widgets/spy_ui.dart';
+
+/// صور الوضع 2D (تُحمَّل مرّة واحدة؛ الرسم يعود للأشكال البسيطة إلى أن تجهز).
+class HeistSprites {
+  static final Map<String, ui.Image> _img = {};
+  static bool _loading = false;
+  static const names = [
+    'h_agent', 'h_guard', 'h_camera', 'h_terminal', 'h_crate', 'h_door',
+    'h_floor_port', 'h_floor_river', 'h_floor_mountain',
+  ];
+
+  static ui.Image? get(String n) => _img[n];
+
+  static Future<void> load() async {
+    if (_loading || _img.length == names.length) return;
+    _loading = true;
+    for (final n in names) {
+      try {
+        final ext = n.startsWith('h_floor') ? 'jpg' : 'png';
+        final data = await rootBundle.load('assets/images/$n.$ext');
+        final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+        _img[n] = (await codec.getNextFrame()).image;
+      } catch (_) {}
+    }
+    _loading = false;
+  }
+
+  /// أرضية المنطقة: الميناء 1–20، النهر 21–40، الجبل بعدها.
+  static ui.Image? floorFor(int stage) =>
+      get(stage <= 20 ? 'h_floor_port' : (stage <= 40 ? 'h_floor_river' : 'h_floor_mountain'));
+}
 
 String _clock(double sec) {
   final s = sec.ceil().clamp(0, 99999);
@@ -29,6 +60,7 @@ class HeistPlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = c.state!;
     final map = heistMap(s.seed, s.stage, s.rooms.length);
+    HeistSprites.load();
     if ((c.myRole ?? 'op') == 'op') return _AgentView(c: c, map: map, lockView: lockView, onExit: onExit);
     return LayoutBuilder(
       builder: (context, box) => Column(children: [
@@ -516,6 +548,19 @@ class HeistPainter extends CustomPainter {
     final x1 = min(map.w - 1, ((size.width - origin.dx) / scale).ceil() + 1);
     final y1 = min(map.h - 1, ((size.height - origin.dy) / scale).ceil() + 1);
     final pFloor = Paint()..color = _floor, pFloor2 = Paint()..color = _floor2;
+    final floorImg = HeistSprites.floorFor(s.stage);
+    Paint? pTex;
+    if (floorImg != null) {
+      // كل صورة أرضية تغطّي 3×3 خلايا وتتكرّر
+      final k = 3 * scale / floorImg.width;
+      final m = Matrix4.identity()
+        ..translate(origin.dx, origin.dy)
+        ..scale(k, k);
+      pTex = Paint()
+        ..filterQuality = FilterQuality.low
+        ..shader = ImageShader(floorImg, TileMode.repeated, TileMode.repeated, m.storage);
+    }
+    final crateImg = HeistSprites.get('h_crate');
     final pWall = Paint()..color = _wall, pWallTop = Paint()..color = _wallTop;
     final pCrate = Paint()..color = _crate;
     final pCrateLine = Paint()
@@ -533,8 +578,10 @@ class HeistPainter extends CustomPainter {
           canvas.drawRect(r, pWall);
           canvas.drawRect(Rect.fromLTWH(r.left, r.top, r.width, r.height * .22), pWallTop);
         } else {
-          canvas.drawRect(r, (x + y).isEven ? pFloor : pFloor2);
-          if (v == kCrate) {
+          canvas.drawRect(r, pTex ?? ((x + y).isEven ? pFloor : pFloor2));
+          if (v == kCrate && crateImg != null) {
+            _sprite(canvas, crateImg, r.center, scale * .96, 0);
+          } else if (v == kCrate) {
             final cr = r.deflate(scale * .08);
             canvas.drawRect(cr, pCrate);
             canvas.drawRect(cr, pCrateLine);
@@ -546,15 +593,28 @@ class HeistPainter extends CustomPainter {
     }
 
     // الأبواب
+    final doorImg = HeistSprites.get('h_door');
     for (final d in map.doors) {
       final open = d.after < solved;
       for (final c in d.cells) {
         final r = Rect.fromLTWH(origin.dx + c.x * scale, origin.dy + c.y * scale, scale, scale);
         if (open) {
           canvas.drawRect(r, Paint()..color = K.ok.withAlpha(40));
-        } else {
+        } else if (doorImg == null) {
           canvas.drawRect(r.deflate(scale * .15), Paint()..color = (d.after == solved ? K.neon : K.danger).withAlpha(200));
         }
+      }
+      // باب فولاذي يغطّي الخليّتين
+      if (!open && doorImg != null && d.cells.length == 2) {
+        final a0 = d.cells.first, a1 = d.cells.last;
+        final c = Offset((a0.x + a1.x) / 2 + .5, (a0.y + a1.y) / 2 + .5);
+        final vertical = a0.x == a1.x;
+        _sprite(canvas, doorImg, sc(c), scale * 2, vertical ? pi / 2 : 0);
+        final edge = Rect.fromCenter(center: sc(c), width: scale * (vertical ? 1 : 2), height: scale * (vertical ? 2 : 1));
+        canvas.drawRect(edge.deflate(scale * .04), Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = max(1, scale * .06)
+          ..color = (d.after == solved ? K.neon : K.danger).withAlpha(200));
       }
     }
 
@@ -571,6 +631,10 @@ class HeistPainter extends CustomPainter {
           ..strokeWidth = scale * .08
           ..color = col);
         canvas.drawCircle(c, scale * .1, Paint()..color = col);
+      } else if (HeistSprites.get('h_terminal') != null) {
+        canvas.drawCircle(c, scale * .5, Paint()..color = col.withAlpha(i == solved ? 70 : 35));
+        _sprite(canvas, HeistSprites.get('h_terminal')!, c, scale * .85, 0, i > solved ? .55 : 1);
+        if (i < solved) canvas.drawCircle(c + Offset(scale * .3, -scale * .3), scale * .12, Paint()..color = K.ok);
       } else {
         final r = Rect.fromCenter(center: c, width: scale * .62, height: scale * .5);
         canvas.drawRRect(RRect.fromRectAndRadius(r, Radius.circular(scale * .06)), Paint()..color = const Color(0xFF22262B));
@@ -585,8 +649,14 @@ class HeistPainter extends CustomPainter {
       final p = sc(cam.pos);
       final ang = camAngle(cam, t);
       if (!off) _cone(canvas, p, ang, kCamHalf, map.params.camRange * scale, const Color(0xFFFFC94D));
-      canvas.drawRect(Rect.fromCenter(center: p, width: scale * .34, height: scale * .34), Paint()..color = off ? const Color(0xFF3A3F45) : const Color(0xFFB9BEC4));
-      canvas.drawCircle(p, scale * .08, Paint()..color = off ? K.muted : K.danger);
+      final camImg = HeistSprites.get('h_camera');
+      if (camImg != null) {
+        // صورة الكاميرا تنظر إلى الأسفل أصلاً
+        _sprite(canvas, camImg, p, scale * .55, ang - pi / 2, off ? .45 : 1);
+      } else {
+        canvas.drawRect(Rect.fromCenter(center: p, width: scale * .34, height: scale * .34), Paint()..color = off ? const Color(0xFF3A3F45) : const Color(0xFFB9BEC4));
+        canvas.drawCircle(p, scale * .08, Paint()..color = off ? K.muted : K.danger);
+      }
       if (off) {
         final sec = ((s.camOff['$i'] ?? 0) - t).ceil();
         _label(canvas, p + Offset(0, -scale * .55), '$sec', K.ok, scale * .32);
@@ -610,6 +680,12 @@ class HeistPainter extends CustomPainter {
       final (gp, ga) = guardAt(g, t);
       final p = sc(gp);
       _cone(canvas, p, ga, kGuardHalf, map.params.guardRange * scale, _coneRed);
+      final gImg = HeistSprites.get('h_guard');
+      if (gImg != null) {
+        canvas.drawCircle(p + Offset(scale * .05, scale * .08), scale * .36, Paint()..color = Colors.black.withAlpha(90));
+        _sprite(canvas, gImg, p, scale * .95, ga + pi / 2);
+        continue;
+      }
       canvas.drawCircle(p, scale * .32, Paint()..color = const Color(0xFF2B3A55));
       canvas.drawCircle(p, scale * .32, Paint()
         ..style = PaintingStyle.stroke
@@ -637,12 +713,22 @@ class HeistPainter extends CustomPainter {
       final p = sc(a);
       final f = facing();
       canvas.drawCircle(p + Offset(scale * .05, scale * .08), scale * .3, Paint()..color = Colors.black.withAlpha(110));
+      final aImg = HeistSprites.get('h_agent');
+      if (aImg != null) {
+        // حلقة زرقاء خفيفة تميّز العميل، ثم الصورة باتجاه الحركة
+        canvas.drawCircle(p, scale * .44, Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = max(1, scale * .05)
+          ..color = K.agent.withAlpha(160));
+        _sprite(canvas, aImg, p, scale * .95, f + pi / 2);
+      } else {
       canvas.drawCircle(p, scale * .3, Paint()..color = K.agent);
       canvas.drawCircle(p, scale * .3, Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = scale * .06
         ..color = const Color(0xFFE6E8EA));
       if (agentMode) canvas.drawCircle(p + Offset(cos(f), sin(f)) * scale * .18, scale * .08, Paint()..color = const Color(0xFF0A0C0E));
+      }
       // تحذير «!» عندما يراه أحد
       final al = alert();
       if (al > 0) _label(canvas, p + Offset(0, -scale * .75), '!', K.danger, scale * (.45 + al));
@@ -668,6 +754,24 @@ class HeistPainter extends CustomPainter {
         canvas.drawCircle(tp, scale * (.18 + .08 * pulse), Paint()..color = K.neon.withAlpha(150));
       }
     }
+  }
+
+  /// يرسم صورة مدوّرة حول [center] بعرض [size] (الصورة تنظر إلى الأعلى أصلاً).
+  void _sprite(Canvas canvas, ui.Image img, Offset center, double size, double rotation, [double opacity = 1]) {
+    final ratio = img.height / img.width;
+    final w = size, h = size * ratio;
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(rotation);
+    canvas.drawImageRect(
+      img,
+      Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+      Rect.fromCenter(center: Offset.zero, width: w, height: h),
+      Paint()
+        ..filterQuality = FilterQuality.medium
+        ..color = Color.fromRGBO(255, 255, 255, opacity),
+    );
+    canvas.restore();
   }
 
   void _cone(Canvas canvas, Offset p, double angle, double half, double range, Color c) {

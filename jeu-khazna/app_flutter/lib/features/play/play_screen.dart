@@ -1084,6 +1084,11 @@ class _End extends ConsumerWidget {
               height: 270,
               width: double.infinity,
               child: Stack(fit: StackFit.expand, children: [
+                // وضع الخريطة: غرفة الخزنة المرسومة (الذهب داخل الباب المفتوح)
+                if (won && s.heist)
+                  Image.asset('assets/images/h_vault_room.jpg',
+                      fit: BoxFit.cover, alignment: const Alignment(0, -.55), errorBuilder: (_, __, ___) => const ColoredBox(color: K.surface))
+                else
                 ColorFiltered(
                   colorFilter: won
                       ? const ColorFilter.matrix([1.1, .15, 0, 0, 12, .1, .9, 0, 0, 2, 0, .05, .45, 0, 0, 0, 0, 0, 1, 0])
