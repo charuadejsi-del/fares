@@ -37,6 +37,9 @@ class Settings {
 /// نسخة سريعة القراءة من وضع الخريطة 2D.
 final ValueNotifier<bool> heistMode = ValueNotifier(true);
 
+/// العميل يرى المبنى بمنظور الشخص الأول (3D) أو من الأعلى (2D).
+final ValueNotifier<bool> view3d = ValueNotifier(true);
+
 /// نسخة سريعة القراءة من وضع البثّ لأيّ ودجت (بلا Riverpod).
 final ValueNotifier<bool> streamerMode = ValueNotifier(false);
 
@@ -55,6 +58,7 @@ class SettingsNotifier extends Notifier<Settings> {
     );
     streamerMode.value = st.streamer;
     heistMode.value = st.heist;
+    view3d.value = _p.getBool('view3d') ?? true;
     return st;
   }
 
@@ -62,6 +66,11 @@ class SettingsNotifier extends Notifier<Settings> {
     _p.setBool('heist', v);
     heistMode.value = v;
     state = state.copyWith(heist: v);
+  }
+
+  void setView3d(bool v) {
+    _p.setBool('view3d', v);
+    view3d.value = v;
   }
 
   void setStreamer(bool v) {

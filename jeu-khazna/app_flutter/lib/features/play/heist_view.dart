@@ -6,13 +6,16 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/theme.dart';
 import '../../core/controller.dart';
 import '../../core/game.dart';
 import '../../core/heist.dart';
 import '../../core/stages.dart';
+import '../../core/services.dart' show view3d;
 import '../../widgets/spy_ui.dart';
+import 'heist_fps.dart';
 
 /// صور الوضع 2D (تُحمَّل مرّة واحدة؛ الرسم يعود للأشكال البسيطة إلى أن تجهز).
 class HeistSprites {
@@ -61,6 +64,7 @@ class HeistPlay extends StatelessWidget {
     final s = c.state!;
     final map = heistMap(s.seed, s.stage, s.rooms.length);
     HeistSprites.load();
+    FpsTextures.load();
     if ((c.myRole ?? 'op') == 'op') return _AgentView(c: c, map: map, lockView: lockView, onExit: onExit);
     return LayoutBuilder(
       builder: (context, box) => Column(children: [
@@ -88,6 +92,7 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
   final _frame = ValueNotifier<int>(0);
   late Offset _pos;
   Offset _stick = Offset.zero;
+  double _look = 0; // دوران متراكم من سحب الإصبع (3D)
   double _facing = 0;
   double _seenFor = 0;
   int _invulnUntil = 0;
@@ -143,6 +148,19 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
     super.dispose();
   }
 
+  /// لوحة المفاتيح في 3D: (أمام، جانبي، دوران).
+  (double, double, double) _fpsKeys() {
+    final k = HardwareKeyboard.instance.logicalKeysPressed;
+    double f = 0, st = 0, tr = 0;
+    if (k.contains(LogicalKeyboardKey.arrowUp) || k.contains(LogicalKeyboardKey.keyW) || k.contains(LogicalKeyboardKey.keyZ)) f += 1;
+    if (k.contains(LogicalKeyboardKey.arrowDown) || k.contains(LogicalKeyboardKey.keyS)) f -= 1;
+    if (k.contains(LogicalKeyboardKey.arrowLeft)) tr -= 1;
+    if (k.contains(LogicalKeyboardKey.arrowRight)) tr += 1;
+    if (k.contains(LogicalKeyboardKey.keyA) || k.contains(LogicalKeyboardKey.keyQ)) st -= 1;
+    if (k.contains(LogicalKeyboardKey.keyD)) st += 1;
+    return (f, st, tr);
+  }
+
   Offset _keys() {
     final k = HardwareKeyboard.instance.logicalKeysPressed;
     var x = 0.0, y = 0.0;
@@ -194,7 +212,22 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
       return;
     }
 
-    if (!_hacking) {
+    if (!_hacking && view3d.value) {
+      // 3D: العصا للأمام/الخلف والدوران، السحب على يمين الشاشة للالتفات، والأسهم/WASD من لوحة المفاتيح
+      final (fwdK, strafeK, turnK) = _fpsKeys();
+      final sy = _stick.dy.abs() > .18 ? -_stick.dy : 0.0;
+      final sx = _stick.dx.abs() > .22 ? _stick.dx : 0.0;
+      final fwd = (sy + fwdK).clamp(-1.0, 1.0), strafe = strafeK, turn = (sx + turnK).clamp(-1.0, 1.0);
+      _facing += turn * 2.4 * dt + _look;
+      _look = 0;
+      final dir = Offset(cos(_facing), sin(_facing));
+      var v = dir * fwd + Offset(-dir.dy, dir.dx) * strafe;
+      if (v.distance > 1) v = v / v.distance;
+      if (v.distance > .05) {
+        _pos = map.move(_pos, v * kAgentSpeed * (fwd < 0 ? .7 : 1) * dt, solved, shut: shut);
+        if (_help) setState(() => _help = false);
+      }
+    } else if (!_hacking) {
       var v = _stick.distance > .1 ? _stick : _keys();
       if (v.distance > 1) v = v / v.distance;
       if (v.distance > .05) {
@@ -281,28 +314,113 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
     final blackout = stageMods(s.stage).contains('blackout') && !s.lit;
     final vision = blackout ? 2.2 : p.vision;
     final footsteps = footstepsStage(s.stage) && widget.map.guards.isNotEmpty;
-    return Stack(children: [
+    return ValueListenableBuilder<bool>(
+      valueListenable: view3d,
+      builder: (context, fps, _) => Stack(children: [
       Positioned.fill(
         child: ClipRect(
-          child: CustomPaint(
-            painter: HeistPainter(
-              map: widget.map,
-              repaint: _frame,
-              state: () => c.state!,
-              time: () => c.heistTime,
-              agent: () => _pos,
-              facing: () => _facing,
-              mark: () => c.markX == null || DateTime.now().millisecondsSinceEpoch - c.markAt > 5000 ? null : Offset(c.markX!, c.markY!),
-              alert: () => _seenFor,
-              ghost: () => DateTime.now().millisecondsSinceEpoch < _invulnUntil,
-              agentMode: true,
-              vision: vision,
-              showGuards: true,
-              pick: () => _pick,
+          child: fps
+              ? CustomPaint(
+                  painter: FpsPainter(
+                    map: widget.map,
+                    repaint: _frame,
+                    state: () => c.state!,
+                    time: () => c.heistTime,
+                    agent: () => _pos,
+                    facing: () => _facing,
+                    alert: () => _seenFor,
+                    vision: vision,
+                  ),
+                )
+              : CustomPaint(
+                  painter: HeistPainter(
+                    map: widget.map,
+                    repaint: _frame,
+                    state: () => c.state!,
+                    time: () => c.heistTime,
+                    agent: () => _pos,
+                    facing: () => _facing,
+                    mark: () => c.markX == null || DateTime.now().millisecondsSinceEpoch - c.markAt > 5000 ? null : Offset(c.markX!, c.markY!),
+                    alert: () => _seenFor,
+                    ghost: () => DateTime.now().millisecondsSinceEpoch < _invulnUntil,
+                    agentMode: true,
+                    vision: vision,
+                    showGuards: true,
+                    pick: () => _pick,
+                  ),
+                ),
+        ),
+      ),
+      // 3D: السحب على النصف الأيمن للالتفات
+      if (fps && !_hacking)
+        Positioned(
+          top: 60,
+          bottom: 0,
+          right: 0,
+          width: MediaQuery.sizeOf(context).width * .55,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onPanUpdate: (d) => _look += d.delta.dx * .0085,
+          ),
+        ),
+      // 3D: رادار صغير (المخطّط من الأعلى حول العميل: الحرّاس والكاميرات والإشارة)
+      if (fps && !_hacking)
+        Positioned(
+          top: 66,
+          right: 12,
+          child: IgnorePointer(
+            child: Container(
+              width: 132,
+              height: 132,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: K.neon.withAlpha(150), width: 1.5),
+                boxShadow: const [BoxShadow(color: Colors.black, blurRadius: 10)],
+              ),
+              child: ClipOval(
+                child: CustomPaint(
+                  painter: HeistPainter(
+                    map: widget.map,
+                    repaint: _frame,
+                    state: () => c.state!,
+                    time: () => c.heistTime,
+                    agent: () => _pos,
+                    facing: () => _facing,
+                    mark: () => c.markX == null || DateTime.now().millisecondsSinceEpoch - c.markAt > 5000 ? null : Offset(c.markX!, c.markY!),
+                    alert: () => _seenFor,
+                    ghost: () => DateTime.now().millisecondsSinceEpoch < _invulnUntil,
+                    agentMode: true,
+                    vision: vision,
+                    showGuards: true,
+                    pick: () => _pick,
+                    zoom: 15,
+                  ),
+                ),
+              ),
             ),
           ),
         ),
-      ),
+      // زرّ التبديل 2D/3D
+      if (!_hacking)
+        Positioned(
+          top: fps ? 204 : 66,
+          right: 12,
+          child: Material(
+            color: const Color(0xCC121518),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: K.borderStrong)),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () {
+                view3d.value = !fps;
+                SharedPreferences.getInstance().then((p) => p.setBool('view3d', !fps));
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Text(fps ? '2D' : '3D', style: const TextStyle(fontFamily: K.mono, fontWeight: FontWeight.w900, color: K.neon)),
+              ),
+            ),
+          ),
+        ),
       // الشريط العلوي
       Positioned(
         top: 0,
@@ -314,17 +432,20 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
         Positioned(
           top: 64,
           left: 16,
-          right: 16,
+          right: 156,
           child: GestureDetector(onTap: () => setState(() => _intro = null), child: _Banner(text: _intro!, color: K.amber)),
         ),
       if (_help)
         Positioned(
           top: 64,
           left: 16,
-          right: 16,
+          right: 156,
           child: _Banner(
-            text: 'تحرّك بالعصا (أو الأسهم). رؤيتك محدودة: شريكك يرى المخطّط والحرّاس. '
-                'اذهب إلى الجهاز المضيء واخترقه. إن رآك حارس أو كاميرا تعود إلى نقطة الحفظ.',
+            text: view3d.value
+                ? 'العصا: للأمام والخلف وللدوران. اسحب على يمين الشاشة لتلتفت. الرادار أعلى اليمين يُظهر الحرّاس، '
+                    'والماسة الخضراء فوق الجهاز الذي تقصده. شريكك يرى المخطّط كاملاً.'
+                : 'تحرّك بالعصا (أو الأسهم). رؤيتك محدودة: شريكك يرى المخطّط والحرّاس. '
+                    'اذهب إلى الجهاز المضيء واخترقه. إن رآك حارس أو كاميرا تعود إلى نقطة الحفظ.',
           ),
         ),
       // زرّ الاختراق عند الجهاز
@@ -442,7 +563,8 @@ class _AgentViewState extends State<_AgentView> with SingleTickerProviderStateMi
             ),
           ]),
         ),
-    ]);
+    ]),
+    );
   }
 
   bool _isVault(GameState s) => s.room == s.rooms.length - 1;
@@ -865,6 +987,7 @@ class HeistPainter extends CustomPainter {
   final double vision;
   final bool showGuards;
   final double Function() pick;
+  final double zoom;
 
   HeistPainter({
     required this.map,
@@ -880,6 +1003,7 @@ class HeistPainter extends CustomPainter {
     required this.vision,
     required this.showGuards,
     required this.pick,
+    this.zoom = 42,
   }) : super(repaint: repaint);
 
   static const _floor = Color(0xFF16191C), _floor2 = Color(0xFF1A1D21), _wall = Color(0xFF353A40), _wallTop = Color(0xFF4A5057);
@@ -902,7 +1026,7 @@ class HeistPainter extends CustomPainter {
     late double scale;
     late Offset origin;
     if (agentMode) {
-      scale = 42;
+      scale = zoom;
       final c = a ?? map.spawn;
       origin = Offset(size.width / 2 - c.dx * scale, size.height / 2 - c.dy * scale);
     } else {
