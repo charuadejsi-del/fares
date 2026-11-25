@@ -64,6 +64,7 @@ jobs:
           cp "$D"/agora_rtc_sdk.dll.lib agora/lib/agora_rtc_sdk.lib 2>/dev/null || cp "$D"/agora_rtc_sdk.lib agora/lib/agora_rtc_sdk.lib
           cp "$D"/agora_rtc_sdk.dll bin/
           for f in "$D"/*aosl*.dll; do [ -f "$f" ] && cp "$f" bin/; done
+          echo "$D" > sdkdir.txt
           ls -la bin
       - name: بناء الإضافة
         run: |
@@ -72,6 +73,7 @@ jobs:
           scons platform=windows target=template_release arch=x86_64 -j4
           ls -la bin
           test -f bin/godot_agora_win.dll
+          python ci/collect.py "$(cat sdkdir.txt)"
       - name: اختبار حقيقي على ويندوز (تحميل المكتبة والدخول إلى قناة الصوت)
         run: |
           curl -fsSL -o godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_win64.exe.zip
