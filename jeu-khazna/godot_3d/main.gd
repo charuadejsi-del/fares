@@ -14,7 +14,7 @@ const WIRES := [
 	["أحمر", Color(0.85, 0.15, 0.15)], ["أزرق", Color(0.2, 0.42, 0.95)], ["أصفر", Color(0.95, 0.8, 0.15)],
 	["أخضر", Color(0.2, 0.72, 0.3)], ["أبيض", Color(0.92, 0.92, 0.92)],
 ]
-const VAULT_FRONT := Vector3(29.0, 0.0, 5.0)
+const VAULT_FRONT := Vector3(27.5, 0.0, 5.0) # دائرة الوقوف أمام الخزنة
 
 var role := "solo" # agent | analyst | solo
 var net
@@ -47,10 +47,7 @@ var lockout := 0.0
 var vault_mode := false
 var dial_angle := 0.0
 var dial_number := 0
-var dial_entered: Array = [] # [{n, d}] الأرقام المسجّلة باتجاهها
-var _dial_dir := 0
-var _dial_travel := 0.0
-const DIAL_DIRS := [1, -1, 1] # يمين ← يسار ← يمين (كالخزنات الحقيقية)
+var dial_entered: Array = [] # الأرقام الصحيحة المؤكَّدة
 var s_clunk: AudioStreamPlayer
 var _cam_saved: Transform3D
 var _partner_seen := -100.0
@@ -74,6 +71,17 @@ var hint_arrow: MeshInstance3D
 var _seer = null
 var shake := 0.0
 var vault_lamp: OmniLight3D
+var vault_barrier: StaticBody3D
+var vault_ring: MeshInstance3D
+var ready_world := false
+var building_lights: Array = []
+var feed_mats: Array = []
+var _fear_t := 40.0
+var _creep_t := 25.0
+var _glitch_t := 30.0
+var blackout := 0.0
+var shutters_closed: Array = [false, false]
+var s_creep: AudioStreamPlayer3D
 var steam: CPUParticles3D
 var _prop_log: Array = []
 # الأصوات
@@ -111,6 +119,9 @@ func _ready() -> void:
 
 
 func _smoke() -> void:
+	while not ready_world:
+		await get_tree().process_frame
+	hud.close_panel()
 	await get_tree().create_timer(0.5).timeout
 	var space := get_world_3d().direct_space_state
 	var sh := SphereShape3D.new()
@@ -124,9 +135,11 @@ func _smoke() -> void:
 		if space.intersect_shape(q, 1).is_empty():
 			solid = false
 			print("SMOKE hole at ", pnt)
-	q.transform = Transform3D(Basis(), Vector3(28.6, 1.2, 5))
+	q.transform = Transform3D(Basis(), Vector3(27.5, 1.2, 5))
 	var front_free := space.intersect_shape(q, 1).is_empty()
-	if solid and front_free:
+	q.transform = Transform3D(Basis(), Vector3(28.45, 1.2, 5))
+	var barrier := not space.intersect_shape(q, 1).is_empty()
+	if solid and front_free and barrier:
 		print("SMOKE vault solid ok")
 	_submit_code(str(puzzle.code))
 	_cut_wire(str(WIRES[int(puzzle.answer)][0]))
@@ -151,13 +164,24 @@ func _smoke() -> void:
 	print("SMOKE symbols: ", _check_symbols(puzzle.symbols.duplicate()))
 	hud.close_panel()
 	_on_switch()
+	# الإمساك أمام القرص ثم إكمال المهمّة
+	agent.global_position = VAULT_FRONT
+	_enter_vault()
+	await get_tree().create_timer(0.7).timeout
+	_spotted()
+	await get_tree().create_timer(0.2).timeout
+	if not vault_mode and not agent.locked and agent.cam.position.distance_to(Vector3(0, 1.62, 0)) < 0.01:
+		print("SMOKE caught ok")
+	agent.global_position = VAULT_FRONT
 	_enter_vault()
 	var c: Array = puzzle.combo
-	_dial_register(int(c[0]), 1)
-	_dial_register(int(c[1]), -1)
-	dial_number = int(c[2])
-	_dial_dir = 1
-	_pull_handle()
+	dial_number = (int(c[0]) + 1) % 40
+	_dial_confirm() # خطأ مقصود: يبقى أمام القرص
+	if vault_mode and dial_entered.is_empty():
+		print("SMOKE wrong stays ok")
+	for n in c:
+		dial_number = int(n)
+		_dial_confirm()
 	await get_tree().create_timer(3.5).timeout
 	print("SMOKE final stage: ", stage, " escape: ", escape_left, " door=", rad_to_deg(vault_pivot.rotation.y))
 	get_tree().quit()
@@ -248,7 +272,7 @@ func _on_msg(m: Dictionary) -> void:
 	elif t == "pos" and avatar:
 		avatar.set_meta("target", Vector3(float(m.get("x", 0)), 0, float(m.get("z", 0))))
 		avatar.set_meta("yaw", float(m.get("y", 0)))
-	elif t == "prog" and role == "analyst":
+	elif t == "prog" and role == "analyst" and ready_world:
 		stage = int(m.get("stage", 0))
 		escape_left = float(m.get("esc", -1))
 		mission_left = float(m.get("left", mission_left))
@@ -272,17 +296,18 @@ func _start(r: String, s: int) -> void:
 	if menu:
 		menu.queue_free()
 		menu = null
-	_materials()
-	_realistic()
-	_environment()
-	_build_building()
-	_build_archive()
-	_props()
-	_spawn_guards()
-	_sounds()
-	_hints()
 	hud = preload("res://hud.gd").new()
 	add_child(hud)
+	# البناء على خطوات خلف شاشة تحميل (لا تتجمّد الشاشة)
+	var steps := [
+		["المواد والخامات", _materials], ["الخامات الواقعية", _realistic], ["الإضاءة والضباب", _environment],
+		["مبنى الميناء", _build_building], ["غرفة الأرشيف", _build_archive], ["الأثاث والأشياء", _props],
+		["الحرّاس", _spawn_guards], ["الأصوات", _sounds], ["اللمسات الأخيرة", _hints],
+	]
+	for i in steps.size():
+		hud.loading(true, float(i) / (steps.size() + 2), str(steps[i][0]) + "…")
+		await get_tree().process_frame
+		(steps[i][1] as Callable).call()
 	hud.interact_pressed.connect(_on_interact)
 	hud.switch_pressed.connect(_on_switch)
 	hud.set_switch_visible(role == "solo")
@@ -294,6 +319,20 @@ func _start(r: String, s: int) -> void:
 		_build_feeds()
 	_set_active(analyst if role == "analyst" else agent)
 	hud.set_status("وضع فردي" if net == null else "")
+	# تحضير المؤثّرات خلف شاشة التحميل: الكاميرا تلتفت حولها فتُجهَّز كل المواد
+	hud.loading(true, 0.85, "تحضير المؤثّرات…")
+	if active:
+		var y0: float = active.yaw
+		for k in 8:
+			active.yaw = y0 + k * TAU / 8.0
+			active.rotation.y = active.yaw
+			await get_tree().process_frame
+		active.yaw = y0
+		active.rotation.y = y0
+	hud.loading(true, 1.0, "جاهز")
+	await get_tree().process_frame
+	hud.loading(false)
+	ready_world = true
 	_intro()
 
 
@@ -393,6 +432,8 @@ func _tex(path: String) -> Texture2D:
 
 
 func _noise_normal(freq: float, strength: float) -> NoiseTexture2D:
+	if _have_pbr():
+		return null
 	var n := FastNoiseLite.new()
 	n.frequency = freq
 	n.fractal_octaves = 5
@@ -406,7 +447,13 @@ func _noise_normal(freq: float, strength: float) -> NoiseTexture2D:
 	return t
 
 
+func _have_pbr() -> bool:
+	return ResourceLoader.exists("res://ph/tex/concrete_wall_008_diff.jpg")
+
+
 func _noise_tex(freq: float, a: Color, b: Color) -> NoiseTexture2D:
+	if _have_pbr():
+		return null
 	var n := FastNoiseLite.new()
 	n.frequency = freq
 	n.fractal_octaves = 4
@@ -627,6 +674,7 @@ func _sounds() -> void:
 	s_clunk = _snd("click", false, 4.0)
 	s_clunk.pitch_scale = 0.45
 	s_door = _snd3d("door", Vector3(8, 1.5, 4.5), 2.0)
+	s_creep = _snd3d("door", Vector3.ZERO, -2.0)
 	s_vault = _snd3d("vault_open", Vector3(29.6, 1.5, 5), 4.0)
 
 
@@ -707,6 +755,8 @@ func _lamp(pos: Vector3, color: Color, energy: float, flicker := false) -> OmniL
 	add_child(l)
 	if flicker:
 		flickers.append(l)
+	if pos.x < 50.0:
+		building_lights.append(l)
 	return l
 
 
@@ -1083,6 +1133,26 @@ func _build_vault() -> void:
 	sq.material = smat
 	steam.mesh = sq
 	add_child(steam)
+	# حاجز غير مرئي: لا يمكن الاقتراب من الباب أكثر من متر ونصف (فلا تدخل في الجدار أبداً)
+	var bar := StaticBody3D.new()
+	var bcol := CollisionShape3D.new()
+	var bbox := BoxShape3D.new()
+	bbox.size = Vector3(0.2, WALL_H, 3.4)
+	bcol.shape = bbox
+	bar.add_child(bcol)
+	bar.position = Vector3(28.4, WALL_H / 2.0, 5)
+	add_child(bar)
+	vault_barrier = bar
+	# دائرة مضيئة على الأرض: «قف هنا»
+	var ring := MeshInstance3D.new()
+	var rt := TorusMesh.new()
+	rt.inner_radius = 0.62
+	rt.outer_radius = 0.72
+	ring.mesh = rt
+	ring.material_override = _glow(Color(1.0, 0.63, 0.23), 2.5)
+	ring.position = VAULT_FRONT + Vector3(0, 0.02, 0)
+	add_child(ring)
+	vault_ring = ring
 	var light := SpotLight3D.new()
 	add_child(light)
 	light.look_at_from_position(Vector3(26.5, 3.0, 5), Vector3(29.8, 1.3, 5))
@@ -1218,14 +1288,18 @@ func _build_feeds() -> void:
 shader_type spatial;
 render_mode unshaded;
 uniform sampler2D feed : source_color;
+uniform float glitch = 0.0;
 void fragment() {
-	vec3 c = texture(feed, UV).rgb;
-	float g = dot(c, vec3(0.3, 0.59, 0.11)) * 1.8;
+	vec2 uv = UV;
+	uv.x += glitch * (fract(sin(floor(UV.y * 40.0) + TIME * 30.0) * 9.0) - 0.5) * 0.15;
+	vec3 c = texture(feed, uv).rgb;
+	float g = dot(c, vec3(0.3, 0.59, 0.11)) * 1.8 * (1.0 - glitch * 0.7);
 	g *= 0.86 + 0.14 * sin(UV.y * 420.0 + TIME * 9.0);
 	float n = fract(sin(dot(UV * (TIME + 1.0), vec2(12.9898, 78.233))) * 43758.5453);
 	g += (n - 0.5) * 0.09;
 	vec2 d = UV - 0.5;
 	g *= 1.0 - dot(d, d) * 1.4;
+	g += glitch * fract(sin(dot(UV * TIME, vec2(91.7, 37.3))) * 4375.5) * 0.8;
 	ALBEDO = vec3(g * 0.7, g * 1.0, g * 0.75);
 }
 """
@@ -1255,6 +1329,7 @@ void fragment() {
 		mm.shader = sh
 		mm.set_shader_parameter("feed", sv.get_texture())
 		quad.material_override = mm
+		feed_mats.append(mm)
 		quad.position = Vector3(0, 0, 0.055)
 		mon.add_child(quad)
 		_label3d(cams[i][2], ARCHIVE + Vector3(2.6 + i * 2.4, 1.28, 0.37), 26, Color(0.6, 0.9, 0.65))
@@ -1268,6 +1343,8 @@ void fragment() {
 
 # ───────── اللعب ─────────
 func _process(delta: float) -> void:
+	if started and not ready_world:
+		return
 	if not started:
 		# المنضمّ يطلب الانضمام حتى يردّ القائد
 		if net and host_role == "" and net.joined:
@@ -1330,6 +1407,7 @@ func _process(delta: float) -> void:
 
 	_hint_update(t)
 	_audio_update(delta)
+	_fear_update(delta, t)
 	if agent:
 		var cam: Camera3D = agent.cam
 		if shake > 0.0 and active == agent:
@@ -1345,6 +1423,82 @@ func _process(delta: float) -> void:
 	if analyst and active == analyst:
 		_analyst_logic()
 	_apply_stage()
+
+
+## مفاجآت مخيفة: انقطاع الكهرباء، أصوات خلفك، مصباح يرتعش، شاشات تتشوّش، ومصاريع الهروب.
+func _fear_update(delta: float, t: float) -> void:
+	var in_play := result == "" and stage < 3
+	# انقطاع الكهرباء كل 45–75 ثانية لمدّة 4 ثوانٍ (الحسّ للطرفين: الكاميرات تنقطع أيضاً)
+	if in_play:
+		_fear_t -= delta
+		if _fear_t <= 0.0 and blackout <= 0.0:
+			_fear_t = randf_range(45.0, 75.0)
+			blackout = 4.0
+			if s_clunk.stream:
+				s_clunk.play()
+			shake = 0.2
+			if active == agent:
+				hud.flash("⚡ انقطعت الكهرباء…", Color(0.7, 0.75, 0.85))
+	if blackout > 0.0:
+		blackout -= delta
+		var dark := blackout > 0.3
+		for l in building_lights:
+			(l as OmniLight3D).visible = not dark or (blackout < 0.9 and fmod(t * 17.0, 1.0) > 0.6)
+		for m in feed_mats:
+			(m as ShaderMaterial).set_shader_parameter("glitch", 1.0 if dark else 0.0)
+		if blackout <= 0.0:
+			for l in building_lights:
+				(l as OmniLight3D).visible = true
+	# أصوات خلف العميل (ضربة حديد، باب يُصفق) كل 20–40 ثانية
+	if agent and active == agent and in_play:
+		_creep_t -= delta
+		if _creep_t <= 0.0 and s_creep.stream:
+			_creep_t = randf_range(20.0, 40.0)
+			var back: Vector3 = agent.global_transform.basis.z * 5.0 + agent.global_transform.basis.x * randf_range(-3.0, 3.0)
+			s_creep.global_position = agent.global_position + back + Vector3(0, 1.5, 0)
+			s_creep.pitch_scale = randf_range(0.55, 0.8)
+			s_creep.play()
+	# مصباح العميل يرتعش عندما يقترب حارس
+	if agent:
+		var near := 99.0
+		for g in guards:
+			near = minf(near, (g.global_position as Vector3).distance_to(agent.global_position))
+		var base := 3.2
+		agent.flash.light_energy = base * (0.15 if near < 5.0 and fmod(t * 11.0 + sin(t * 3.0), 1.0) > 0.82 else 1.0)
+	# شاشات المراقبة تتشوّش أحياناً عند المحلّل
+	if feed_mats.size() > 0 and blackout <= 0.0:
+		_glitch_t -= delta
+		if _glitch_t <= 0.0:
+			_glitch_t = randf_range(25.0, 45.0)
+			var m: ShaderMaterial = feed_mats[randi() % feed_mats.size()]
+			m.set_shader_parameter("glitch", 1.0)
+			get_tree().create_timer(2.5).timeout.connect(func(): m.set_shader_parameter("glitch", 0.0))
+	# الهروب: المصاريع تنزل واحداً بعد الآخر (الباب الثاني بعد 22 ث، الأول بعد 36 ث من الإنذار)
+	if stage >= 3 and escape_left >= 0.0:
+		var since := ESCAPE_SECONDS - escape_left
+		for i in [1, 0]:
+			var at := 22.0 if i == 1 else 36.0
+			if since > at - 5.0 and since < at and int(since * 4.0) % 2 == 0 and active == agent:
+				hud.flash("⚠ الباب يُغلق خلال %d ث!" % int(ceil(at - since)), Color(1.0, 0.63, 0.23))
+			if since >= at and not shutters_closed[i]:
+				shutters_closed[i] = true
+				_close_shutter(i)
+
+
+func _close_shutter(i: int) -> void:
+	var d: Dictionary = doors[i]
+	(d.stripe as MeshInstance3D).material_override = _glow(Color(0.95, 0.2, 0.2), 3.0)
+	if s_door.stream:
+		s_door.global_position = (d.body as Node3D).global_position
+		s_door.play()
+	var tw := create_tween()
+	tw.tween_property(d.body, "position:y", WALL_H / 2.0, 2.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await tw.finished
+	# العميل بقي خلف الباب المغلق ← حُبس
+	var door_x: float = (d.body as Node3D).global_position.x
+	if agent and role != "analyst" and result == "" and agent.global_position.x > door_x + 0.2:
+		hud.flash("⛓ حُبستَ خلف الباب!", Color(0.9, 0.28, 0.3))
+		_end(false)
 
 
 func _hint_update(t: float) -> void:
@@ -1440,16 +1594,9 @@ func _agent_logic(delta: float, t: float) -> void:
 		hud.set_alert(seen_time / 0.6)
 
 	if vault_mode:
-		hud.dial_center = agent.cam.unproject_position(vault_dial.global_position)
-		var dd: float = hud.dial_delta + agent.look_delta.x * 0.004
-		hud.dial_delta = 0.0
 		agent.look_delta = Vector2.ZERO
-		if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_E):
-			dd += delta * 1.1
-		if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_Q) or Input.is_key_pressed(KEY_A):
-			dd -= delta * 1.1
-		_dial_turn(dd)
-		hud.vault_state(dial_number, dial_entered.size())
+		# القرص ثلاثي الأبعاد يدور بنعومة نحو الرقم المختار
+		vault_dial.rotation.x = lerp_angle(vault_dial.rotation.x, -dial_number * TAU / 40.0, minf(1.0, delta * 14.0))
 		return
 
 	if active != agent:
@@ -1463,8 +1610,8 @@ func _agent_logic(delta: float, t: float) -> void:
 		var near: bool = agent.global_position.distance_to(terminals[stage].pos) < 1.7
 		hud.show_interact(("استعمل " + str(terminals[stage].title)) if near else "")
 	else:
-		var near2: bool = agent.global_position.distance_to(VAULT_FRONT) < 1.6
-		hud.show_interact("اقترب من قرص الخزنة" if near2 else "")
+		var near2: bool = Vector2(agent.global_position.x - VAULT_FRONT.x, agent.global_position.z - VAULT_FRONT.z).length() < 1.3
+		hud.show_interact("افتح الخزنة" if near2 else "")
 
 
 func _analyst_logic() -> void:
@@ -1528,7 +1675,7 @@ func _analyst_interact() -> void:
 func _check_symbols(picked: Array) -> String:
 	if picked == puzzle.symbols:
 		var c: Array = puzzle.combo
-		return "> تمّ فكّ التشفير ✔\nتركيبة القرص:\n١) يميناً إلى %02d   ٢) يساراً إلى %02d   ٣) يميناً إلى %02d" % [c[0], c[1], c[2]]
+		return "> تمّ فكّ التشفير ✔\nتركيبة القرص (بالترتيب):\n%02d   ←   %02d   ←   %02d" % [c[0], c[1], c[2]]
 	return "> رموز خاطئة ✖  حاول مرّة أخرى"
 
 
@@ -1611,12 +1758,10 @@ func _enter_vault() -> void:
 	dial_entered = []
 	_cam_saved = agent.cam.global_transform
 	var target := Transform3D.IDENTITY.looking_at(Vector3(1, 0, 0), Vector3.UP)
-	target.origin = Vector3(28.75, 1.72, 5.0)
+	target.origin = Vector3(28.6, 1.72, 5.0)
 	var tw := create_tween()
 	tw.tween_property(agent.cam, "global_transform", target, 0.6).set_trans(Tween.TRANS_CUBIC)
-	_dial_dir = 0
-	_dial_travel = 0.0
-	hud.vault_ui(true, _pull_handle, _exit_vault)
+	hud.vault_ui(true, _dial_step, _dial_confirm, _exit_vault)
 	hud.vault_state(dial_number, 0)
 
 
@@ -1624,7 +1769,7 @@ func _exit_vault() -> void:
 	if not vault_mode:
 		return
 	vault_mode = false
-	hud.vault_ui(false, Callable(), Callable())
+	hud.vault_ui(false, Callable(), Callable(), Callable())
 	var tw := create_tween()
 	tw.tween_property(agent.cam, "position", Vector3(0, 1.62, 0), 0.35).set_trans(Tween.TRANS_CUBIC)
 	tw.parallel().tween_property(agent.cam, "rotation", Vector3(agent.pitch, 0, 0), 0.35)
@@ -1634,62 +1779,46 @@ func _exit_vault() -> void:
 ## إعادة الكاميرا فوراً (عند الإمساك بالعميل أو تبديل الدور).
 func _reset_agent_cam() -> void:
 	vault_mode = false
-	hud.vault_ui(false, Callable(), Callable())
+	hud.vault_ui(false, Callable(), Callable(), Callable())
 	agent.cam.position = Vector3(0, 1.62, 0)
 	agent.cam.rotation = Vector3(agent.pitch, 0, 0)
 	agent.locked = false
 
 
-func _dial_turn(dd: float) -> void:
-	if absf(dd) < 0.0004:
+func _dial_step(st: int) -> void:
+	dial_number = posmod(dial_number + st, 40)
+	Input.vibrate_handheld(5)
+	if s_click.stream:
+		s_click.play()
+	hud.vault_state(dial_number, dial_entered.size())
+
+
+func _dial_confirm() -> void:
+	var i := dial_entered.size()
+	if i >= 3:
 		return
-	var dir := 1 if dd > 0.0 else -1
-	if dir != _dial_dir:
-		# عكس الاتجاه بعد دوران كافٍ = تسجيل الرقم الحالي (كما في الخزنات الحقيقية)
-		if _dial_dir != 0 and _dial_travel > TAU / 40.0 * 1.5 and dial_entered.size() < 2:
-			_dial_register(dial_number, _dial_dir)
-		_dial_dir = dir
-		_dial_travel = 0.0
-	_dial_travel += absf(dd)
-	dial_angle += dd
-	var n := posmod(int(round(-dial_angle / (TAU / 40.0))), 40)
-	if n != dial_number:
-		dial_number = n
-		Input.vibrate_handheld(6)
-		if s_click.stream:
-			s_click.play()
-	vault_dial.rotation.x = dial_angle
-
-
-func _dial_register(n: int, dir: int) -> void:
-	dial_entered.append({"n": n, "d": dir})
-	Input.vibrate_handheld(40)
-	if s_clunk.stream:
-		s_clunk.play()
-	shake = 0.12
-
-
-func _pull_handle() -> void:
-	var ok := dial_entered.size() == 2
-	if ok:
-		var seq: Array = dial_entered + [{"n": dial_number, "d": _dial_dir}]
-		for i in 3:
-			if int(seq[i].n) != int(puzzle.combo[i]) or int(seq[i].d) != int(DIAL_DIRS[i]):
-				ok = false
-	if ok:
-		hud.flash("✔ الأقفال تتحرّك…", Color(0.42, 0.85, 0.58))
-		hud.vault_ui(false, Callable(), Callable())
-		_spin_wheel()
+	if dial_number == int(puzzle.combo[i]):
+		dial_entered.append(dial_number)
+		Input.vibrate_handheld(40)
+		if s_clunk.stream:
+			s_clunk.play()
+		shake = 0.15
+		hud.vault_state(dial_number, dial_entered.size())
+		if dial_entered.size() == 3:
+			hud.flash("✔ الأقفال تتحرّك…", Color(0.42, 0.85, 0.58))
+			_spin_wheel()
 	else:
-		hud.flash("✖ لم ينفتح — ابدأ من جديد: يمين ثم يسار ثم يمين", Color(0.9, 0.28, 0.3))
+		# خطأ: ارتجاج وضوء أحمر، ونعيد من الرقم الأول دون الخروج
+		hud.flash("✖ رقم خاطئ — أعد من الرقم الأول", Color(0.9, 0.28, 0.3))
 		hud.hit()
+		hud.vault_wrong()
+		Input.vibrate_handheld(200)
 		shake = 0.3
+		dial_entered = []
+		hud.vault_state(dial_number, 0)
 		var tw := create_tween()
 		tw.tween_property(vault_wheel, "rotation:x", vault_wheel.rotation.x + 0.25, 0.08)
 		tw.tween_property(vault_wheel, "rotation:x", vault_wheel.rotation.x, 0.12)
-		dial_entered = []
-		_dial_dir = 0
-		_dial_travel = 0.0
 
 
 func _spin_wheel() -> void:

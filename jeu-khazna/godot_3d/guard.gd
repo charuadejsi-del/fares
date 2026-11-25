@@ -21,6 +21,8 @@ var bounds := Rect2() # حدود غرفته (x، z): لا يخرج منها أث
 var saw := false # يضبطها المشهد كل إطار: هل يرى العميل الآن؟
 var _target: Node3D
 var _lost := 0.0
+var _turn_t := 18.0
+var _look_rot := 0.0
 const CHASE_SPEED := 2.75
 
 const RANGE := 7.5
@@ -276,6 +278,14 @@ func _process(delta: float) -> void:
 	match _state:
 		"chase":
 			_chase(delta)
+		"look":
+			# التفاتة مفاجئة إلى الخلف
+			_steps_on(false)
+			_play("alert", 0.12)
+			rotation.y = lerp_angle(rotation.y, _look_rot, minf(1.0, delta * 9.0))
+			_wait -= delta
+			if _wait <= 0.0:
+				_state = "walk"
 		"search":
 			_steps_on(false)
 			_play("alert")
@@ -306,6 +316,13 @@ func _process(delta: float) -> void:
 
 
 func _walk(delta: float) -> void:
+	_turn_t -= delta
+	if _turn_t <= 0.0 and not alarm:
+		_turn_t = _rng.randf_range(14.0, 26.0)
+		_state = "look"
+		_wait = 1.8
+		_look_rot = rotation.y + PI
+		return
 	var target: Vector3 = path[(_idx + 1) % path.size()]
 	var to := target - position
 	to.y = 0.0

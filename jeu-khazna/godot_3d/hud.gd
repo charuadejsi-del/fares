@@ -7,10 +7,15 @@ signal switch_pressed
 
 var player
 var look_only := false # وضع القرص: كل سحب = دوران
-var dial_center := Vector2(-1, -1) # موضع القرص على الشاشة
-var dial_delta := 0.0 # دوران الإصبع حول القرص (راديان، موجب = مع عقارب الساعة)
-var _ring: Line2D
 var _vault_hint: Label
+var _dial: Control
+var _on_step: Callable
+var _hold := 0 # زرّ مضغوط باستمرار: ‎-1 أو 1
+var _hold_t := 0.0
+var _drag_acc := 0.0
+var _loading: Control
+var _load_bar: ProgressBar
+var _load_txt: Label
 var _move_touch := -1
 var _move_origin := Vector2.ZERO
 var _move_pos := Vector2.ZERO
@@ -209,11 +214,14 @@ func _input(event) -> void:
 			player.move_input = Vector2(v.x, -v.y)
 			_pad.queue_redraw()
 		elif event.index == _look_touch:
-			if look_only and dial_center.x >= 0.0:
-				var p1: Vector2 = event.position - dial_center
-				var p0: Vector2 = p1 - event.relative
-				if p1.length() > 25.0 and p0.length() > 25.0:
-					dial_delta += wrapf(p1.angle() - p0.angle(), -PI, PI)
+			if look_only:
+				# سحب أفقي على القرص: كل 22 بكسل = رقم واحد
+				_drag_acc += event.relative.x
+				while absf(_drag_acc) >= 22.0:
+					var st := 1 if _drag_acc > 0.0 else -1
+					_drag_acc -= st * 22.0
+					if _on_step.is_valid():
+						_on_step.call(st)
 			else:
 				player.look_delta += event.relative * 1.5
 
@@ -232,6 +240,12 @@ func pad_state() -> Dictionary:
 
 
 func _process(delta: float) -> void:
+	# الضغط المستمر على ◀ ▶ يدير القرص بسرعة
+	if _hold != 0 and _on_step.is_valid():
+		_hold_t -= delta
+		if _hold_t <= 0.0:
+			_hold_t = 0.09
+			_on_step.call(_hold)
 	_hit = maxf(0.0, _hit - delta * 1.5)
 	if _flash.modulate.a > 0.0:
 		_flash.modulate.a = maxf(0.0, _flash.modulate.a - delta * 0.45)
@@ -472,63 +486,87 @@ func open_feed(title: String, tex: Texture2D) -> void:
 
 
 # ───────── قرص الخزنة ─────────
-func vault_ui(on: bool, on_pull: Callable, on_exit: Callable) -> void:
+func vault_ui(on: bool, on_step: Callable, on_confirm: Callable, on_exit: Callable) -> void:
 	look_only = on
-	dial_delta = 0.0
+	_hold = 0
+	_drag_acc = 0.0
 	release_touches()
 	if _vault:
 		_vault.queue_free()
 		_vault = null
 	if not on:
-		dial_center = Vector2(-1, -1)
+		_on_step = Callable()
 		return
+	_on_step = on_step
 	_interact.visible = false
 	_vault = Control.new()
 	_vault.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_vault.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_vault)
-	# حلقة إرشاد حول القرص: أدِر إصبعك عليها
-	_ring = Line2D.new()
-	var pts := PackedVector2Array()
-	for i in 65:
-		var a := i * TAU / 64.0
-		pts.append(Vector2(cos(a), sin(a)) * 190.0)
-	_ring.points = pts
-	_ring.width = 3.0
-	_ring.default_color = Color(0.91, 0.63, 0.23, 0.35)
-	_vault.add_child(_ring)
-	_vault_num = _label(64, AMBER)
-	_vault_num.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_vault_num.offset_left = -230
-	_vault_num.offset_right = -40
-	_vault_num.offset_top = 110
+	var shade := ColorRect.new()
+	shade.color = Color(0, 0, 0, 0.45)
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_vault.add_child(shade)
+	# القرص الكبير في الوسط
+	_dial = preload("res://dial.gd").new()
+	_dial.set_anchors_preset(Control.PRESET_CENTER)
+	_dial.offset_left = -230
+	_dial.offset_right = 230
+	_dial.offset_top = -260
+	_dial.offset_bottom = 200
+	_dial.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if ResourceLoader.exists("res://fonts/Tajawal-Bold.ttf"):
+		_dial.font = load("res://fonts/Tajawal-Bold.ttf")
+	_vault.add_child(_dial)
+	_vault_num = _label(70, AMBER)
+	_vault_num.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	_vault_num.offset_left = 40
+	_vault_num.offset_right = 240
+	_vault_num.offset_top = -60
 	_vault_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_vault_num.text_direction = Control.TEXT_DIRECTION_LTR
 	_vault.add_child(_vault_num)
-	_vault_seq = _label(40, Color(0.9, 0.91, 0.92))
-	_vault_seq.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_vault_seq.offset_left = -230
-	_vault_seq.offset_right = -40
-	_vault_seq.offset_top = 200
-	_vault_seq.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_vault_seq.text_direction = Control.TEXT_DIRECTION_LTR
-	_vault.add_child(_vault_seq)
-	_vault_hint = _label(22, Color(0.85, 0.87, 0.9))
-	_vault_hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_vault_hint.offset_left = -520
-	_vault_hint.offset_right = 520
-	_vault_hint.offset_top = -190
+	_vault_hint = _label(22, Color(0.88, 0.9, 0.92))
+	_vault_hint.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_vault_hint.offset_top = 70
+	_vault_hint.offset_left = 120
+	_vault_hint.offset_right = -120
 	_vault_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_vault_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_vault.add_child(_vault_hint)
-	var pull := _button("  اسحب المقبض  ", AMBER, Color(0.07, 0.05, 0.01), 30)
-	pull.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	pull.offset_left = -340
-	pull.offset_top = -120
-	pull.offset_right = -36
-	pull.offset_bottom = -36
-	pull.pressed.connect(on_pull)
-	_vault.add_child(pull)
+	# ◀ ▶ (ضغطة = رقم، ضغط مستمر = دوران سريع)
+	var left := _button("◀", Color(0.18, 0.2, 0.23), Color.WHITE, 46)
+	left.set_anchors_preset(Control.PRESET_CENTER)
+	left.offset_left = -400
+	left.offset_right = -270
+	left.offset_top = -40
+	left.offset_bottom = 70
+	_vault.add_child(left)
+	var right := _button("▶", Color(0.18, 0.2, 0.23), Color.WHITE, 46)
+	right.set_anchors_preset(Control.PRESET_CENTER)
+	right.offset_left = 270
+	right.offset_right = 400
+	right.offset_top = -40
+	right.offset_bottom = 70
+	_vault.add_child(right)
+	for pair in [[left, -1], [right, 1]]:
+		var b: Button = pair[0]
+		var st: int = pair[1]
+		b.button_down.connect(func():
+			on_step.call(st)
+			_hold = st
+			_hold_t = 0.35
+		)
+		b.button_up.connect(func(): _hold = 0)
+	var ok := _button("  ✔ تأكيد الرقم  ", AMBER, Color(0.07, 0.05, 0.01), 30)
+	ok.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	ok.offset_left = -360
+	ok.offset_top = -120
+	ok.offset_right = -36
+	ok.offset_bottom = -36
+	ok.pressed.connect(on_confirm)
+	_vault.add_child(ok)
 	var ex := _button("  ابتعد  ", Color(0.15, 0.16, 0.18), Color.WHITE, 24)
 	ex.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	ex.offset_left = 36
@@ -543,25 +581,77 @@ func vault_state(number: int, done: int) -> void:
 	if _vault == null:
 		return
 	_vault_num.text = "%02d" % number
-	var leds := ""
-	for i in 3:
-		leds += ("●" if i < done else "○") + " "
-	_vault_seq.text = leds.strip_edges()
-	_vault_seq.add_theme_color_override("font_color", OK if done > 0 else Color(0.55, 0.58, 0.62))
-	match done:
-		0:
-			_vault_hint.text = "الخطوة ١ من ٣: أدِر القرص بإصبعك يميناً (مع عقارب الساعة) حتى الرقم الأول، ثم اعكس الاتجاه"
-		1:
-			_vault_hint.text = "الخطوة ٢ من ٣: الآن يساراً (عكس عقارب الساعة) حتى الرقم الثاني، ثم اعكس الاتجاه"
-		_:
-			_vault_hint.text = "الخطوة ٣ من ٣: يميناً حتى الرقم الأخير، ثم اسحب المقبض"
-	if _ring and dial_center.x >= 0.0:
-		_ring.position = dial_center
+	_dial.number = number
+	_dial.done = done
+	_vault_hint.text = "الرقم %d من 3 — أدِر القرص بـ ◀ ▶ (أو اسحب) حتى الرقم الذي يقوله المحلّل، ثم «تأكيد الرقم»" % (done + 1) if done < 3 else "المقبض يدور…"
+
+
+func vault_wrong() -> void:
+	if _dial:
+		_dial.flash_red = 1.0
+
+
+# ───────── شاشة التحميل ─────────
+func loading(on: bool, progress := 0.0, text := "") -> void:
+	if not on:
+		if _loading:
+			var tw := create_tween()
+			tw.tween_property(_loading, "modulate:a", 0.0, 0.5)
+			tw.tween_callback(_loading.queue_free)
+			_loading = null
+		return
+	if _loading == null:
+		_loading = ColorRect.new()
+		(_loading as ColorRect).color = Color(0.02, 0.025, 0.03)
+		_loading.set_anchors_preset(Control.PRESET_FULL_RECT)
+		add_child(_loading)
+		var title := _label(72, AMBER)
+		title.text = "الخزنة"
+		title.set_anchors_preset(Control.PRESET_CENTER)
+		title.offset_left = -400
+		title.offset_right = 400
+		title.offset_top = -170
+		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_loading.add_child(title)
+		_load_bar = ProgressBar.new()
+		_load_bar.set_anchors_preset(Control.PRESET_CENTER)
+		_load_bar.offset_left = -300
+		_load_bar.offset_right = 300
+		_load_bar.offset_top = 0
+		_load_bar.offset_bottom = 22
+		_load_bar.max_value = 1.0
+		_load_bar.show_percentage = false
+		var fill := StyleBoxFlat.new()
+		fill.bg_color = AMBER
+		fill.set_corner_radius_all(6)
+		_load_bar.add_theme_stylebox_override("fill", fill)
+		var bg := StyleBoxFlat.new()
+		bg.bg_color = Color(0.12, 0.13, 0.15)
+		bg.set_corner_radius_all(6)
+		_load_bar.add_theme_stylebox_override("background", bg)
+		_loading.add_child(_load_bar)
+		_load_txt = _label(22, Color(0.65, 0.68, 0.72))
+		_load_txt.set_anchors_preset(Control.PRESET_CENTER)
+		_load_txt.offset_left = -500
+		_load_txt.offset_right = 500
+		_load_txt.offset_top = 50
+		_load_txt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_loading.add_child(_load_txt)
+		var tip := _label(20, Color(0.5, 0.53, 0.57))
+		tip.text = "نصيحة: الحرّاس يرونك في ضوء مصابيحهم فقط — ابقَ في الظلام وخلف الصناديق"
+		tip.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		tip.offset_left = -560
+		tip.offset_right = 560
+		tip.offset_top = -90
+		tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_loading.add_child(tip)
+	_load_bar.value = progress
+	_load_txt.text = text
 
 
 func end_screen(won: bool) -> void:
 	close_panel()
-	vault_ui(false, Callable(), Callable())
+	vault_ui(false, Callable(), Callable(), Callable())
 	_interact.visible = false
 	var e := ColorRect.new()
 	e.color = Color(0, 0, 0, 0.75)
