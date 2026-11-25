@@ -55,6 +55,12 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 14),
             HudPanel(
+              label: 'MAP // وضع الخريطة',
+              child: toggle('وضع الخريطة 2D (تجريبي)', 'الحملة أونلاين كمبنى يُخترق: تحرّك، تجنّب الحرّاس والكاميرات، واخترق الأجهزة. القائد هو من يقرّر',
+                  Icons.map_outlined, s.heist, n.setHeist),
+            ),
+            const SizedBox(height: 14),
+            HudPanel(
               label: 'LIVE // البثّ المباشر',
               child: toggle('وضع البثّ (تيك توك)', 'يخفي رمز الغرفة واسم الشريك، ويعرض للمشاهدين لافتة «ساعدونا في التعليقات»',
                   Icons.live_tv, s.streamer, n.setStreamer),

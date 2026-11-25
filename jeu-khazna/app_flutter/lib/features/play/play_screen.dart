@@ -24,6 +24,7 @@ import '../../widgets/spy_ui.dart';
 import '../../widgets/stage_brief.dart';
 import '../../widgets/coach_card.dart';
 import '../../widgets/session_summary.dart';
+import 'heist_view.dart';
 import '../../widgets/stage_map.dart';
 import '../../core/ext_locks.dart' show vaultDigit, kVaultCode;
 import '../../widgets/ui_kit.dart';
@@ -182,6 +183,16 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with TickerProviderStat
         _danger.forward(from: 0);
         _showFlash('إنذار! −${e.pen} ثانية', K.danger);
         break;
+      case 'spotted':
+        audio.fx(Sfx.alarm, HapticKind.heavy, volume: 0.7);
+        _shake.forward(from: 0);
+        _danger.forward(from: 0);
+        _showFlash('رآك الحارس! −${e.pen} ث · عودة لنقطة الحفظ', K.danger);
+        break;
+      case 'hacked':
+        audio.fx(Sfx.success, HapticKind.light);
+        _showFlash('كاميرا معطّلة لـ10 ثوانٍ', K.ok);
+        break;
       case 'bump':
         audio.fx(Sfx.bump, HapticKind.medium);
         _shake.forward(from: 0);
@@ -292,7 +303,9 @@ class _PlayScreenState extends ConsumerState<PlayScreen> with TickerProviderStat
                       Positioned.fill(
                         child: c.table
                             ? _TableGame(c: c, shake: _shake, onExit: _leave)
-                            : _Game(c: c, shake: _shake, onExit: _leave, voice: _voice),
+                            : s.heist
+                                ? HeistPlay(c: c, onExit: _leave, lockView: _Game(c: c, shake: _shake, onExit: _leave, voice: _voice))
+                                : _Game(c: c, shake: _shake, onExit: _leave, voice: _voice),
                       ),
                       if (s.paused || c.hostLost) Positioned.fill(child: _PauseOverlay(c: c, onExit: _leave)),
                     ]);

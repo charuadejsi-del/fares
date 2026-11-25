@@ -19,16 +19,23 @@ class Settings {
 
   /// وضع البثّ المباشر (تيك توك): يخفي رمز الغرفة والأسماء ويعرض لافتة للمشاهدين.
   final bool streamer;
-  const Settings({this.sound = true, this.music = true, this.haptics = true, this.name = '', this.streamer = false});
 
-  Settings copyWith({bool? sound, bool? music, bool? haptics, String? name, bool? streamer}) => Settings(
+  /// وضع الخريطة 2D للحملة.
+  final bool heist;
+  const Settings({this.sound = true, this.music = true, this.haptics = true, this.name = '', this.streamer = false, this.heist = true});
+
+  Settings copyWith({bool? sound, bool? music, bool? haptics, String? name, bool? streamer, bool? heist}) => Settings(
         sound: sound ?? this.sound,
         music: music ?? this.music,
         haptics: haptics ?? this.haptics,
         name: name ?? this.name,
         streamer: streamer ?? this.streamer,
+        heist: heist ?? this.heist,
       );
 }
+
+/// نسخة سريعة القراءة من وضع الخريطة 2D.
+final ValueNotifier<bool> heistMode = ValueNotifier(true);
 
 /// نسخة سريعة القراءة من وضع البثّ لأيّ ودجت (بلا Riverpod).
 final ValueNotifier<bool> streamerMode = ValueNotifier(false);
@@ -44,9 +51,17 @@ class SettingsNotifier extends Notifier<Settings> {
       haptics: _p.getBool('haptics') ?? true,
       name: _p.getString('name') ?? '',
       streamer: _p.getBool('streamer') ?? false,
+      heist: _p.getBool('heist') ?? true,
     );
     streamerMode.value = st.streamer;
+    heistMode.value = st.heist;
     return st;
+  }
+
+  void setHeist(bool v) {
+    _p.setBool('heist', v);
+    heistMode.value = v;
+    state = state.copyWith(heist: v);
   }
 
   void setStreamer(bool v) {

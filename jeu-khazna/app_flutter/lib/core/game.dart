@@ -3,6 +3,7 @@
 import 'dart:math' show Random;
 
 import 'ext_locks.dart';
+import 'heist.dart' show kSpotPenalty, kCamHackSeconds;
 import 'stages.dart' show stageMods;
 
 const int kDuration = 600; // ثانية
@@ -444,6 +445,15 @@ class GameState {
   /// المشتريات أثناء المهمّة: light_round · light_lock:<room> · morse_text:<room> · morse_replay:<room>
   final List<String> bought;
 
+  /// وضع الخريطة 2D: هل تُلعب هذه المهمّة كمبنى يُخترق؟ (يقرّره القائد عند البدء)
+  final bool heist;
+
+  /// عدد مرّات اكتشاف العميل (يعيده إلى نقطة الحفظ).
+  final int spots;
+
+  /// الكاميرات المعطّلة: رقمها ← حتى أيّ ثانية من وقت المهمّة.
+  final Map<String, double> camOff;
+
   const GameState({
     required this.seed,
     this.rooms = kRooms,
@@ -472,6 +482,9 @@ class GameState {
     this.variant = 0,
     this.variantRoom = -1,
     this.bought = const [],
+    this.heist = false,
+    this.spots = 0,
+    this.camOff = const {},
   });
 
   /// الضوء مشترى للقفل الحالي أو للجولة كاملة (يلغي انقطاع الكهرباء).
@@ -515,6 +528,9 @@ class GameState {
     int? variant,
     int? variantRoom,
     List<String>? bought,
+    bool? heist,
+    int? spots,
+    Map<String, double>? camOff,
   }) =>
       GameState(
         seed: seed,
@@ -544,6 +560,9 @@ class GameState {
         variant: variant ?? this.variant,
         variantRoom: variantRoom ?? this.variantRoom,
         bought: bought ?? this.bought,
+        heist: heist ?? this.heist,
+        spots: spots ?? this.spots,
+        camOff: camOff ?? this.camOff,
       );
 
   /// نسخة بمدّة مختلفة (تأتي من الخادم عند بداية الجلسة).
@@ -553,6 +572,7 @@ class GameState {
         cut: cut, lastEvent: lastEvent, eventId: eventId, finishedIn: finishedIn, duration: seconds,
         pausedAt: pausedAt, pauseReason: pauseReason, hints: hints, hint: hint,
         errors: errors, syncOp: syncOp, syncEx: syncEx, variant: variant, variantRoom: variantRoom, bought: bought,
+        heist: heist, spots: spots, camOff: camOff,
       );
 
   Map<String, dynamic> toJson() => {
@@ -583,6 +603,9 @@ class GameState {
         if (variant > 0) 'variant': variant,
         if (variantRoom >= 0) 'variantRoom': variantRoom,
         if (bought.isNotEmpty) 'bought': bought,
+        if (heist) 'heist': true,
+        if (spots > 0) 'spots': spots,
+        if (camOff.isNotEmpty) 'camOff': camOff,
       };
 
   static int _i(dynamic v, [int d = 0]) => v is num ? v.toInt() : d;
@@ -618,6 +641,11 @@ class GameState {
         variant: _i(j['variant']),
         variantRoom: _i(j['variantRoom'], -1),
         bought: j['bought'] is List ? [for (final b in j['bought'] as List) '$b'] : const [],
+        heist: j['heist'] == true,
+        spots: _i(j['spots']),
+        camOff: j['camOff'] is Map
+            ? {for (final e in (j['camOff'] as Map).entries) '${e.key}': (e.value as num? ?? 0).toDouble()}
+            : const {},
       );
 }
 
@@ -807,6 +835,19 @@ GameState applyAction(GameState s, Puzzles p, Map<String, dynamic> a, int now) {
     // محاولات محدودة: الخطأ الرابع يُفشل المهمّة
     if (mods.contains('limited') && t == 'wrong' && errs > kLimitedTries) y = y.copyWith(phase: 'lost');
     return ev(y, t, p0);
+  }
+
+  // وضع الخريطة: الحارس أو الكاميرا رأى العميل
+  if (type == 'spotted') {
+    if (!s.heist) return s;
+    return wrong(s.copyWith(spots: s.spots + 1), kSpotPenalty, 'spotted');
+  }
+  // وضع الخريطة: المحلّل يعطّل كاميرا (مرّة لكل كاميرا)
+  if (type == 'hackcam') {
+    final i = '${a['cam']}';
+    if (!s.heist || s.camOff.containsKey(i)) return s;
+    final t = s.effectiveDuration - s.penalty - remainingSeconds(s, now);
+    return s.copyWith(camOff: {...s.camOff, i: t + kCamHackSeconds}, eventId: s.eventId + 1, lastEvent: GameEvent('hacked', room));
   }
 
   GameState out = s;

@@ -11,6 +11,7 @@ import 'auth.dart';
 import 'bot.dart';
 import 'ext_locks.dart';
 import 'game.dart';
+import 'services.dart' show heistMode;
 import 'session.dart';
 import 'stages.dart';
 
@@ -149,6 +150,42 @@ class GameController extends ChangeNotifier {
 
   /// أُعيدت المرحلة (بذرة وترتيب جديدان) — لإظهار «خزنة جديدة».
   bool replayed = false;
+
+  // ───── وضع الخريطة 2D ─────
+  /// موقع العميل كما وصل من الشريك (لشاشة المحلّل).
+  double? partnerX, partnerY;
+  int partnerPosAt = 0;
+
+  /// إشارة المحلّل على الخريطة.
+  double? markX, markY;
+  int markAt = 0;
+  int _lastPosSent = 0;
+
+  /// «وقت المهمّة» المشترك (ثوانٍ منذ البدء، بلا العقوبات): الحرّاس والكاميرات تتحرّك به.
+  double get heistTime {
+    final s = state;
+    if (s == null || s.phase != 'playing') return 0;
+    final t = s.effectiveDuration - s.penalty - remaining;
+    return t < 0 ? 0 : t;
+  }
+
+  /// العميل يرسل موقعه (10 مرّات في الثانية على الأكثر).
+  void sendPos(double x, double y) {
+    if (!online || _net == null) return;
+    final n = _now();
+    if (n - _lastPosSent < 100) return;
+    _lastPosSent = n;
+    _net!.send({'kind': 'pos', 'id': meId, 'x': x, 'y': y});
+  }
+
+  /// المحلّل يضع إشارة على الخريطة تظهر عند العميل.
+  void sendMark(double x, double y) {
+    markX = x;
+    markY = y;
+    markAt = _now();
+    if (online) _net?.send({'kind': 'mark', 'id': meId, 'x': x, 'y': y});
+    _notify();
+  }
 
   /// مرحلة مختارة مسبقاً (من «فريقي» أو لتحسين النجوم): تُختار تلقائياً عند انضمام الشريك.
   int? preferredStage;
@@ -405,6 +442,8 @@ class GameController extends ChangeNotifier {
       if (r.timeLimit != null && s.stage > 0) s = s.withDuration(r.timeLimit!);
       _lastPeerSeen = _now();
       state = startGame(s, puzzles!, _now());
+      // وضع الخريطة 2D لمراحل الحملة أونلاين (قرار القائد يسري على الاثنين)
+      if (s.stage > 0 && heistMode.value && !table && !bot) state = state!.copyWith(heist: true);
       _broadcast();
       _changed();
       _startBeat();
@@ -686,6 +725,23 @@ class GameController extends ChangeNotifier {
         partnerRtt = _now() - t.toInt();
         _lastRttAck = _now();
         if (connQuality != q0) _notify();
+      }
+      return;
+    }
+    if (kind == 'pos' || kind == 'mark') {
+      final id = m['id'], x = m['x'], y = m['y'];
+      if (id is String && id != meId && x is num && y is num) {
+        if (kind == 'pos') {
+          partnerX = x.toDouble();
+          partnerY = y.toDouble();
+          partnerPosAt = _now();
+          if (isHost) _lastPeerSeen = _now();
+        } else {
+          markX = x.toDouble();
+          markY = y.toDouble();
+          markAt = _now();
+          _notify();
+        }
       }
       return;
     }
