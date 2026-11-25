@@ -3,9 +3,10 @@
 # المحلّل يستطيع تجميد كل الكاميرات لثوانٍ (تصبح عمياء: يطفأ المخروط والنقطة).
 extends Node3D
 
-const RANGE := 9.5
-const HALF_ANGLE := 21.0
-const PITCH := -32.0
+var RANGE := 9.5
+var HALF_ANGLE := 21.0
+var PITCH := -32.0
+var search := false # كشّاف برج: ضوء أبيض قوي، مدى بعيد، بلا جسم كاميرا
 
 var base_yaw := 0.0
 var sweep := 50.0
@@ -20,6 +21,15 @@ var _led: MeshInstance3D
 var _led_mat: StandardMaterial3D
 var _spot: SpotLight3D
 var _servo_t := 0.0
+
+
+## كشّاف ضوئي فوق برج (في الخارج): نفس منطق الرصد، بمدى أبعد وزاوية أضيق.
+func setup_search(at: Vector3, yaw_deg: float, sweep_deg: float, per: float) -> void:
+	search = true
+	RANGE = 26.0
+	HALF_ANGLE = 8.5
+	PITCH = -24.0
+	setup(at, yaw_deg, sweep_deg, per)
 
 
 func setup(at: Vector3, yaw_deg: float, sweep_deg: float, per: float) -> void:
@@ -120,6 +130,21 @@ func setup(at: Vector3, yaw_deg: float, sweep_deg: float, per: float) -> void:
 	_cone.rotation_degrees.x = 90
 	_cone.position = Vector3(0, 0, -0.25 - RANGE * 0.31)
 	_head.add_child(_cone)
+	if search:
+		body.scale = Vector3(2.4, 2.4, 1.2)
+		hood.visible = false
+		arm.visible = false
+		lens.scale = Vector3(3.2, 1.0, 3.2)
+		var lm2 := StandardMaterial3D.new()
+		lm2.albedo_color = Color(1, 0.97, 0.88)
+		lm2.emission_enabled = true
+		lm2.emission = Color(1, 0.97, 0.88)
+		lm2.emission_energy_multiplier = 8.0
+		lm2.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		lens.material_override = lm2
+		_spot.light_color = Color(1.0, 0.97, 0.9)
+		_spot.shadow_enabled = true
+		_cone_mat.albedo_color = Color(1.0, 0.97, 0.88, 0.04)
 	update(0.0, 0.0)
 
 
@@ -137,8 +162,13 @@ func update(t: float, delta: float) -> void:
 	_cone.visible = not blind
 	var alarm := fill > 0.05
 	_led.visible = not blind and (fmod(t * (6.0 if alarm else 1.2), 1.0) > 0.5)
-	_cone_mat.albedo_color = Color(1.0, 0.3, 0.22, 0.05 + 0.12 * fill)
-	_spot.light_energy = 1.4 + 2.5 * fill
+	if search:
+		_cone_mat.albedo_color = Color(1.0, 0.97 - 0.6 * fill, 0.88 - 0.7 * fill, 0.035 + 0.08 * fill)
+		_spot.light_energy = 9.0 + 6.0 * fill
+		_led.visible = false
+	else:
+		_cone_mat.albedo_color = Color(1.0, 0.3, 0.22, 0.05 + 0.12 * fill)
+		_spot.light_energy = 1.4 + 2.5 * fill
 
 
 func eye() -> Vector3:

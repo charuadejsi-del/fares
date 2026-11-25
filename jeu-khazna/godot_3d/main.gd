@@ -38,6 +38,7 @@ var _tut := 0
 var _tut_moved := 0.0
 var _breath_t := 3.0
 var breath: CPUParticles3D
+var maps # بنّاء خرائط النهر والجبل (maps.gd)
 var net
 var hud
 var menu
@@ -430,6 +431,7 @@ func _start(r: String, s: int) -> void:
 	seed_value = s
 	lv = Levels.get_level(level_i)
 	mission_left = float(lv.mission)
+	maps = preload("res://maps.gd").new(self)
 	puzzle = _make_puzzle(s)
 	if menu:
 		menu.queue_free()
@@ -801,7 +803,13 @@ func _aabb(n: Node3D) -> AABB:
 
 
 func _props() -> void:
-	# المبنى: براميل وصناديق ورفوف وكاميرات حقيقية وطفّاية حريق
+	# المبنى: براميل وصناديق ورفوف وكاميرات حقيقية وطفّاية حريق (الميناء والتدريب فقط؛ النهر والجبل لهما أثاثهما)
+	if str(lv.get("theme", "port")) == "port":
+		_props_port()
+	_props_archive()
+
+
+func _props_port() -> void:
 	_prop("Barrel_01", Vector3(15.6, 0, 1.0))
 	_prop("Barrel_01", Vector3(16.4, 0, 1.25), 40)
 	_prop("barrel_03", Vector3(26.6, 0, 9.2))
@@ -814,7 +822,9 @@ func _props() -> void:
 		_prop("security_camera_01", c, 0, false)
 	for l in [Vector3(4, 2.75, 4), Vector3(14, 2.75, 5), Vector3(25, 2.75, 5), ARCHIVE + Vector3(5, 2.75, 5)]:
 		_prop("caged_hanging_light", l, 0, false)
-	# الأرشيف
+
+
+func _props_archive() -> void:
 	_prop("modern_arm_chair_01", ARCHIVE + Vector3(5, 0, 2.4), 180)
 	_prop("wooden_bookshelf_worn", ARCHIVE + Vector3(0.6, 0, 7.0), 90)
 	_prop("vintage_cabinet_01", ARCHIVE + Vector3(8.6, 0, 7.4), 180)
@@ -938,61 +948,14 @@ func _apply_low_quality() -> void:
 
 # ───────── جوّ المرحلة ─────────
 func _theme() -> void:
+	# أصوات الطقس (الخرائط نفسها تبني المطر والثلج والماء)
 	match str(lv.get("theme", "port")):
 		"river":
-			# أرض مبلّلة تلمع، برك ماء، قطرات من السقف، ومطر على السطح
-			mat_floor.roughness = 0.22
-			mat_floor.albedo_color = mat_floor.albedo_color.darkened(0.25)
-			var water := StandardMaterial3D.new()
-			water.albedo_color = Color(0.02, 0.03, 0.035, 0.9)
-			water.metallic = 0.4
-			water.roughness = 0.03
-			water.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			for pd in [Vector3(5.5, 0.005, 6.2), Vector3(12.5, 0.005, 3.0), Vector3(17.0, 0.005, 6.8), Vector3(24.0, 0.005, 7.5), Vector3(26.5, 0.005, 2.6)]:
-				var m := MeshInstance3D.new()
-				var pm := PlaneMesh.new()
-				pm.size = Vector2(randf_range(1.2, 2.2), randf_range(0.8, 1.6))
-				m.mesh = pm
-				m.material_override = water
-				m.position = pd
-				m.rotation.y = randf() * TAU
-				add_child(m)
-			for dp in [Vector3(5.5, WALL_H - 0.05, 6.2), Vector3(12.5, WALL_H - 0.05, 3.0), Vector3(17.0, WALL_H - 0.05, 6.8), Vector3(24.0, WALL_H - 0.05, 7.5)]:
-				_drips(dp)
-			s_hazard_amb = _snd("rain", true, -9.0)
-			if s_hazard_amb.stream:
-				s_hazard_amb.play()
+			s_hazard_amb = _snd("rain", true, -7.0)
 		"mountain":
-			# جدران مثلّجة، أكوام ثلج عند الجدران، ثلج يتطاير من شقوق السقف، وأنفاس تتبخّر
-			for m in [mat_wall, mat_wall_dark]:
-				(m as StandardMaterial3D).albedo_color = (m as StandardMaterial3D).albedo_color * Color(0.86, 0.92, 1.08)
-			mat_floor.albedo_color = mat_floor.albedo_color.lerp(Color(0.75, 0.8, 0.9), 0.35)
-			mat_floor.roughness = 0.35
-			var snow := StandardMaterial3D.new()
-			snow.albedo_color = Color(0.9, 0.93, 0.98)
-			snow.roughness = 0.95
-			var rng := RandomNumberGenerator.new()
-			rng.seed = 11
-			for i in 22:
-				var along := rng.randf_range(0.6, 29.0)
-				var side := 0.25 if rng.randf() < 0.5 else 9.75
-				if along < 8.0:
-					side = 0.25 if side < 5.0 else 7.75
-				var m := MeshInstance3D.new()
-				var sm := SphereMesh.new()
-				sm.radius = rng.randf_range(0.35, 0.7)
-				sm.height = sm.radius * 2.0
-				m.mesh = sm
-				m.material_override = snow
-				m.scale = Vector3(rng.randf_range(1.2, 2.0), 0.28, 0.8)
-				m.position = Vector3(along, 0.0, side)
-				m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				add_child(m)
-			for c in [Vector3(4, WALL_H - 0.1, 4), Vector3(14, WALL_H - 0.1, 5), Vector3(25, WALL_H - 0.1, 5)]:
-				_snowfall(c)
-			s_hazard_amb = _snd("wind", true, -8.0)
-			if s_hazard_amb.stream:
-				s_hazard_amb.play()
+			s_hazard_amb = _snd("wind", true, -7.0)
+	if s_hazard_amb and s_hazard_amb.stream:
+		s_hazard_amb.play()
 
 
 func _drips(at: Vector3) -> void:
@@ -1306,6 +1269,19 @@ func _label3d(text: String, at: Vector3, size: int, color: Color, parent: Node3D
 
 # ───────── مبنى العميل ─────────
 func _build_building() -> void:
+	# كل مرحلة مكانها الخاص؛ ونقاط اللعب (البداية، الأجهزة، البابان، الخزنة) في نفس الإحداثيات
+	match str(lv.get("theme", "port")):
+		"river":
+			maps.river()
+		"mountain":
+			maps.mountain()
+		_:
+			_map_port()
+	_build_core()
+
+
+## المبنى الأصلي (الميناء والتدريب): ثلاث غرف خرسانية.
+func _map_port() -> void:
 	_box(Vector3(16.5, -0.1, 5), Vector3(33.6, 0.2, 10.6), mat_floor)
 	_box(Vector3(16.5, WALL_H + 0.1, 5), Vector3(33.6, 0.2, 10.6), mat_ceil)
 	# الغرفة 1 (البداية): x 0..8، z 0..8
@@ -1320,16 +1296,62 @@ func _build_building() -> void:
 	_wall_x(10, 8, 20)
 	_wall_z(20, 0, 4)
 	_wall_z(20, 6, 10)
-	# الغرفة 3 (قاعة الخزنة): x 20..30، وفتحة الخزنة z 3.6..6.4
+	# الغرفة 3 (قاعة الخزنة): x 20..30
 	_wall_x(0, 20, 30)
 	_wall_x(10, 20, 30)
-	_wall_z(30, 0, 3.6)
-	_wall_z(30, 6.4, 10)
-	_box(Vector3(30, 2.95, 5), Vector3(0.3, 0.5, 2.8), mat_wall)
-	# حجرة الكنز خلف الباب: x 30..33
+	_vault_wall(mat_wall)
+	for p in [Vector3(11, 0, 2), Vector3(11.9, 0, 2), Vector3(11.45, 0.9, 2), Vector3(16, 0, 7.5), Vector3(14, 0, 4.8), Vector3(23.5, 0, 2.2), Vector3(4.5, 0, 1.2), Vector3(24.4, 0, 2.2)]:
+		_box(p + Vector3(0, 0.45, 0), Vector3(0.9, 0.9, 0.9), mat_crate)
+	# إضاءة مخيفة: مصباح خافت + مصابيح ترتعش + مصباح طوارئ أحمر
+	_lamp(Vector3(4, WALL_H, 4), Color(1.0, 0.82, 0.58), 1.0)
+	_lamp(Vector3(14, WALL_H, 5), Color(1.0, 0.86, 0.62), 1.2, true)
+	vault_lamp = _lamp(Vector3(25, WALL_H, 5), Color(0.6, 0.75, 1.0), 0.8, true)
+	var red := OmniLight3D.new()
+	red.position = Vector3(19.6, 2.6, 1.0)
+	red.light_color = Color(1.0, 0.12, 0.08)
+	red.light_energy = 1.4
+	red.omni_range = 5.0
+	add_child(red)
+	_box(Vector3(19.8, 2.6, 1.0), Vector3(0.12, 0.18, 0.18), _glow(Color(1.0, 0.15, 0.1), 3.0), false)
+	for c in [Vector3(4, 1.6, 4), Vector3(14, 1.6, 5), Vector3(25, 1.6, 5)]:
+		_probe(c, Vector3(12, WALL_H, 10.5))
+	_dust(Vector3(15, 1.6, 5), Vector3(15, 1.5, 5))
+	if lv.id == "tutorial":
+		# قاعة تدريب: أرضية بخطوط صفراء وأرقام المحطّات
+		var tape := _glow(Color(0.95, 0.75, 0.15), 0.6)
+		for x in [3.6, 6.4]:
+			_box(Vector3(x, 0.005, 4.0), Vector3(0.08, 0.01, 7.6), tape, false)
+		for st in [["١ امشِ", Vector3(1.0, 2.4, 6.0)], ["٢ انحنِ تحت الليزر", Vector3(4.9, 2.6, 7.7)], ["٣ لوحة الأرقام", Vector3(7.4, 2.4, 0.4)], ["٤ الكاميرا", Vector3(14.0, 2.5, 9.7)], ["٥ الخزنة", Vector3(25.0, 2.6, 9.7)]]:
+			var lb := _label3d(str(st[0]), st[1], 40, Color(0.95, 0.75, 0.15))
+			if (st[1] as Vector3).z > 5.0:
+				lb.rotation_degrees.y = 180
+
+
+func _probe(c: Vector3, size: Vector3) -> void:
+	var rp := ReflectionProbe.new()
+	rp.position = c
+	rp.size = size
+	rp.box_projection = true
+	rp.update_mode = ReflectionProbe.UPDATE_ONCE
+	rp.intensity = 0.7
+	add_child(rp)
+
+
+## الجدار الشرقي لقاعة الخزنة (فتحة للإطار الفولاذي).
+func _vault_wall(mat: Material) -> void:
+	_wall_z(30, 0, 3.6, mat)
+	_wall_z(30, 6.4, 10, mat)
+	_box(Vector3(30, 2.95, 5), Vector3(0.3, 0.5, 2.8), mat)
+
+
+## ما تشترك فيه كل المراحل: حجرة الكنز، البابان، الجهازان، الخزنة، والسهم.
+func _build_core() -> void:
 	_wall_x(3.4, 30, 33.3, mat_steel)
 	_wall_x(6.6, 30, 33.3, mat_steel)
 	_wall_z(33.3, 3.4, 6.6, mat_steel)
+	if str(lv.get("theme", "port")) != "port":
+		_box(Vector3(31.65, -0.1, 5), Vector3(3.6, 0.2, 3.6), mat_steel)
+		_box(Vector3(31.65, WALL_H + 0.1, 5), Vector3(3.6, 0.2, 3.6), mat_steel)
 	for i in 6:
 		var gold := _box(Vector3(31.4 + (i % 3) * 0.45, 0.08 + float(i / 3) * 0.16, 4.85 + (i % 2) * 0.3), Vector3(0.4, 0.15, 0.22), _glow(Color(1.0, 0.75, 0.25), 1.6), false)
 		gold.rotation.y = 0.05 * i
@@ -1342,35 +1364,9 @@ func _build_building() -> void:
 
 	doors.append(_door(Vector3(8, 0, 4.5)))
 	doors.append(_door(Vector3(20, 0, 5)))
-
-	for p in [Vector3(11, 0, 2), Vector3(11.9, 0, 2), Vector3(11.45, 0.9, 2), Vector3(16, 0, 7.5), Vector3(14, 0, 4.8), Vector3(23.5, 0, 2.2), Vector3(4.5, 0, 1.2), Vector3(24.4, 0, 2.2)]:
-		_box(p + Vector3(0, 0.45, 0), Vector3(0.9, 0.9, 0.9), mat_crate)
-
 	terminals.append(_terminal(Vector3(7.4, 0, 1.3), "لوحة الأرقام"))
 	terminals.append(_terminal(Vector3(19.4, 0, 8.7), "لوحة الأسلاك"))
-
 	_build_vault()
-
-	# إضاءة مخيفة: مصباح خافت، مصابيح ترتعش، ومصباح طوارئ أحمر
-	_lamp(Vector3(4, WALL_H, 4), Color(1.0, 0.82, 0.58), 1.0)
-	_lamp(Vector3(14, WALL_H, 5), Color(1.0, 0.86, 0.62), 1.2, true)
-	vault_lamp = _lamp(Vector3(25, WALL_H, 5), Color(0.6, 0.75, 1.0), 0.8, true)
-	var red := OmniLight3D.new()
-	red.position = Vector3(19.6, 2.6, 1.0)
-	red.light_color = Color(1.0, 0.12, 0.08)
-	red.light_energy = 1.4
-	red.omni_range = 5.0
-	add_child(red)
-	_box(Vector3(19.8, 2.6, 1.0), Vector3(0.12, 0.18, 0.18), _glow(Color(1.0, 0.15, 0.1), 3.0), false)
-
-	for c in [Vector3(4, 1.6, 4), Vector3(14, 1.6, 5), Vector3(25, 1.6, 5)]:
-		var rp := ReflectionProbe.new()
-		rp.position = c
-		rp.size = Vector3(12, WALL_H, 10.5)
-		rp.box_projection = true
-		rp.update_mode = ReflectionProbe.UPDATE_ONCE
-		rp.intensity = 0.7
-		add_child(rp)
 
 	marker = MeshInstance3D.new()
 	var pm := PrismMesh.new()
@@ -1379,8 +1375,6 @@ func _build_building() -> void:
 	marker.material_override = _glow(Color(1.0, 0.63, 0.23), 4.0)
 	marker.rotation_degrees.x = 180
 	add_child(marker)
-
-	_dust(Vector3(15, 1.6, 5), Vector3(15, 1.5, 5))
 
 
 func _dust(center: Vector3, extents: Vector3) -> void:

@@ -24,7 +24,17 @@
   "metal_plate",
   "rusty_metal_02",
   "old_wooden_floor_02",
-  "concrete_wall_005"
+  "concrete_wall_005",
+  "brown_planks_04",
+  "corrugated_iron_02",
+  "factory_wall",
+  "rock_embedded_concrete_wall",
+  "rusty_metal_03",
+  "snow_02",
+  "rock_wall_08",
+  "rock_ground",
+  "metal_plate_02",
+  "rusty_painted_metal"
  ],
  "models": [
   "Barrel_01",
