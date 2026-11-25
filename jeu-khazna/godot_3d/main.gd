@@ -68,6 +68,7 @@ var vault_bolts: Array = []
 var hint_light: OmniLight3D
 var hint_arrow: MeshInstance3D
 var _seer = null
+var _prop_log: Array = []
 # الأصوات
 var s_amb: AudioStreamPlayer
 var s_heart: AudioStreamPlayer
@@ -107,6 +108,10 @@ func _smoke() -> void:
 	_submit_code(str(puzzle.code))
 	_cut_wire(str(WIRES[int(puzzle.answer)][0]))
 	print("SMOKE stage after puzzles: ", stage)
+	print("SMOKE guard: ", guards[0].debug)
+	print("SMOKE pose: ", guards[0].pose_report())
+	for pr in _prop_log:
+		print("SMOKE prop: ", pr)
 	await get_tree().create_timer(2.4).timeout
 	var r := _reach_test()
 	print("SMOKE reach: ", r)
@@ -506,6 +511,7 @@ func _prop(id: String, pos: Vector3, rot := 0.0, collide := true) -> Node3D:
 		return n
 	var c := box.get_center()
 	n.global_position += Vector3(pos.x - c.x, pos.y - box.position.y, pos.z - c.z)
+	_prop_log.append("%s size=%s" % [id, box.size])
 	if collide:
 		var body := StaticBody3D.new()
 		var cs := CollisionShape3D.new()

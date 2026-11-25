@@ -15,6 +15,8 @@ var _wait := 0.0
 var _radio_t := 8.0
 var _alert_target := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
+var debug := ""
+var _skel: Skeleton3D
 
 const RANGE := 7.5
 const HALF_ANGLE := 32.0
@@ -90,8 +92,12 @@ func _load_model() -> Node3D:
 	model.rotation_degrees.y = 180 # شخصيات Mixamo تنظر نحو +Z
 	_anim = _find(model, "AnimationPlayer") as AnimationPlayer
 	var skel := _find(model, "Skeleton3D") as Skeleton3D
+	_skel = skel
+	debug += "tree=%s | " % _tree(model, 0)
 	if _anim == null or skel == null:
+		debug += "NO anim/skel"
 		return model
+	debug += "root_node=%s anims=%s | " % [_anim.root_node, _anim.get_animation_list()]
 	var lib := AnimationLibrary.new()
 	var root := _anim.get_node(_anim.root_node)
 	var skel_path := str(root.get_path_to(skel))
@@ -100,6 +106,8 @@ func _load_model() -> Node3D:
 		if a == null:
 			continue
 		a = a.duplicate(true)
+		if a.get_track_count() > 0:
+			debug += "%s:%d tracks first=%s | " % [key, a.get_track_count(), a.track_get_path(0)]
 		# توحيد مسارات العظام مع هيكل الشخصية، وإلغاء انزلاق الحوض للأمام (المشي في المكان)
 		for i in a.get_track_count():
 			var p := str(a.track_get_path(i))
@@ -117,6 +125,31 @@ func _load_model() -> Node3D:
 		_anim.remove_animation_library("g")
 	_anim.add_animation_library("g", lib)
 	return model
+
+
+func _tree(n: Node, depth: int) -> String:
+	if depth > 3:
+		return ""
+	var out := n.name + "<" + n.get_class() + ">"
+	var kids := []
+	for c in n.get_children():
+		if c is MeshInstance3D and depth > 1:
+			continue
+		kids.append(_tree(c, depth + 1))
+	if kids.size() > 0:
+		out += "[" + ",".join(PackedStringArray(kids)) + "]"
+	return out
+
+
+func pose_report() -> String:
+	if _skel == null or _skel.get_bone_count() == 0:
+		return "no skeleton"
+	var b := _skel.find_bone("mixamorig_LeftArm")
+	if b < 0:
+		b = 1
+	var pose := _skel.get_bone_pose_rotation(b)
+	var rest := _skel.get_bone_rest(b).basis.get_rotation_quaternion()
+	return "bone %s posed=%s rest=%s playing=%s anim=%s" % [_skel.get_bone_name(b), pose, rest, _anim.is_playing() if _anim else false, _anim.current_animation if _anim else ""]
 
 
 func _first_anim(res_path: String) -> Animation:
