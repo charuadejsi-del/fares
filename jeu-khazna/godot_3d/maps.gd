@@ -221,7 +221,7 @@ func _lightning(moon: DirectionalLight3D) -> void:
 	m.add_child(t)
 	t.timeout.connect(func():
 		t.wait_time = randf_range(12.0, 26.0)
-		var tw := m.create_tween()
+		var tw = m.create_tween()
 		for k in 2:
 			tw.tween_property(moon, "light_energy", 2.6, 0.04)
 			tw.tween_property(moon, "light_energy", base, 0.09)
@@ -236,7 +236,7 @@ func river() -> void:
 	var factory := _mat("factory_wall", m.mat_wall, 3.0, Color(0.62, 0.64, 0.66))
 	var basement := _mat("rock_embedded_concrete_wall", m.mat_wall_dark, 2.5, Color(0.5, 0.52, 0.5))
 	var rust := _mat("rusty_metal_03", m.mat_rust, 1.5, Color(0.8, 0.75, 0.7))
-	var wet := m.mat_floor.duplicate() as StandardMaterial3D
+	var wet = m.mat_floor.duplicate() as StandardMaterial3D
 	wet.roughness = 0.18
 	wet.albedo_color = wet.albedo_color.darkened(0.3)
 	m.mat_wall = factory # الأبواب والجدران الداخلية
@@ -336,11 +336,11 @@ func river() -> void:
 	blight.omni_range = 3.5
 	blight.position = Vector3(0, 1.6, 0.9)
 	boat.add_child(blight)
-	var tw := m.create_tween().set_loops()
+	var tw = m.create_tween().set_loops()
 	tw.tween_property(boat, "rotation_degrees:z", 3.0, 2.2).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(boat, "rotation_degrees:z", -3.0, 2.2).set_trans(Tween.TRANS_SINE)
 	m._box(Vector3(-3.6, -0.05, 6.0), Vector3(1.6, 0.08, 0.8), planks, false) # لوح العبور
-	var bl := m._label3d("🚤 الهروب", Vector3(-3.2, 2.2, 6.0), 44, Color(0.4, 1.0, 0.5))
+	var bl = m._label3d("🚤 الهروب", Vector3(-3.2, 2.2, 6.0), 44, Color(0.4, 1.0, 0.5))
 	bl.rotation_degrees.y = 90
 	# أعمدة إنارة صفراء ترتعش تحت المطر
 	_lamp_post(Vector3(-2.2, 0, 3.5), Color(1.0, 0.62, 0.25), 2.6)
@@ -355,7 +355,7 @@ func river() -> void:
 	m._box(Vector3(8, 1.6, 7.75), Vector3(0.3, 3.2, 4.5), iron)
 	m._box(Vector3(8, 4.6, 5.0), Vector3(0.3, 2.8, 10.0), iron)
 	m._box(Vector3(7.75, 3.45, 4.5), Vector3(0.2, 0.25, 2.6), m.mat_steel, false)
-	var signl := m._label3d("مستودع ٧ · مضخّات النهر", Vector3(7.8, 4.4, 4.5), 46, Color(0.9, 0.85, 0.7))
+	var signl = m._label3d("مستودع ٧ · مضخّات النهر", Vector3(7.8, 4.4, 4.5), 46, Color(0.9, 0.85, 0.7))
 	signl.rotation_degrees.y = -90
 	var warn := OmniLight3D.new()
 	warn.position = Vector3(7.2, 3.6, 4.5)
@@ -451,7 +451,7 @@ func mountain() -> void:
 	var rock_floor := _mat("rock_ground", m.mat_floor, 3.0, Color(0.55, 0.57, 0.6))
 	var plate := _mat("metal_plate_02", m.mat_steel, 1.5, Color(0.55, 0.58, 0.62), 0.45, 0.7)
 	var bunker := _mat("rusty_painted_metal", m.mat_rust, 2.0, Color(0.7, 0.75, 0.72))
-	var concrete := m.mat_wall.duplicate() as StandardMaterial3D
+	var concrete = m.mat_wall.duplicate() as StandardMaterial3D
 	concrete.albedo_color = concrete.albedo_color * Color(0.8, 0.86, 0.95)
 	m.mat_wall = concrete
 
@@ -509,7 +509,7 @@ func mountain() -> void:
 	pad.material_override = _plain(Color(0.08, 0.09, 0.1), 0.7)
 	pad.position = Vector3(2.0, 0.02, 6.0)
 	m.add_child(pad)
-	var yel := m._glow(Color(1.0, 0.8, 0.15), 1.2)
+	var yel = m._glow(Color(1.0, 0.8, 0.15), 1.2)
 	m._box(Vector3(1.4, 0.045, 6.0), Vector3(0.22, 0.01, 2.0), yel, false)
 	m._box(Vector3(2.6, 0.045, 6.0), Vector3(0.22, 0.01, 2.0), yel, false)
 	m._box(Vector3(2.0, 0.045, 6.0), Vector3(1.2, 0.01, 0.22), yel, false)
@@ -557,15 +557,15 @@ func mountain() -> void:
 	# صخور بارزة من الجبل (بعيداً عن الباب واللوحة)
 	for i in 10:
 		var z := rng.randf_range(-5.5, -0.8) if i % 2 == 0 else rng.randf_range(10.2, 15.5)
-		var r := m._box(Vector3(rng.randf_range(7.2, 7.7), rng.randf_range(0.4, 6.5), z), Vector3(rng.randf_range(0.8, 1.6), rng.randf_range(0.8, 2.0), rng.randf_range(1.0, 2.2)), rock, false)
+		var r = m._box(Vector3(rng.randf_range(7.2, 7.7), rng.randf_range(0.4, 6.5), z), Vector3(rng.randf_range(0.8, 1.6), rng.randf_range(0.8, 2.0), rng.randf_range(1.0, 2.2)), rock, false)
 		r.rotation = Vector3(rng.randf_range(-0.4, 0.4), rng.randf_range(-0.5, 0.5), rng.randf_range(-0.4, 0.4))
 	# إطار باب المخبأ الخرساني بخطوط تحذير
-	var hz := m._glow(Color(0.95, 0.75, 0.1), 0.5)
+	var hz = m._glow(Color(0.95, 0.75, 0.1), 0.5)
 	m._box(Vector3(7.75, 1.7, 3.3), Vector3(0.3, 3.4, 0.35), concrete)
 	m._box(Vector3(7.75, 1.7, 5.7), Vector3(0.3, 3.4, 0.35), concrete)
 	m._box(Vector3(7.75, 3.45, 4.5), Vector3(0.3, 0.35, 2.75), concrete)
 	m._box(Vector3(7.58, 3.45, 4.5), Vector3(0.02, 0.12, 2.5), hz, false)
-	var bl := m._label3d("مخبأ B-7 · ممنوع الدخول", Vector3(7.55, 4.1, 4.5), 40, Color(0.95, 0.85, 0.6))
+	var bl = m._label3d("مخبأ B-7 · ممنوع الدخول", Vector3(7.55, 4.1, 4.5), 40, Color(0.95, 0.85, 0.6))
 	bl.rotation_degrees.y = -90
 	var flood := SpotLight3D.new()
 	m.add_child(flood)
@@ -589,7 +589,7 @@ func mountain() -> void:
 		for k in 5:
 			var x := 10.9 + k * 0.72
 			m._box(Vector3(x, 1.0, row), Vector3(0.66, 2.0, 1.0), rack)
-			var face := row + (0.51 if row < 5.0 else -0.51)
+			var face: float = row + (0.51 if row < 5.0 else -0.51)
 			for j in 6:
 				m._box(Vector3(x - 0.2 + (j % 2) * 0.4, 0.4 + j * 0.27, face), Vector3(0.05, 0.03, 0.01), m._glow(led_cols[(k + j) % 3], 4.0), false)
 	for row in [2.6, 7.4]:
@@ -615,10 +615,10 @@ func mountain() -> void:
 	for i in 14:
 		var zz := 0.3 if i % 2 == 0 else 9.7
 		var c := Vector3(20.8 + (i / 2) * 1.3 + rng.randf_range(-0.3, 0.3), rng.randf_range(0.4, 2.8), zz)
-		var b := m._box(c, Vector3(rng.randf_range(0.9, 1.6), rng.randf_range(0.7, 1.4), 0.5), rock, false)
+		var b = m._box(c, Vector3(rng.randf_range(0.9, 1.6), rng.randf_range(0.7, 1.4), 0.5), rock, false)
 		b.rotation = Vector3(rng.randf_range(-0.3, 0.3), rng.randf_range(-0.4, 0.4), rng.randf_range(-0.3, 0.3))
 	# هوابط صخرية وجليد يتوهّج
-	var ice := m._glow(Color(0.5, 0.85, 1.0), 0.9)
+	var ice = m._glow(Color(0.5, 0.85, 1.0), 0.9)
 	for i in 16:
 		var p := Vector3(rng.randf_range(20.6, 29.4), WALL_H() - 0.25, rng.randf_range(0.6, 9.4))
 		_cyl(p, rng.randf_range(0.08, 0.18), rng.randf_range(0.35, 0.75), rock, false, Vector3(180, 0, 0), 0.01)
