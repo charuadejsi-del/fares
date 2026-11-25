@@ -129,9 +129,9 @@ func _smoke() -> void:
 	print("SMOKE stage after puzzles: ", stage)
 	print("SMOKE guard: ", guards[0].debug)
 	await get_tree().create_timer(1.0).timeout
-	var pr := str(guards[0].pose_report())
-	print("SMOKE pose: ", pr)
-	if pr.contains("moved=true"):
+	var pose_s := str(guards[0].pose_report())
+	print("SMOKE pose: ", pose_s)
+	if pose_s.contains("moved=true"):
 		print("SMOKE guard animated ok")
 	for pr in _prop_log:
 		print("SMOKE prop: ", pr)
