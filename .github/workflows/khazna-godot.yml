@@ -13,7 +13,30 @@ permissions:
   contents: write
 
 jobs:
+  agora:
+    # مكتبة صوت Agora لـ Godot (AAR) — تُبنى بـ Gradle ثم تُعطى لخطوة بناء اللعبة
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+      - name: بناء مكتبة الصوت
+        run: |
+          cd jeu-khazna/godot_3d/android_plugin
+          gradle :agora:assembleRelease --no-daemon
+          ls -la agora/build/outputs/aar/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: godot-agora
+          path: jeu-khazna/godot_3d/android_plugin/agora/build/outputs/aar/*.aar
+
   build:
+    needs: agora
     runs-on: ubuntu-latest
     container: barichello/godot-ci:4.3
     defaults:
@@ -30,6 +53,24 @@ jobs:
           ls ~/.local/share/godot/export_templates/
           keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore /tmp/debug.keystore \
             -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999 -deststoretype pkcs12
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: godot-agora
+          path: jeu-khazna/godot_3d/addons/godot_agora/bin
+
+      - name: قالب بناء أندرويد (لإضافة الصوت)
+        run: |
+          mv addons/godot_agora/bin/*.aar addons/godot_agora/bin/GodotAgora.aar
+          ls -la addons/godot_agora/bin
+          command -v unzip >/dev/null || (apt-get update -qq && apt-get install -y -qq unzip >/dev/null)
+          mkdir -p android/build
+          unzip -q -o ~/.local/share/godot/export_templates/4.3.stable/android_source.zip -d android/build
+          echo -n "4.3.stable" > android/.build_version
+          touch android/build/.gdignore
+          SDK=${ANDROID_HOME:-/usr/lib/android-sdk}
+          echo "SDK=$SDK"; ls $SDK || true
+          (yes | $SDK/cmdline-tools/*/bin/sdkmanager --licenses >/dev/null 2>&1) || (yes | sdkmanager --licenses >/dev/null 2>&1) || true
 
       - name: الأصول (خطّ عربي ونموذج الحارس)
         run: |
@@ -68,7 +109,13 @@ jobs:
           GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           mkdir -p build
-          godot --headless --path . --export-debug "Android" build/khazna3d.apk 2>&1 | tail -40
+          godot --headless --path . --export-debug "Android" build/khazna3d.apk 2>&1 | tail -60
+          if [ ! -f build/khazna3d.apk ]; then
+            echo "::warning::فشل البناء مع الصوت — بناء بديل بلا صوت داخل اللعبة"
+            sed -i 's/gradle_build\/use_gradle_build=true/gradle_build\/use_gradle_build=false/' export_presets.cfg
+            godot --headless --path . --export-debug "Android" build/khazna3d.apk 2>&1 | tail -20
+            echo "novoice" > build/NOVOICE
+          fi
           ls -la build
           test -f build/khazna3d.apk
 

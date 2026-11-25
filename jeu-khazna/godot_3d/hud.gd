@@ -5,6 +5,7 @@ extends CanvasLayer
 signal interact_pressed
 signal switch_pressed
 signal tool_pressed(kind: String)
+signal mic_pressed
 
 var player
 var look_only := false # وضع القرص: كل سحب = دوران
@@ -16,6 +17,8 @@ var _hold_t := 0.0
 var _drag_acc := 0.0
 var _tools: VBoxContainer
 var _tool_btns := {}
+var _mic: Button
+var _voice_lbl: Label
 var _loading: Control
 var _load_bar: ProgressBar
 var _load_txt: Label
@@ -163,6 +166,24 @@ void fragment() {
 		_tools.add_child(b)
 		_tool_btns[k] = [b, t[1]]
 
+	# الميكروفون (يظهر عند تشغيل الصوت)
+	_mic = _button("🎙", Color(0.12, 0.14, 0.17), Color.WHITE, 30)
+	_mic.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_mic.offset_left = -300
+	_mic.offset_right = -224
+	_mic.offset_top = 48
+	_mic.offset_bottom = 100
+	_mic.visible = false
+	_mic.pressed.connect(func(): mic_pressed.emit())
+	_root.add_child(_mic)
+	_voice_lbl = _label(16, Color(0.6, 0.64, 0.68))
+	_voice_lbl.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_voice_lbl.offset_left = -520
+	_voice_lbl.offset_right = -20
+	_voice_lbl.offset_top = 104
+	_voice_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_root.add_child(_voice_lbl)
+
 	_pad = preload("res://pad.gd").new()
 	_pad.hud = self
 	_pad.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -208,7 +229,7 @@ func _input(event) -> void:
 			for c2 in _tools.get_children():
 				if _tools.visible and (c2 as Control).get_global_rect().has_point(event.position):
 					return
-			for b in [_interact, _switch]:
+			for b in [_interact, _switch, _mic]:
 				if b.visible and b.get_global_rect().has_point(event.position):
 					return
 			if _vault != null:
@@ -326,6 +347,22 @@ func set_tools(on: bool, cooldowns: Dictionary) -> void:
 		var cd: float = cooldowns.get(k, 0.0)
 		b.disabled = cd > 0.0
 		b.text = (str(_tool_btns[k][1]) + "  (%d)" % int(ceil(cd))) if cd > 0.0 else str(_tool_btns[k][1])
+
+
+func set_voice(text: String, muted: bool) -> void:
+	_mic.visible = true
+	_mic.text = "🔇" if muted else "🎙"
+	_voice_lbl.text = text
+
+
+func set_speaking(me: bool, other: bool) -> void:
+	var sb := StyleBoxFlat.new()
+	sb.set_corner_radius_all(10)
+	sb.bg_color = OK.darkened(0.3) if me else Color(0.12, 0.14, 0.17)
+	for st in ["normal", "hover", "pressed", "focus"]:
+		_mic.add_theme_stylebox_override(st, sb)
+	if other:
+		_voice_lbl.text = "🗣 الشريك يتكلّم…"
 
 
 func set_switch_visible(v: bool) -> void:

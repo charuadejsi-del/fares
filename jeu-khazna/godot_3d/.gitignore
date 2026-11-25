@@ -5,3 +5,7 @@ models/
 sounds/
 ph/
 *.log
+addons/godot_agora/bin/*.aar
+android/
+android_plugin/**/build/
+android_plugin/.gradle/

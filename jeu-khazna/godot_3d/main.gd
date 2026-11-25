@@ -31,6 +31,8 @@ var terminals: Array = []
 var feeds: Array = []
 var puzzle := {}
 var host_role := ""
+var room_code := ""
+var voice
 var started := false
 var seed_value := 0
 
@@ -263,12 +265,14 @@ func _host(r: String) -> void:
 	host_role = r
 	seed_value = randi() % 1000000
 	var code := str(randi_range(1000, 9999))
+	room_code = code
 	_net()
 	net.open(code)
 	menu.waiting(code, r)
 
 
 func _join(code: String) -> void:
+	room_code = code
 	_net()
 	net.open(code)
 	menu.show_info("جارٍ الانضمام إلى الغرفة %s…" % code)
@@ -358,6 +362,19 @@ func _start(r: String, s: int) -> void:
 	hud.loading(false)
 	ready_world = true
 	_intro()
+	# الصوت داخل اللعبة (أونلاين فقط)
+	if net and room_code != "":
+		voice = preload("res://voice.gd").new()
+		add_child(voice)
+		voice.status.connect(func(t): hud.set_voice(t, voice.muted))
+		voice.speaking.connect(func(me, other): hud.set_speaking(me, other))
+		hud.mic_pressed.connect(func():
+			voice.toggle_mute()
+			hud.set_voice("🔇 الميكروفون مكتوم" if voice.muted else "🎙 الميكروفون يعمل", voice.muted))
+		if voice.available:
+			voice.start(room_code)
+		else:
+			hud.set_voice("الصوت داخل اللعبة متاح على أندرويد — استعمل مكالمة هنا", false)
 
 
 func _intro() -> void:
