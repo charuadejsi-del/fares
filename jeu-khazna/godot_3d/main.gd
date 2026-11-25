@@ -68,6 +68,9 @@ var vault_bolts: Array = []
 var hint_light: OmniLight3D
 var hint_arrow: MeshInstance3D
 var _seer = null
+var shake := 0.0
+var vault_lamp: OmniLight3D
+var steam: CPUParticles3D
 var _prop_log: Array = []
 # الأصوات
 var s_amb: AudioStreamPlayer
@@ -105,11 +108,31 @@ func _ready() -> void:
 
 func _smoke() -> void:
 	await get_tree().create_timer(0.5).timeout
+	var space := get_world_3d().direct_space_state
+	var sh := SphereShape3D.new()
+	sh.radius = 0.25
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = sh
+	q.exclude = [agent.get_rid()]
+	var solid := true
+	for pnt in [Vector3(29.62, 1.2, 5), Vector3(29.9, 1.5, 3.7), Vector3(29.9, 1.5, 6.3), Vector3(29.9, 0.4, 4.0), Vector3(29.9, 2.6, 6.0), Vector3(29.62, 0.5, 5.6)]:
+		q.transform = Transform3D(Basis(), pnt)
+		if space.intersect_shape(q, 1).is_empty():
+			solid = false
+			print("SMOKE hole at ", pnt)
+	q.transform = Transform3D(Basis(), Vector3(28.6, 1.2, 5))
+	var front_free := space.intersect_shape(q, 1).is_empty()
+	if solid and front_free:
+		print("SMOKE vault solid ok")
 	_submit_code(str(puzzle.code))
 	_cut_wire(str(WIRES[int(puzzle.answer)][0]))
 	print("SMOKE stage after puzzles: ", stage)
 	print("SMOKE guard: ", guards[0].debug)
-	print("SMOKE pose: ", guards[0].pose_report())
+	await get_tree().create_timer(1.0).timeout
+	var pr := str(guards[0].pose_report())
+	print("SMOKE pose: ", pr)
+	if pr.contains("moved=true"):
+		print("SMOKE guard animated ok")
 	for pr in _prop_log:
 		print("SMOKE prop: ", pr)
 	await get_tree().create_timer(2.4).timeout
@@ -128,8 +151,8 @@ func _smoke() -> void:
 	for n in puzzle.combo:
 		dial_number = int(n)
 		_record_number()
-	await get_tree().create_timer(2.0).timeout
-	print("SMOKE final stage: ", stage, " escape: ", escape_left)
+	await get_tree().create_timer(3.5).timeout
+	print("SMOKE final stage: ", stage, " escape: ", escape_left, " door=", rad_to_deg(vault_pivot.rotation.y))
 	get_tree().quit()
 
 
@@ -543,10 +566,7 @@ func _props() -> void:
 	_prop("cardboard_box_01", Vector3(5.6, 0, 7.4))
 	_prop("cardboard_box_01", Vector3(6.3, 0, 7.5), 25)
 	_prop("cardboard_box_01", Vector3(17.6, 0, 9.4), -15, false)
-	_prop("steel_frame_shelves_01", Vector3(12.5, 0, 9.45), 0, false)
-	_prop("steel_frame_shelves_01", Vector3(2.6, 0, 0.55), 180, false)
 	_prop("korean_fire_extinguisher_01", Vector3(7.6, 0, 7.6), 0, false)
-	_prop("metal_trash_can", Vector3(9.0, 0, 0.6), 0, false)
 	_prop("power_box_01", Vector3(19.75, 1.1, 2.6), -90, false)
 	for c in [Vector3(0.6, 2.7, 0.6), Vector3(8.6, 2.7, 9.4), Vector3(20.6, 2.7, 0.6)]:
 		_prop("security_camera_01", c, 0, false)
@@ -748,7 +768,7 @@ func _build_building() -> void:
 	# إضاءة مخيفة: مصباح خافت، مصابيح ترتعش، ومصباح طوارئ أحمر
 	_lamp(Vector3(4, WALL_H, 4), Color(1.0, 0.82, 0.58), 1.0)
 	_lamp(Vector3(14, WALL_H, 5), Color(1.0, 0.86, 0.62), 1.2, true)
-	_lamp(Vector3(25, WALL_H, 5), Color(0.6, 0.75, 1.0), 0.8, true)
+	vault_lamp = _lamp(Vector3(25, WALL_H, 5), Color(0.6, 0.75, 1.0), 0.8, true)
 	var red := OmniLight3D.new()
 	red.position = Vector3(19.6, 2.6, 1.0)
 	red.light_color = Color(1.0, 0.12, 0.08)
@@ -851,6 +871,16 @@ func _build_vault() -> void:
 	hole.operation = CSGShape3D.OPERATION_SUBTRACTION
 	hole.rotation_degrees.z = 90
 	frame.add_child(hole)
+	# أجسام تصادم صريحة حول الفتحة: لا يمكن الدخول في الإطار أبداً
+	for bx in [[Vector3(29.9, 2.83, 5), Vector3(0.55, 0.34, 3.0)], [Vector3(29.9, 0.17, 5), Vector3(0.55, 0.34, 3.0)], [Vector3(29.9, 1.5, 3.67), Vector3(0.55, 2.4, 0.34)], [Vector3(29.9, 1.5, 6.33), Vector3(0.55, 2.4, 0.34)]]:
+		var sb := StaticBody3D.new()
+		var col := CollisionShape3D.new()
+		var bsh := BoxShape3D.new()
+		bsh.size = bx[1]
+		col.shape = bsh
+		sb.add_child(col)
+		sb.position = bx[0]
+		add_child(sb)
 	# براغي الإطار
 	for i in 16:
 		var a := i * TAU / 16.0
@@ -1014,6 +1044,36 @@ func _build_vault() -> void:
 		ball.material_override = mat_dark
 		ball.position = Vector3(0, cos(a) * 0.37, sin(a) * 0.37)
 		vault_wheel.add_child(ball)
+	# بخار يخرج من حواف الباب عند الفتح
+	steam = CPUParticles3D.new()
+	steam.position = Vector3(29.45, 1.5, 5)
+	steam.emitting = false
+	steam.one_shot = true
+	steam.explosiveness = 0.5
+	steam.amount = 140
+	steam.lifetime = 2.6
+	steam.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	steam.emission_ring_axis = Vector3(1, 0, 0)
+	steam.emission_ring_radius = 1.12
+	steam.emission_ring_inner_radius = 1.0
+	steam.emission_ring_height = 0.05
+	steam.direction = Vector3(-1, 0.2, 0)
+	steam.spread = 35
+	steam.gravity = Vector3(0, 0.35, 0)
+	steam.initial_velocity_min = 0.5
+	steam.initial_velocity_max = 1.3
+	steam.scale_amount_min = 0.6
+	steam.scale_amount_max = 1.6
+	var sq := QuadMesh.new()
+	sq.size = Vector2(0.35, 0.35)
+	var smat := StandardMaterial3D.new()
+	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	smat.albedo_color = Color(0.9, 0.92, 0.95, 0.18)
+	smat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	sq.material = smat
+	steam.mesh = sq
+	add_child(steam)
 	var light := SpotLight3D.new()
 	add_child(light)
 	light.look_at_from_position(Vector3(26.5, 3.0, 5), Vector3(29.8, 1.3, 5))
@@ -1027,11 +1087,11 @@ func _build_vault() -> void:
 func _spawn_guards() -> void:
 	var g = preload("res://guard.gd").new()
 	add_child(g)
-	g.setup([Vector3(9.5, 0, 8.6), Vector3(18.5, 0, 8.6), Vector3(18.5, 0, 1.3), Vector3(9.5, 0, 1.3)], 1.25)
+	g.setup([Vector3(9.5, 0, 8.6), Vector3(18.5, 0, 8.6), Vector3(18.5, 0, 1.3), Vector3(9.5, 0, 1.3)], 1.25, Rect2(8.5, 0.5, 11.0, 9.0))
 	guards.append(g)
 	var g2 = preload("res://guard.gd").new()
 	add_child(g2)
-	g2.setup([Vector3(22, 0, 8.2), Vector3(27.2, 0, 8.2), Vector3(27.2, 0, 1.6), Vector3(22, 0, 1.6)], 1.0)
+	g2.setup([Vector3(22, 0, 8.2), Vector3(27.2, 0, 8.2), Vector3(27.2, 0, 1.6), Vector3(22, 0, 1.6)], 1.0, Rect2(20.5, 0.5, 8.6, 9.0))
 	guards.append(g2)
 
 
@@ -1262,6 +1322,16 @@ func _process(delta: float) -> void:
 	_hint_update(t)
 	_audio_update(delta)
 	if agent:
+		var cam: Camera3D = agent.cam
+		if shake > 0.0 and active == agent:
+			shake = maxf(0.0, shake - delta)
+			var k := minf(shake, 1.0) * 0.06
+			cam.h_offset = randf_range(-k, k)
+			cam.v_offset = randf_range(-k, k)
+		else:
+			cam.h_offset = 0.0
+			cam.v_offset = 0.0
+	if agent:
 		_agent_logic(delta, t)
 	if analyst and active == analyst:
 		_analyst_logic()
@@ -1304,6 +1374,9 @@ func _audio_update(delta: float) -> void:
 	for g in guards:
 		near = minf(near, (g.global_position as Vector3).distance_to(agent.global_position))
 	var danger := clampf(maxf(seen_time / 0.6, (6.0 - near) / 4.0), 0.0, 1.0)
+	for g in guards:
+		if g.is_chasing():
+			danger = 1.0
 	if s_heart.stream:
 		if danger > 0.05 and not s_heart.playing:
 			s_heart.play()
@@ -1329,15 +1402,29 @@ func _agent_logic(delta: float, t: float) -> void:
 	var seen := false
 	_seer = null
 	for g in guards:
-		var sees_now: bool = g.sees(agent, space)
+		var sees_now: bool = invuln <= 0.0 and g.sees(agent, space)
+		g.saw = sees_now
 		if sees_now:
 			seen = true
 			_seer = g
-		g.set_alert(sees_now and seen_time > 0.15, agent.global_position)
-	if seen and invuln <= 0.0:
-		seen_time += delta * (1.6 if (active == agent and hud.panel_open()) or vault_mode else 1.0)
-		if seen_time > 0.6:
+		if not g.is_chasing():
+			g.set_alert(sees_now and seen_time > 0.15, agent.global_position)
+		# أمسكه الحارس
+		elif invuln <= 0.0 and (g.global_position as Vector3).distance_to(agent.global_position) < 1.15:
+			_seer = g
 			_spotted()
+			return
+	if seen:
+		seen_time += delta * (1.6 if (active == agent and hud.panel_open()) or vault_mode else 1.0)
+		if seen_time > 0.6 and _seer and not _seer.is_chasing():
+			_seer.chase(agent)
+			seen_time = 0.6
+			if active == agent:
+				hud.flash("🏃 رآك الحارس! اهرب واختبئ خلف الصناديق", Color(0.9, 0.28, 0.3))
+				hud.hit()
+				hud.close_panel()
+			if vault_mode:
+				_exit_vault()
 	else:
 		seen_time = maxf(0.0, seen_time - delta * 2.0)
 	if active == agent:
@@ -1485,7 +1572,6 @@ func _apply_stage() -> void:
 			tw.tween_property(d.body, "position:y", WALL_H * 1.5, 1.8).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	if stage >= 3 and _applied_stage < 3:
 		_open_vault_door()
-		_alarm()
 	if stage != _applied_stage:
 		_applied_stage = stage
 		_update_objective()
@@ -1541,13 +1627,24 @@ func _record_number() -> void:
 		return
 	if dial_entered == puzzle.combo:
 		hud.flash("✔ التركيبة صحيحة", Color(0.42, 0.85, 0.58))
-		var tw := create_tween()
-		tw.tween_property(vault_wheel, "rotation:x", vault_wheel.rotation.x + TAU, 1.4).set_trans(Tween.TRANS_CUBIC)
-		tw.tween_callback(_vault_opened)
+		_spin_wheel()
 	else:
 		hud.flash("✖ تركيبة خاطئة", Color(0.9, 0.28, 0.3))
 		hud.hit()
 		dial_entered = []
+
+
+func _spin_wheel() -> void:
+	# المقبض يدور ثقيلاً مع طقطقات، ثم تبدأ لحظة الفتح
+	var tw := create_tween()
+	tw.tween_property(vault_wheel, "rotation:x", vault_wheel.rotation.x + TAU * 1.5, 2.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	for i in 8:
+		await get_tree().create_timer(0.24).timeout
+		if s_click.stream:
+			s_click.play()
+		shake = 0.12
+	await tw.finished
+	_vault_opened()
 
 
 func _vault_opened() -> void:
@@ -1559,16 +1656,30 @@ func _vault_opened() -> void:
 
 
 func _open_vault_door() -> void:
-	if s_vault.stream:
-		s_vault.play()
-	var tw := create_tween()
-	tw.set_parallel(true)
+	# ١) الأقفال تنسحب واحداً بعد الآخر ٢) الأضواء ترتعش وتنطفئ ٣) بخار واهتزاز ٤) الباب الثقيل ينفتح ٥) الإنذار
 	for b in vault_bolts:
 		var a: float = b[1]
-		tw.tween_property(b[0], "position", Vector3(0, cos(a) * 0.86, sin(a) * 0.86), 0.7).set_trans(Tween.TRANS_BACK)
-	tw.set_parallel(false)
-	tw.tween_interval(0.2)
-	tw.tween_property(vault_pivot, "rotation:y", deg_to_rad(-100), 3.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		var t1 := create_tween()
+		t1.tween_property(b[0], "position", Vector3(0, cos(a) * 0.86, sin(a) * 0.86), 0.25).set_trans(Tween.TRANS_BACK)
+		if s_click.stream:
+			s_click.play()
+		shake = 0.1
+		await get_tree().create_timer(0.14).timeout
+	flickers.erase(vault_lamp)
+	for k in 6:
+		vault_lamp.light_energy = 0.05 if k % 2 == 0 else 1.0
+		await get_tree().create_timer(0.09).timeout
+	vault_lamp.light_energy = 0.0
+	await get_tree().create_timer(0.6).timeout
+	if s_vault.stream:
+		s_vault.play()
+	steam.restart()
+	steam.emitting = true
+	shake = 1.2
+	var tw := create_tween()
+	tw.tween_property(vault_pivot, "rotation:y", deg_to_rad(-100), 3.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await get_tree().create_timer(1.2).timeout
+	_alarm()
 
 
 func _alarm() -> void:
@@ -1578,6 +1689,8 @@ func _alarm() -> void:
 	for g in guards:
 		g.speed *= 1.6
 		g.alarm = true
+		if agent and g.sees(agent, get_world_3d().direct_space_state):
+			g.chase(agent)
 	for c in [Vector3(4, WALL_H - 0.2, 4), Vector3(14, WALL_H - 0.2, 5), Vector3(25, WALL_H - 0.2, 5), ARCHIVE + Vector3(5, WALL_H - 0.2, 4)]:
 		for k in 2:
 			var s := SpotLight3D.new()
@@ -1597,9 +1710,10 @@ func _spotted() -> void:
 		_seer.attack()
 	invuln = 2.5
 	if active == agent:
-		hud.flash("👁 رآك الحارس!", Color(0.9, 0.28, 0.3))
+		hud.flash("⛓ أمسك بك الحارس!", Color(0.9, 0.28, 0.3))
 		hud.hit()
 		hud.close_panel()
+	shake = 0.5
 	if vault_mode:
 		_exit_vault()
 	if stage >= 3:

@@ -51,6 +51,8 @@ jobs:
         run: |
           KHAZNA_SMOKE=1 timeout 120 godot --headless --path . > run.log 2>&1 || true
           grep -v "Parameter \"m\" is null\|mesh_storage.h" run.log | tail -60
+          grep -q "SMOKE vault solid ok" run.log || { echo "يمكن الدخول في الخزنة"; exit 1; }
+          grep -q "SMOKE guard animated ok" run.log || { echo "الحارس لا يتحرّك"; exit 1; }
           grep -q "SMOKE reach ok" run.log || { echo "العميل لا يستطيع الوصول إلى كل الأهداف"; exit 1; }
           grep -q "SMOKE final stage: 3" run.log || { echo "اختبار الألغاز لم يصل إلى الهروب"; exit 1; }
           if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Invalid (call|get|set)" run.log; then exit 1; fi

@@ -17,6 +17,11 @@ var _alert_target := Vector3.ZERO
 var _rng := RandomNumberGenerator.new()
 var debug := ""
 var _skel: Skeleton3D
+var bounds := Rect2() # حدود غرفته (x، z): لا يخرج منها أثناء المطاردة
+var saw := false # يضبطها المشهد كل إطار: هل يرى العميل الآن؟
+var _target: Node3D
+var _lost := 0.0
+const CHASE_SPEED := 2.75
 
 const RANGE := 7.5
 const HALF_ANGLE := 32.0
@@ -31,9 +36,10 @@ const CLIPS := {
 const LOOPED := ["walk", "idle_sweat", "idle_bugs", "alert", "back"]
 
 
-func setup(points: Array, spd: float) -> void:
+func setup(points: Array, spd: float, room: Rect2) -> void:
 	path = points
 	speed = spd
+	bounds = room
 	position = points[0]
 	if points.size() > 1:
 		var d: Vector3 = points[1] - points[0]
@@ -149,7 +155,8 @@ func pose_report() -> String:
 		b = 1
 	var pose := _skel.get_bone_pose_rotation(b)
 	var rest := _skel.get_bone_rest(b).basis.get_rotation_quaternion()
-	return "bone %s posed=%s rest=%s playing=%s anim=%s" % [_skel.get_bone_name(b), pose, rest, _anim.is_playing() if _anim else false, _anim.current_animation if _anim else ""]
+	var moved := pose.angle_to(rest) > 0.05
+	return "bone %s moved=%s anim=%s" % [_skel.get_bone_name(b), moved, _anim.current_animation if _anim else ""]
 
 
 func _first_anim(res_path: String) -> Animation:
@@ -162,10 +169,18 @@ func _first_anim(res_path: String) -> Animation:
 	var ap := _find(inst, "AnimationPlayer") as AnimationPlayer
 	var out: Animation = null
 	if ap:
+		# «mixamo_com» هي الحركة الحقيقية؛ وإلا الأطول (لا «Take 001» الثابتة ولا RESET)
+		var best_len := -1.0
 		for n in ap.get_animation_list():
-			if str(n) != "RESET":
-				out = ap.get_animation(n)
+			if str(n) == "RESET":
+				continue
+			var cand := ap.get_animation(n)
+			if str(n) == "mixamo_com":
+				out = cand
 				break
+			if cand.length > best_len:
+				best_len = cand.length
+				out = cand
 	inst.free()
 	return out
 
@@ -228,6 +243,19 @@ func set_alert(on: bool, target: Vector3) -> void:
 		_state = "walk"
 
 
+func chase(target: Node3D) -> void:
+	if _state == "attack":
+		return
+	_state = "chase"
+	_target = target
+	_lost = 0.0
+	_light.light_color = Color(1.0, 0.45, 0.35)
+
+
+func is_chasing() -> bool:
+	return _state == "chase"
+
+
 func attack() -> void:
 	_state = "attack"
 	_wait = 1.6
@@ -246,6 +274,16 @@ func _process(delta: float) -> void:
 			_radio.play()
 
 	match _state:
+		"chase":
+			_chase(delta)
+		"search":
+			_steps_on(false)
+			_play("alert")
+			rotation.y += delta * 1.2
+			_wait -= delta
+			if _wait <= 0.0:
+				_state = "walk"
+				_light.light_color = Color(1.0, 0.92, 0.7)
 		"attack":
 			_wait -= delta
 			_steps_on(false)
@@ -286,6 +324,47 @@ func _walk(delta: float) -> void:
 	rotation.y = lerp_angle(rotation.y, atan2(-to.x, -to.z), minf(1.0, delta * 5.0))
 	if _anim:
 		_anim.speed_scale = clampf(speed / 1.25, 0.7, 1.8)
+
+
+func _chase(delta: float) -> void:
+	if _target == null:
+		_state = "walk"
+		return
+	var to := _target.global_position - position
+	to.y = 0.0
+	_play("walk", 0.15)
+	_steps_on(true)
+	if _anim:
+		_anim.speed_scale = 2.1
+	if to.length() > 0.9:
+		_move_safe(to.normalized() * CHASE_SPEED * (1.2 if alarm else 1.0) * delta)
+	if to.length() > 0.05:
+		rotation.y = lerp_angle(rotation.y, atan2(-to.x, -to.z), minf(1.0, delta * 8.0))
+	# فقد أثره: 3 ثوانٍ دون أن يراه ← يبحث قليلاً ثم يعود إلى دوريّته
+	_lost = 0.0 if saw else _lost + delta
+	if _lost > 3.0:
+		_state = "search"
+		_wait = 3.0
+
+
+## يتحرّك دون اختراق الصناديق والجدران، ودون الخروج من غرفته.
+func _move_safe(step: Vector3) -> void:
+	var space := get_world_3d().direct_space_state
+	var sh := SphereShape3D.new()
+	sh.radius = 0.3
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = sh
+	if _target is CollisionObject3D:
+		q.exclude = [(_target as CollisionObject3D).get_rid()]
+	for cand in [step, Vector3(step.x, 0, 0), Vector3(0, 0, step.z)]:
+		var np: Vector3 = position + cand
+		if bounds.size != Vector2.ZERO:
+			np.x = clampf(np.x, bounds.position.x, bounds.end.x)
+			np.z = clampf(np.z, bounds.position.y, bounds.end.y)
+		q.transform = Transform3D(Basis(), np + Vector3(0, 0.9, 0))
+		if space.intersect_shape(q, 1).is_empty():
+			position = np
+			return
 
 
 func _steps_on(on: bool) -> void:
