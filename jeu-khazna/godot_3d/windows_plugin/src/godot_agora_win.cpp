@@ -114,7 +114,7 @@ void GodotAgoraWin::mute(bool m) {
 void GodotAgoraWin::leave() {
 	if (engine != nullptr) {
 		engine->leaveChannel();
-		engine->release(true);
+		engine->release();
 		engine = nullptr;
 	}
 	if (handler != nullptr) {
