@@ -2039,20 +2039,25 @@ func _tutorial_update(delta: float) -> void:
 		return
 	_tut_moved += Vector2(agent.velocity.x, agent.velocity.z).length() * delta
 	if _tut == 0:
-		tip = "١. حرّك العصا اليسرى للمشي، واسحب يمين الشاشة لتلتفت (على الحاسوب: WASD والفأرة)"
+		tip = "١. حرّك العصا اليسرى للمشي، واسحب يمين الشاشة لتدير الكاميرا. زرّ 🏃 للركض (لكنه يُسمع)"
 		if _tut_moved > 3.0:
 			_tut = 1
 	if _tut == 1 and stage == 0:
-		if p.x < 5.8:
-			tip = "٢. 🔴 أمامك ليزر عالٍ! اضغط «🧎 انحنِ» (أو C) ومُرّ تحته ببطء" if p.x > 2.6 else "٢. تقدّم نحو الليزر الأحمر"
+		var g0 = guards[0] if guards.size() > 0 else null
+		if p.x < 5.8 and p.x > 2.6 and not has_card:
+			tip = "٢. 🔴 ليزر عالٍ! اضغط «🧎 انحنِ» ومُرّ تحته ببطء"
+		elif g0 and not g0.ko and not has_card:
+			tip = "٣. الحارس يحمل بطاقة الدخول 💳 (المخروط الأبيض = ما يراه). اقترب من خلفه: 🤏 اسرق البطاقة، أو 👊 أسقطه"
+		elif g0 and g0.ko and not g0.hidden:
+			tip = "٤. أخفِ الجسم قبل أن يُرى: 👕 خذ بدلته (تنكّر)، ثم 🫳 اسحبه إلى 📦 الخزانة"
 		else:
-			tip = "٣. ممتاز! قِف واذهب إلى الجهاز (السهم البرتقالي). الرمز ليس عندك: اضغط «👁 بدّل الدور» لتصبح المحلّل"
+			tip = "٥. اذهب إلى الجهاز (السهم البرتقالي) ومرّر البطاقة — أو بدّل الدور 👁 واخترق الباب من جهاز المحلّل"
 	elif stage == 1:
-		tip = "٤. 📹 كاميرا في الغرفة التالية: ابقَ خارج المخروط الأحمر، أو انحنِ وراء الصناديق. عدّاد أحمر = تراك"
+		tip = "٦. 🛂 نقطة التفتيش: بزيّ الحارس تمرّ. 📹 كاميرا في الطريق: ابقَ خارج المخروط الأحمر. جرّب 👁 الحاسّة و🥫 رمي علبة"
 	elif stage == 2:
-		tip = "٥. صِف رموز باب الخزنة (أو بدّل الدور وأدخلها في الحاسوب)، ثم أدِر القرص على التركيبة"
+		tip = "٧. صِف رموز باب الخزنة للمحلّل (أو بدّل الدور وأدخلها في الحاسوب)، أدِر القرص، ثم اضغطا معاً في القفل الزمني"
 	elif stage >= 3:
-		tip = "٦. 🚨 اهرب إلى نقطة البداية! لا تنسَ الانحناء تحت الليزر"
+		tip = "٨. 🚨 اهرب إلى نقطة البداية! انحنِ تحت الليزر"
 	hud.set_tip(tip)
 
 
@@ -3252,6 +3257,10 @@ func _agent_logic(delta: float, t: float) -> void:
 	if stage >= 3:
 		hud.show_interact("قاطع الليزر" if _near_kill() and _laser_off() <= 0.0 else "")
 		if agent.global_position.distance_to(SPAWN) < 1.4:
+			if escape_left < 10.0 and OS.get_environment("KHAZNA_SMOKE") != "1":
+				# نجاة في آخر لحظة: حركة بطيئة قصيرة
+				Engine.time_scale = 0.3
+				get_tree().create_timer(0.35, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
 			_end(true)
 		return
 	if _near_kill():

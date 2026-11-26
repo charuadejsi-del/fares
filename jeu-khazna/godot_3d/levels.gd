@@ -11,8 +11,8 @@ static var pending := -1 # «المرحلة التالية» بعد الفوز: 
 # cams: [موضع الكاميرا، الاتجاه بالدرجات (0 = تنظر نحو −z، 180 = نحو +z)، زاوية المسح، مدّة الدورة]
 const LIST := [
 	{
-		"id": "tutorial", "name": "التدريب", "sub": "تعلّم الحركة والانحناء والكاميرات — وحدك",
-		"theme": "port", "mission": 900.0, "guard_speed": 0.7, "guard_sight": 0.75, "extra_guard": false, "solo_only": true,
+		"id": "tutorial", "name": "التدريب", "sub": "تعلّم: الانحناء، سرقة البطاقة، الإسقاط والإخفاء، التنكّر، والرمي — وحدك",
+		"theme": "port", "mission": 900.0, "guard_speed": 0.7, "guard_sight": 0.75, "extra_guard": false, "solo_only": true, "sync": true,
 		"lasers": [[5.0, 0.2, 7.8, "static", [1.35, 1.6], 0.0]],
 		"cams": [[Vector3(14.0, 2.85, 0.25), 180.0, 45.0, 9.0]],
 		"killswitch": false,
