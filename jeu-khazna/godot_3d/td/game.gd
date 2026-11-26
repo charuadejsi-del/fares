@@ -1595,7 +1595,7 @@ func _shot(n: String) -> void:
 		dir = "user://shots"
 	DirAccess.make_dir_recursive_absolute(dir)
 	var img := get_viewport().get_texture().get_image()
-	img.save_png(dir.path_join(n + ".png"))
+	img.save_jpg(dir.path_join(n + ".jpg"), 0.82)
 	print("SHOT ", n)
 
 

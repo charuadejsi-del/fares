@@ -197,17 +197,26 @@ jobs:
         continue-on-error: true
         run: |
           (command -v xvfb-run >/dev/null) || (apt-get update -qq && apt-get install -y -qq xvfb libgl1 libgl1-mesa-dri libglu1-mesa >/dev/null)
-          mkdir -p shots
-          KHAZNA_SHOT=1 KHAZNA_SHOT_DIR=$PWD/shots timeout 200 xvfb-run -a -s "-screen 0 1776x800x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --resolution 1776x800 --path . > shot.log 2>&1 || true
+          mkdir -p /tmp/shots
+          KHAZNA_SHOT=1 KHAZNA_SHOT_DIR=/tmp/shots timeout 200 xvfb-run -a -s "-screen 0 1776x800x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --resolution 1776x800 --path . > shot.log 2>&1 || true
           grep -E "SHOT|SMOKE|ERROR" shot.log | head -60
-          ls -la shots
+          ls -la /tmp/shots
 
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: shots
-          path: jeu-khazna/godot_3d/shots/*.png
-          if-no-files-found: ignore
+      - name: نشر اللقطات للمراجعة (مجلّد review_shots في نفس الفرع)
+        continue-on-error: true
+        working-directory: .
+        run: |
+          ls /tmp/shots/*.jpg >/dev/null 2>&1 || exit 0
+          git config --global --add safe.directory "$PWD"
+          git config user.name "khazna-ci"
+          git config user.email "ci@users.noreply.github.com"
+          git fetch -q origin jeu-khazna
+          git checkout -q -B shots-tmp origin/jeu-khazna
+          rm -rf jeu-khazna/review_shots && mkdir -p jeu-khazna/review_shots
+          cp /tmp/shots/*.jpg jeu-khazna/review_shots/
+          git add -A jeu-khazna/review_shots
+          git commit -qm "لقطات المراجعة — بناء ${{ github.run_number }} [skip ci]" && git push -q origin HEAD:jeu-khazna
+          git checkout -q ${{ github.sha }}
 
       - name: بناء أندرويد
         env:
