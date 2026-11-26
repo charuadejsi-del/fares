@@ -98,12 +98,12 @@ func _ready() -> void:
 	_goal.offset_top = 10
 	_goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(_goal)
-	_status = _label("", 18, Color(0.6, 0.85, 0.65))
+	_status = _label("", 17, Color(0.6, 0.85, 0.65))
 	_status.offset_left = 16
-	_status.offset_top = 18
+	_status.offset_top = 70
 	root.add_child(_status)
 
-	_switch = _button("🔁 بدّل الدور", func(): switch_pressed.emit())
+	_switch = _button("بدّل الدور", func(): switch_pressed.emit())
 	_switch.anchor_left = 1.0
 	_switch.anchor_right = 1.0
 	_switch.offset_left = -220
@@ -112,10 +112,10 @@ func _ready() -> void:
 	_switch.offset_bottom = 58
 	_switch.visible = false
 	root.add_child(_switch)
-	_mic = _button("🎙", func(): mic_pressed.emit())
+	_mic = _button("الميكروفون", func(): mic_pressed.emit())
 	_mic.anchor_left = 1.0
 	_mic.anchor_right = 1.0
-	_mic.offset_left = -300
+	_mic.offset_left = -390
 	_mic.offset_right = -230
 	_mic.offset_top = 8
 	_mic.offset_bottom = 58
@@ -387,14 +387,14 @@ func _build_analyst() -> void:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	_apanel.add_child(v)
-	v.add_child(_label("🖥️ غرفة المحلّل", 26, Color(0.91, 0.63, 0.23)))
+	v.add_child(_label("غرفة المحلّل", 26, Color(0.91, 0.63, 0.23)))
 	_acode = _label("", 30, Color(0.45, 0.95, 0.6))
 	v.add_child(_acode)
 	_ainfo = _label("", 19, Color(0.82, 0.84, 0.86))
 	_ainfo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_ainfo.custom_minimum_size = Vector2(290, 0)
 	v.add_child(_ainfo)
-	for k in [["distract", "📻 تشتيت حارس"], ["loop", "📷 تعطيل الكاميرا"], ["door", "🚪 باب الخزنة"]]:
+	for k in [["distract", "تشتيت حارس"], ["loop", "تعطيل الكاميرا"], ["door", "باب الخزنة"]]:
 		var kind := str(k[0])
 		var b := _button(str(k[1]), func(): tool_pressed.emit(kind), 22)
 		b.custom_minimum_size = Vector2(0, 56)

@@ -37,8 +37,8 @@ func _ready() -> void:
 	_box.add_child(_title("الخزنة", 64, Color(0.91, 0.63, 0.23)))
 	_box.add_child(_title("عميل يتسلّل · محلّل يرى كلّ شيء · خزنة لا تُفتح إلا معاً", 22, Color(0.64, 0.67, 0.7)))
 	_box.add_child(_levels_row())
-	_box.add_child(_btn("🕵️  إنشاء غرفة — أنا العميل", func(): _host_if_ok("agent")))
-	_box.add_child(_btn("🖥️  إنشاء غرفة — أنا المحلّل", func(): _host_if_ok("analyst")))
+	_box.add_child(_btn("إنشاء غرفة — أنا العميل", func(): _host_if_ok("agent")))
+	_box.add_child(_btn("إنشاء غرفة — أنا المحلّل", func(): _host_if_ok("analyst")))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	_code = LineEdit.new()
@@ -54,7 +54,7 @@ func _ready() -> void:
 	jb.custom_minimum_size = Vector2(200, 72)
 	row.add_child(jb)
 	_box.add_child(row)
-	_box.add_child(_btn("🎮  تجربة وحدي (أبدّل بين الدورين)", func(): solo.emit()))
+	_box.add_child(_btn("العب وحدك (تبدّل بين الدورين)", func(): solo.emit()))
 	_quality = _btn("", func():
 		Levels.set_low_quality(not Levels.low_quality())
 		_quality_text())
@@ -82,7 +82,7 @@ func _levels_row() -> Control:
 		var lv: Dictionary = Levels.get_level(i)
 		var locked: bool = i > top
 		var b := Button.new()
-		b.text = ("🔒 " if locked else "") + str(lv.name)
+		b.text = ("(مقفلة) " if locked else "") + str(lv.name)
 		b.disabled = locked
 		b.toggle_mode = true
 		b.custom_minimum_size = Vector2(150, 58)
@@ -96,7 +96,7 @@ func _levels_row() -> Control:
 
 
 func _quality_text() -> void:
-	_quality.text = "⚙ الجودة: منخفضة (أسرع للهواتف الضعيفة)" if Levels.low_quality() else "⚙ الجودة: عالية (ظلال وتوهّج كاملان)"
+	_quality.text = "الجودة: منخفضة (أسرع للهواتف الضعيفة)" if Levels.low_quality() else "الجودة: عالية (ظلال وتوهّج كاملان)"
 
 
 func _pick(i: int) -> void:

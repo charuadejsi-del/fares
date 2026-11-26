@@ -11,7 +11,7 @@ const Levels := preload("res://levels.gd")
 
 const WALL_VIS := 1.7 # ارتفاع الجدار المرئي (منخفض حتى لا يحجب الكاميرا)
 const WALL_COL := 3.0 # ارتفاع التصادم (يحجب الرؤية والحركة)
-const CAM_OFF := Vector3(0, 14.5, 8.0)
+const CAM_OFF := Vector3(0, 16.0, 8.8)
 const LAYER_MOVE := 1
 const LAYER_SIGHT := 2
 
@@ -249,7 +249,7 @@ func _wire_ui() -> void:
 		get_tree().reload_current_scene())
 	ui.set_switch_visible(role == "solo")
 	ui.set_code(code)
-	ui.set_status("وضع فردي — اضغط «بدّل الدور» لترى شاشة المحلّل" if role == "solo" else "")
+	ui.set_status("وضع فردي" if role == "solo" else "")
 
 
 func _start_voice() -> void:
@@ -258,9 +258,9 @@ func _start_voice() -> void:
 	voice.status.connect(func(t): ui.set_status(t))
 	ui.mic_pressed.connect(func():
 		voice.toggle_mute()
-		ui.set_mic("🔇" if voice.muted else "🎙"))
+		ui.set_mic("صامت" if voice.muted else "الميكروفون"))
 	if voice.available:
-		ui.set_mic("🎙")
+		ui.set_mic("الميكروفون")
 		voice.start(room_code)
 	else:
 		ui.set_status("الصوت داخل اللعبة يعمل على أندرويد وويندوز — أو استعمل مكالمة هاتفية")
@@ -280,9 +280,9 @@ func _materials() -> void:
 	mats.floor_office = _pbr("concrete_floor_01", Color(0.42, 0.45, 0.5), 2.0, Color(0.75, 0.8, 0.9))
 	mats.floor_vault = _pbr("metal_plate", Color(0.45, 0.47, 0.5), 1.5, Color(0.85, 0.87, 0.9))
 	mats.floor_vault.metallic = 0.6
-	mats.wall = _pbr("factory_wall", Color(0.62, 0.6, 0.56), 2.5, Color(0.92, 0.9, 0.86))
-	mats.wall_out = _pbr("corrugated_iron_02", Color(0.4, 0.45, 0.48), 2.0, Color(0.7, 0.78, 0.82))
-	mats.cap = _flat(Color(0.12, 0.13, 0.15), 0.8)
+	mats.wall = _pbr("concrete_wall_008", Color(0.62, 0.6, 0.56), 2.5, Color(0.86, 0.84, 0.8))
+	mats.wall_out = _pbr("corrugated_iron_02", Color(0.4, 0.45, 0.48), 2.0, Color(0.55, 0.6, 0.66))
+	mats.cap = _flat(Color(0.17, 0.19, 0.22), 0.8)
 	mats.crate = _pbr("brown_planks_04", Color(0.55, 0.38, 0.22), 1.0, Color(1.0, 0.92, 0.8))
 	mats.steel = _pbr("metal_plate_02", Color(0.5, 0.53, 0.56), 1.2, Color(0.9, 0.92, 0.95))
 	mats.steel.metallic = 0.7
@@ -393,7 +393,7 @@ func _build_level() -> void:
 	var h := L.height()
 	var T := L.TILE
 	# أرض خارج المبنى
-	_box(Vector3(w * T * 0.5, -0.06, h * T * 0.5), Vector3(w * T + 30, 0.1, h * T + 30), mats.ground)
+	_box(Vector3(w * T * 0.5, -0.06, h * T * 0.5), Vector3(w * T + 120, 0.1, h * T + 80), mats.ground)
 	# أرضيات الغرف
 	for rm in L.ROOMS:
 		var rc: Rect2i = rm[1]
@@ -403,8 +403,9 @@ func _build_level() -> void:
 		if role != "agent":
 			var lb := Label3D.new()
 			lb.text = str(rm[0])
-			lb.font_size = 72
-			lb.outline_size = 14
+			lb.font_size = 64
+			lb.pixel_size = 0.012
+			lb.outline_size = 12
 			lb.modulate = Color(1, 1, 1, 0.55)
 			lb.rotation_degrees.x = -90
 			lb.position = Vector3((rc.position.x + rc.size.x * 0.5) * T, 0.08, (rc.position.y + rc.size.y - 0.4) * T)
@@ -568,7 +569,7 @@ func set_door(open: bool) -> void:
 	mi.material_override = _glow(Color(0.2, 1.0, 0.4) if open else Color(1, 0.2, 0.1), 2.0)
 	if s_door and s_door.stream:
 		s_door.play()
-	ui.set_tool("door", "🚪 أغلق باب الخزنة" if open else "🚪 افتح باب الخزنة", true)
+	ui.set_tool("door", "أغلق باب الخزنة" if open else "افتح باب الخزنة", true)
 
 
 func _glow(c: Color, e: float) -> StandardMaterial3D:
@@ -631,8 +632,6 @@ func _aabb(n: Node3D) -> AABB:
 func _build_props() -> void:
 	# لمسات: رفوف على جدران المستودع، صناديق كرتون، طفّايات، صندوق كهرباء، سلّة مهملات
 	var T := L.TILE
-	for x in [11.5, 14.5, 17.5]:
-		_prop("steel_frame_shelves_01", Vector3(x * T, 0, 13.65 * T), 0.0, false)
 	_prop("cardboard_box_01", Vector3(19.4 * T, 0, 6.5 * T), 20.0)
 	_prop("cardboard_box_01", Vector3(19.7 * T, 0, 7.0 * T), -15.0)
 	_prop("korean_fire_extinguisher_01", Vector3(9.75 * T, 0, 6.3 * T), 90.0)
@@ -1433,16 +1432,16 @@ func _refresh_tools_tick() -> void:
 	if ui == null or view != "analyst":
 		return
 	if loop_left > 0.0:
-		ui.set_tool("loop", "📷 الكاميرا معطّلة: %d ث" % int(ceil(loop_left)), false)
+		ui.set_tool("loop", "الكاميرا معطّلة: %d ث" % int(ceil(loop_left)), false)
 	elif loop_cd > 0.0:
-		ui.set_tool("loop", "📷 جاهزة بعد %d ث" % int(ceil(loop_cd)), false)
+		ui.set_tool("loop", "الكاميرا جاهزة بعد %d ث" % int(ceil(loop_cd)), false)
 	else:
-		ui.set_tool("loop", "📷 تعطيل الكاميرا", true)
+		ui.set_tool("loop", "تعطيل الكاميرا 20 ث", true)
 	if distract_cd > 0.0:
-		ui.set_tool("distract", "📻 جاهز بعد %d ث" % int(ceil(distract_cd)), false)
+		ui.set_tool("distract", "التشتيت جاهز بعد %d ث" % int(ceil(distract_cd)), false)
 	else:
-		ui.set_tool("distract", "📻 اضغط هنا ثم على مكان" if distract_mode else "📻 تشتيت حارس", true)
-	ui.set_tool("door", "🚪 أغلق باب الخزنة" if bool(door_r.open) else "🚪 افتح باب الخزنة", true)
+		ui.set_tool("distract", "اضغط الآن على مكان في الخريطة" if distract_mode else "تشتيت حارس", true)
+	ui.set_tool("door", "أغلق باب الخزنة" if bool(door_r.open) else "افتح باب الخزنة", true)
 
 
 # ───────── المزامنة ─────────
