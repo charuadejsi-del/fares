@@ -34,8 +34,8 @@ func _ready() -> void:
 	_box.custom_minimum_size = Vector2(520, 0)
 	center.add_child(_box)
 
-	_box.add_child(_title("الخزنة 3D", 64, Color(0.91, 0.63, 0.23)))
-	_box.add_child(_title("عميل يتسلّل · محلّل يبحث · خزنة لا تُفتح إلا معاً", 22, Color(0.64, 0.67, 0.7)))
+	_box.add_child(_title("الخزنة", 64, Color(0.91, 0.63, 0.23)))
+	_box.add_child(_title("عميل يتسلّل · محلّل يرى كلّ شيء · خزنة لا تُفتح إلا معاً", 22, Color(0.64, 0.67, 0.7)))
 	_box.add_child(_levels_row())
 	_box.add_child(_btn("🕵️  إنشاء غرفة — أنا العميل", func(): _host_if_ok("agent")))
 	_box.add_child(_btn("🖥️  إنشاء غرفة — أنا المحلّل", func(): _host_if_ok("analyst")))

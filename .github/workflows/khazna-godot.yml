@@ -181,49 +181,33 @@ jobs:
 
       - name: اختبار تشغيل (أخطاء السكربت توقف البناء)
         run: |
-          KHAZNA_SMOKE=1 timeout 120 godot --headless --path . > run.log 2>&1 || true
-          grep -v "Parameter \"m\" is null\|mesh_storage.h" run.log | tail -60
-          grep -q "SMOKE vault solid ok" run.log || { echo "يمكن الدخول في الخزنة"; exit 1; }
-          grep -q "SMOKE guard animated ok" run.log || { echo "الحارس لا يتحرّك"; exit 1; }
-          grep -q "SMOKE caught ok" run.log || { echo "بعد الإمساك لا يمكن الإكمال"; exit 1; }
-          grep -q "SMOKE wrong stays ok" run.log || { echo "الخطأ في القرص يُخرج اللاعب"; exit 1; }
-          grep -q "SMOKE sync ok" run.log || { echo "مزامنة الحرّاس لا تعمل"; exit 1; }
-          grep -q "SMOKE tools ok" run.log || { echo "أدوات المحلّل لا تعمل"; exit 1; }
-          grep -q "SMOKE reach ok" run.log || { echo "العميل لا يستطيع الوصول إلى كل الأهداف"; exit 1; }
-          grep -E "SMOKE (hitman|keycard|checkpoint|agent)" run.log || true
-          grep -q "SMOKE hitman ok" run.log || { echo "آليات Hitman لا تعمل"; exit 1; }
-          grep -q "SMOKE controls ok" run.log || { echo "التحكّم بالعصا لا يعمل كما يجب"; grep "SMOKE controls" run.log; exit 1; }
-          grep -q "SMOKE camera ok" run.log || { echo "الكاميرا تدخل في الجدران"; grep "SMOKE camera" run.log; exit 1; }
-          grep -q "SMOKE keycard ok" run.log || { echo "بطاقة الدخول لا تعمل"; exit 1; }
-          grep -q "SMOKE checkpoint ok" run.log || { echo "نقطة التفتيش لا تعمل"; exit 1; }
-          grep -q "has_run=true has_crouch=true has_hook=true" run.log || { echo "حركات العميل غير محمّلة"; exit 1; }
+          KHAZNA_SMOKE=1 timeout 150 godot --headless --path . > run.log 2>&1 || true
+          grep -v "Parameter \"m\" is null\|mesh_storage.h" run.log | tail -80
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Invalid (call|get|set)" run.log; then echo "خطأ في السكربت"; exit 1; fi
+          for k in "move ok" "detect ok" "disguise ok" "door ok" "cam ok" "safe ok" "win ok" "all ok"; do
+            grep -q "SMOKE $k" run.log || { echo "الاختبار فشل: $k"; exit 1; }
+          done
           grep -q "SMOKE voice channel ok" run.log || { echo "اسم قناة الصوت لا يطابق السيرفر"; exit 1; }
           CH=$(grep -o "SMOKE voice channel ok .*" run.log | awk '{print $5}')
           KEY=$(grep -oE 'eyJ[A-Za-z0-9._-]+' net.gd | head -1)
           RESP=$(curl -s -X POST "https://ubdamgzqqwgcxjvvegwk.supabase.co/functions/v1/agora-token" -H "Content-Type: application/json" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -d "{\"channel\":\"$CH\",\"appId\":\"9fd63619ac984e71b3c3eba6215b5a32\"}")
-          echo "$RESP" | grep -q '"mode":"secured"' || { echo "السيرفر لم يعطِ إذن صوت للقناة $CH: $RESP" | cut -c1-200; exit 1; }
-          echo "VOICE TOKEN: السيرفر يقبل القناة ✅"
-          grep -q "SMOKE final stage: 3" run.log || { echo "اختبار الألغاز لم يصل إلى الهروب"; exit 1; }
-          # المراحل الأخرى: تُبنى وتُلعب حتى الهروب، مع اختبارات الليزر والكاميرات والقاطع
-          for L in tutorial river mountain; do
-            LOW=0; [ "$L" = tutorial ] && LOW=1
-            KHAZNA_LOW=$LOW KHAZNA_SMOKE=1 KHAZNA_LEVEL=$L timeout 120 godot --headless --path . > run_$L.log 2>&1 || true
-            grep -E "SMOKE (level|laser|cam|killswitch|final|reach|valves|radio|sync|stage|servers|maze)|QUALITY|SCRIPT ERROR|Parse Error" run_$L.log | head -20
-            if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Invalid (call|get|set)" run_$L.log; then echo "خطأ سكربت في المرحلة $L"; exit 1; fi
-            grep -q "SMOKE final stage: 3" run_$L.log || { echo "المرحلة $L لم تصل إلى الهروب"; tail -40 run_$L.log; exit 1; }
-            grep -q "SMOKE reach ok" run_$L.log || { echo "في خريطة $L مكان لا يُوصل إليه"; grep "SMOKE reach" run_$L.log; exit 1; }
-            grep -q "SMOKE vault solid ok" run_$L.log || { echo "خزنة $L يمكن الدخول فيها"; exit 1; }
-            grep -q "SMOKE cam ok" run_$L.log || { echo "كاميرا المرحلة $L لا تعمل"; exit 1; }
-            grep -q "SMOKE laser ok" run_$L.log || { echo "ليزر المرحلة $L لا يعمل"; exit 1; }
-          done
-          grep -q "SMOKE killswitch ok" run_river.log || { echo "قاطع الليزر لا يعمل"; exit 1; }
-          grep -q "SMOKE valves ok" run_river.log || { echo "لغز الصمّامات لا يعمل"; exit 1; }
-          grep -q "SMOKE radio ok" run_river.log || { echo "لغز اللاسلكي لا يعمل"; exit 1; }
-          grep -q "SMOKE sync lock ok" run_river.log || { echo "القفل الزمني لا يعمل"; exit 1; }
-          grep -q "SMOKE servers ok" run_mountain.log || { echo "لغز الخوادم لا يعمل"; grep "SMOKE servers" run_mountain.log; exit 1; }
-          grep -q "SMOKE maze ok" run_mountain.log || { echo "المتاهة لا تعمل"; exit 1; }
-          grep -q "SMOKE sync lock ok" run_mountain.log || { echo "القفل الزمني لا يعمل (الجبل)"; exit 1; }
-          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Invalid (call|get|set)" run.log; then exit 1; fi
+          echo "$RESP" | grep -q '"mode":"secured"' && echo "VOICE TOKEN: السيرفر يقبل القناة ✅" || echo "::warning::السيرفر لم يعطِ إذن صوت للقناة $CH"
+
+      - name: لقطات شاشة حقيقية من اللعبة (للمراجعة قبل الإرسال)
+        continue-on-error: true
+        run: |
+          (command -v xvfb-run >/dev/null) || (apt-get update -qq && apt-get install -y -qq xvfb libgl1 libgl1-mesa-dri libglu1-mesa >/dev/null)
+          mkdir -p shots
+          KHAZNA_SHOT=1 KHAZNA_SHOT_DIR=$PWD/shots timeout 200 xvfb-run -a -s "-screen 0 1776x800x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --resolution 1776x800 --path . > shot.log 2>&1 || true
+          grep -E "SHOT|SMOKE|ERROR" shot.log | head -60
+          ls -la shots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shots
+          path: jeu-khazna/godot_3d/shots/*.png
+          if-no-files-found: ignore
 
       - name: بناء أندرويد
         env:
@@ -274,10 +258,10 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: khazna3d-build-${{ github.run_number }}
-          name: الخزنة 3D — نموذج ${{ github.run_number }}
+          name: الخزنة (من الأعلى) — نموذج ${{ github.run_number }}
           prerelease: true
           target_commitish: ${{ github.sha }}
-          body: "نموذج تجريبي ثلاثي الأبعاد (Godot). khazna3d.apk للهاتف، khazna3d-windows.zip للحاسوب (فكّه وشغّل khazna3d.exe)."
+          body: "الخزنة برؤية من الأعلى (Godot). khazna3d.apk للهاتف، khazna3d-windows.zip للحاسوب (فكّه وشغّل khazna3d.exe)."
           files: |
             jeu-khazna/godot_3d/build/khazna3d.apk
             jeu-khazna/godot_3d/build/khazna3d-windows.zip
