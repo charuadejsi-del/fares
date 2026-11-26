@@ -1547,7 +1547,7 @@ func _strip(g) -> void:
 	_busy = 3.0
 	agent.locked = true
 	var gp: Vector3 = g.global_position
-	var to := gp - agent.global_position
+	var to: Vector3 = gp - agent.global_position
 	to.y = 0.0
 	if to.length() > 0.1:
 		agent.face = atan2(-to.x, -to.z)
@@ -1611,7 +1611,6 @@ func _stuff_locker(g) -> void:
 	tw2.tween_property(door, "rotation:y", 0.0, 0.25 if not smoke else 0.01)
 	await get_tree().create_timer(0.3 if not smoke else 0.03).timeout
 	if s_clunk.stream:
-		s_clunk.global_position = lpos + Vector3(0, 1, 0)
 		s_clunk.play()
 	shake = 0.15
 	await get_tree().create_timer(0.4 if not smoke else 0.01).timeout
