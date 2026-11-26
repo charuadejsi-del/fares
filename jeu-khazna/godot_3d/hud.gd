@@ -52,6 +52,7 @@ var _inst: Button
 var _throw: Button
 var _act2: Button
 var _instinct_fx: ColorRect
+var _fade: ColorRect
 var _dark: Button
 var _sync: Control
 var _sync_lbl: Label
@@ -526,6 +527,20 @@ func set_agent_buttons(on: bool, running: bool, inst_cd: float, cans: int, act2:
 	_throw.queue_redraw()
 	_act2.visible = show and act2 != ""
 	_act2.text = act2
+
+
+## إظلام/ومضة للمشاهد السينمائية.
+func fade(color: Color, to_alpha: float, secs: float) -> void:
+	if _fade == null:
+		_fade = ColorRect.new()
+		_fade.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_fade.color = Color(color.r, color.g, color.b, 0.0)
+		_root.add_child(_fade)
+	_fade.color = Color(color.r, color.g, color.b, _fade.color.a)
+	var tw := create_tween()
+	tw.set_ignore_time_scale(true)
+	tw.tween_property(_fade, "color:a", to_alpha, secs)
 
 
 func instinct_fx(v: float) -> void:

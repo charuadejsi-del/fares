@@ -14,7 +14,10 @@
   "laser": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/32e33701-0d3b-4fdd-8217-95340fa69979.mp3",
   "rain": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/3bc463c4-f06a-4e4e-b756-edee9ef9a706.mp3",
   "wind": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/d5d9222c-5581-49c7-bbdc-439e725139da.mp3",
-  "cam_beep": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/40f27e0f-aaf0-4f7d-84cb-06044cb32929.mp3"
+  "cam_beep": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/40f27e0f-aaf0-4f7d-84cb-06044cb32929.mp3",
+  "punch": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/60541059-50d8-4dd1-a388-2a4fc0fe33cf.mp3",
+  "cloth": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/158a9eef-cf5e-40a0-b001-29df60609d92.mp3",
+  "drag": "https://cdn.creativeclaw.co/u/e2f6a8fe/audio/903f18b3-f7bb-4316-80ff-a80908d16129.mp3"
  },
  "textures": [
   "concrete_wall_008",

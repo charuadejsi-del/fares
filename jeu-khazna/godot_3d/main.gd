@@ -103,6 +103,11 @@ var _act_g = null
 var _act_id := ""
 var _act2_id := ""
 var _busy := 0.0 # أثناء حركة الإسقاط
+var s_punch: AudioStreamPlayer
+var s_cloth: AudioStreamPlayer
+var s_drag: AudioStreamPlayer
+var lockers: Array = [] # [موضع، باب (محور)، اتّجاه الواجهة]
+var _cine_cam: Camera3D
 var stats := {"seen": 0, "ko": 0, "found": 0, "start": 0.0}
 var _found_alarm := false
 var _tip_t := 0.0
@@ -364,25 +369,26 @@ func _smoke_hitman() -> void:
 	if _act2_id == "steal":
 		_do_act(true)
 	var card_ok: bool = (not had_card) or has_card or has_chief_card
-	_takedown(g)
-	await get_tree().create_timer(0.6).timeout
+	await _takedown(g)
 	var ko_ok: bool = g.ko and g.state_name() == "ko"
 	_busy = 0.0
 	agent.global_position = g.global_position + Vector3(0.6, 0, 0)
 	_hitman_update(0.016)
 	var strip_ok: bool = _act_id == "suit"
-	_do_act(false)
+	await _strip(g)
 	var dis_ok: bool = disguised and agent.body.disguised
 	_hitman_update(0.016)
 	_do_act(false) # اسحب
 	var drag_ok: bool = drag_g == g and agent.dragging
-	if hide_spots.size() > 0:
-		agent.global_position = (hide_spots[0][0] as Vector3) + Vector3(0.9, 0, 0)
+	# التحكّم: العصا للأمام تحرّك العميل نحو وجهه، واليمين يدير الجسم والكاميرا تتبعه
+	pass
+	if lockers.size() > 0:
+		agent.global_position = (lockers[0][0] as Vector3) + (lockers[0][2] as Vector3) * 1.0
 		for k in 5:
 			await get_tree().process_frame
 		_hitman_update(0.016)
-		_do_act(false)
-	var hide_ok: bool = g.hidden and drag_g == null
+		await _stuff_locker(g)
+	var hide_ok: bool = g.hidden and drag_g == null and g.visible and (g.global_position as Vector3).distance_to(lockers[0][0]) < 0.6
 	# الرمي: حارس قريب يذهب ليفحص الصوت
 	cans = 1
 	var other = guards[1] if guards.size() > 1 else null
@@ -405,6 +411,24 @@ func _smoke_hitman() -> void:
 		await get_tree().physics_frame
 		if k > 15 and agent.cam_inside_wall():
 			inside = true
+	# التحكّم بالعصا: للأمام = نحو الوجه، ولليمين = يدور الجسم والكاميرا تتبعه
+	agent.global_position = Vector3(4.0, 0, 5.0)
+	agent.face = 0.0
+	agent.yaw = 0.0
+	agent.move_input = Vector2(0, 1)
+	var p0: Vector3 = agent.global_position
+	for k in 30:
+		await get_tree().physics_frame
+	var dp: Vector3 = agent.global_position - p0
+	agent.move_input = Vector2(1, 0)
+	for k in 30:
+		await get_tree().physics_frame
+	agent.move_input = Vector2.ZERO
+	var turned: bool = agent.face < -0.5
+	var follows: bool = absf(angle_difference(agent.yaw, agent.face)) < 0.6
+	print("SMOKE controls fwd=", dp, " face=", agent.face, " yaw=", agent.yaw)
+	if dp.z < -0.5 and absf(dp.x) < 0.25 and turned and follows:
+		print("SMOKE controls ok")
 	print("SMOKE camera inside_wall=", inside, " dist=", agent.cam.position.z)
 	if not inside:
 		print("SMOKE camera ok")
@@ -1240,6 +1264,9 @@ func _sounds() -> void:
 	s_music = _snd("chase", true, -40.0)
 	s_vault = _snd3d("vault_open", vault_xf * Vector3(29.6, 1.5, 5), 4.0)
 	s_beep = _snd("cam_beep", false, -4.0)
+	s_punch = _snd("punch", false, 0.0)
+	s_cloth = _snd("cloth", false, -2.0)
+	s_drag = _snd("drag", true, -6.0)
 
 
 func _glow(color: Color, energy: float) -> StandardMaterial3D:
@@ -1328,8 +1355,18 @@ func _hitman_update(delta: float) -> void:
 	hud.instinct_fx(clampf(instinct_t, 0.0, 1.0) if active == agent else 0.0)
 	var p: Vector3 = agent.global_position
 	if drag_g:
+		# الجسم يُجرّ أمام العميل (العميل يمشي إلى الخلف): يُسحب من كتفيه على الأرض
 		var back := Basis(Vector3.UP, agent.face).z
-		drag_g.position = drag_g.position.lerp(p + back * 0.95, minf(1.0, delta * 10.0))
+		drag_g.position = drag_g.position.lerp(p + back * 1.05, minf(1.0, delta * 9.0))
+		drag_g.rotation.y = lerp_angle(drag_g.rotation.y, agent.face + PI, minf(1.0, delta * 6.0))
+		var moving: bool = Vector2(agent.velocity.x, agent.velocity.z).length() > 0.3
+		if s_drag.stream:
+			if moving and not s_drag.playing:
+				s_drag.play()
+			elif not moving and s_drag.playing:
+				s_drag.stop()
+	elif s_drag and s_drag.playing:
+		s_drag.stop()
 	_act = ""
 	_act2 = ""
 	_act_id = ""
@@ -1376,7 +1413,7 @@ func _set_act(a: String, b: String) -> void:
 
 func _near_hide(p: Vector3) -> String:
 	for h in hide_spots:
-		if (h[0] as Vector3).distance_to(p) < 2.0:
+		if (h[0] as Vector3).distance_to(p) < 2.2:
 			return str(h[1])
 	return ""
 
@@ -1392,12 +1429,7 @@ func _do_act(second: bool) -> void:
 		"steal":
 			_take_card_from(g)
 		"suit":
-			g.stripped = true
-			disguised = true
-			agent.body.set_disguised(true)
-			_take_card_from(g)
-			shake = 0.15
-			hud.flash("تنكّرتَ بزيّ الحارس — الحرّاس لا يشكّون إلا إن ركضت أو انحنيت أمامهم. الرئيس (قبّعة حمراء) يكشفك!", Color(0.6, 0.85, 1.0))
+			_strip(g)
 		"drag":
 			drag_g = g
 			agent.dragging = true
@@ -1407,12 +1439,7 @@ func _do_act(second: bool) -> void:
 		"drop":
 			_drop_body()
 		"hide":
-			g.hide_body()
-			_drop_body()
-			hud.flash("أخفيتَ الجسم — لن يجده أحد", Color(0.42, 0.85, 0.58))
-			if s_door.stream:
-				s_door.global_position = agent.global_position
-				s_door.play()
+			_stuff_locker(g)
 		"can":
 			(g as Node3D).visible = false
 			cans += 1
@@ -1435,31 +1462,170 @@ func _take_card_from(g) -> void:
 			hud.flash("💳 أخذتَ بطاقة الدخول — تفتح الباب الأول", Color(0.42, 0.85, 0.58))
 
 
+## كاميرا سينمائية مؤقّتة: من جانب المشهد، تنظر إلى نقطة، ثم تعود إلى خلف العميل.
+func _cine(at: Vector3, look: Vector3) -> void:
+	if OS.get_environment("KHAZNA_SMOKE") == "1" or active != agent:
+		return
+	if _cine_cam == null:
+		_cine_cam = Camera3D.new()
+		_cine_cam.fov = 55
+		add_child(_cine_cam)
+	# لا نضع الكاميرا داخل جدار
+	var q := PhysicsRayQueryParameters3D.create(look, at)
+	q.exclude = [agent.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	var pos := at
+	if not hit.is_empty():
+		pos = look.lerp(hit.position, 0.85)
+	_cine_cam.global_position = pos
+	_cine_cam.look_at(look, Vector3.UP)
+	_cine_cam.current = true
+
+
+func _cine_end() -> void:
+	if _cine_cam and _cine_cam.current:
+		_cine_cam.current = false
+		if agent and active == agent:
+			agent.cam.current = true
+
+
+func _side_of(g) -> Vector3:
+	var right: Vector3 = (g.global_transform.basis.x as Vector3)
+	right.y = 0.0
+	return right.normalized()
+
+
 func _takedown(g) -> void:
-	# العميل يقفز خلف الحارس ويضربه بالـ Hook
-	_busy = 0.9
-	invuln = maxf(invuln, 1.2)
+	# مشهد: العميل يقفز خلف الحارس، الكاميرا من الجانب، حركة بطيئة لحظة الضربة، والحارس ينهار
+	_busy = 2.0
+	invuln = maxf(invuln, 2.2)
+	agent.locked = true
 	g.sus = 0.0
 	var gp: Vector3 = g.global_position
 	var gback: Vector3 = (g.global_transform.basis.z as Vector3)
 	gback.y = 0.0
-	var spot: Vector3 = gp + gback.normalized() * 0.85
+	gback = gback.normalized()
+	var spot: Vector3 = gp + gback * 0.75
 	spot.y = agent.global_position.y
-	var tw := create_tween()
-	tw.tween_property(agent, "global_position", spot, 0.16).set_trans(Tween.TRANS_QUAD)
 	var to := gp - spot
 	agent.face = atan2(-to.x, -to.z)
-	agent.body.one_shot("hook", 0.8)
-	await get_tree().create_timer(0.35).timeout
+	agent.body.rotation.y = agent.face
+	var tw := create_tween()
+	tw.tween_property(agent, "global_position", spot, 0.15).set_trans(Tween.TRANS_QUAD)
+	_cine(gp + _side_of(g) * 2.4 + Vector3(0, 1.35, 0) + gback * 0.4, gp + Vector3(0, 1.1, 0) + gback * 0.35)
+	agent.body.one_shot("hook", 1.2)
+	await get_tree().create_timer(0.3).timeout
 	if g.ko:
+		agent.locked = false
+		_cine_end()
 		return
+	# لحظة الضربة
+	if OS.get_environment("KHAZNA_SMOKE") != "1":
+		Engine.time_scale = 0.35
+	if s_punch.stream:
+		s_punch.play()
+	elif s_clunk.stream:
+		s_clunk.play()
+	hud.fade(Color.WHITE, 0.35, 0.03)
 	g.knock_out()
 	stats.ko += 1
-	shake = 0.3
-	Input.vibrate_handheld(70)
+	shake = 0.45
+	Input.vibrate_handheld(120)
+	await get_tree().create_timer(0.06, true, false, true).timeout
+	hud.fade(Color.WHITE, 0.0, 0.25)
+	await get_tree().create_timer(0.55, true, false, true).timeout
+	Engine.time_scale = 1.0
+	await get_tree().create_timer(0.5).timeout
+	_cine_end()
+	agent.locked = false
+	_busy = 0.0
+	hud.flash("أسقطتَه! تنكّر بزيّه، أو اسحبه إلى خزانة قبل أن يراه أحد", Color(0.9, 0.85, 0.6))
+
+
+## مشهد نزع البدلة: ينحني على الحارس (Picking Up)، صوت قماش، إظلام قصير، ثم يقوم بزيّ الحارس.
+func _strip(g) -> void:
+	_busy = 3.0
+	agent.locked = true
+	var gp: Vector3 = g.global_position
+	var to := gp - agent.global_position
+	to.y = 0.0
+	if to.length() > 0.1:
+		agent.face = atan2(-to.x, -to.z)
+		agent.body.rotation.y = agent.face
+	_cine(agent.global_position + _side_of(agent) * 2.0 + Vector3(0, 1.0, 0) - to.normalized() * 0.6, (agent.global_position + gp) * 0.5 + Vector3(0, 0.5, 0))
+	agent.body.one_shot("pick", 2.2)
+	if s_cloth.stream:
+		s_cloth.play()
+	var half := 0.9 if OS.get_environment("KHAZNA_SMOKE") != "1" else 0.05
+	await get_tree().create_timer(half).timeout
+	hud.fade(Color.BLACK, 0.85, 0.2)
+	await get_tree().create_timer(0.25 if half > 0.1 else 0.01).timeout
+	g.stripped = true
+	g.strip_look()
+	disguised = true
+	agent.body.set_disguised(true)
+	_take_card_from(g)
+	hud.fade(Color.BLACK, 0.0, 0.35)
+	await get_tree().create_timer(0.7 if half > 0.1 else 0.01).timeout
+	_cine_end()
+	agent.locked = false
+	_busy = 0.0
+	hud.flash("تنكّرتَ بزيّ الحارس — لا يشكّون إلا إن ركضت أو انحنيت أمامهم. الرئيس (قبّعة حمراء) يكشفك!", Color(0.6, 0.85, 1.0))
+
+
+## مشهد الخزانة: يفتح الباب (Opening Door)، يُدخل الجسم واقفاً، ويغلق الباب.
+func _stuff_locker(g) -> void:
+	var lk = _near_locker(agent.global_position)
+	_busy = 3.0
+	agent.locked = true
+	_drop_body()
+	var smoke := OS.get_environment("KHAZNA_SMOKE") == "1"
+	if lk == null:
+		g.hide_body()
+		agent.locked = false
+		_busy = 0.0
+		return
+	var lpos: Vector3 = lk[0]
+	var door: Node3D = lk[1]
+	var front: Vector3 = lk[2]
+	var stand := lpos + front * 0.95
+	stand.y = agent.global_position.y
+	agent.global_position = stand
+	agent.face = atan2(front.x, front.z)
+	agent.body.rotation.y = agent.face
+	g.global_position = stand + front.rotated(Vector3.UP, PI / 2.0) * 0.9
+	_cine(lpos + front * 2.6 + front.rotated(Vector3.UP, -PI / 2.0) * 1.6 + Vector3(0, 1.5, 0), lpos + Vector3(0, 1.0, 0))
+	agent.body.one_shot("open", 1.2)
+	await get_tree().create_timer(0.4 if not smoke else 0.01).timeout
+	if s_door.stream:
+		s_door.global_position = lpos + Vector3(0, 1, 0)
+		s_door.play()
+	var tw := create_tween()
+	tw.tween_property(door, "rotation:y", deg_to_rad(-105), 0.35 if not smoke else 0.01)
+	await get_tree().create_timer(0.6 if not smoke else 0.03).timeout
+	# الجسم داخل الخزانة، مسنود واقفاً
+	g.into_locker(lpos + Vector3(0, 0.02, 0) - front * 0.05, atan2(front.x, front.z))
+	agent.body.one_shot("pick", 0.9)
+	await get_tree().create_timer(0.7 if not smoke else 0.01).timeout
+	var tw2 := create_tween()
+	tw2.tween_property(door, "rotation:y", 0.0, 0.25 if not smoke else 0.01)
+	await get_tree().create_timer(0.3 if not smoke else 0.03).timeout
 	if s_clunk.stream:
+		s_clunk.global_position = lpos + Vector3(0, 1, 0)
 		s_clunk.play()
-	hud.flash("أسقطتَه! تنكّر بزيّه أو اسحبه إلى خزانة قبل أن يراه أحد", Color(0.9, 0.85, 0.6))
+	shake = 0.15
+	await get_tree().create_timer(0.4 if not smoke else 0.01).timeout
+	_cine_end()
+	agent.locked = false
+	_busy = 0.0
+	hud.flash("الجسم في الخزانة والباب مغلق — لن يجده أحد", Color(0.42, 0.85, 0.58))
+
+
+func _near_locker(p: Vector3):
+	for lk in lockers:
+		if (lk[0] as Vector3).distance_to(p) < 2.2:
+			return lk
+	return null
 
 
 func _do_throw() -> void:
@@ -2228,6 +2394,71 @@ func _map_port() -> void:
 				lb.rotation_degrees.y = 180
 
 
+## خزانة معدنية حقيقية: جدران وسقف وظهر صلبة، وباب على مفصّلة يُفتح ويُغلق. تواجه أقرب مساحة مفتوحة.
+func _build_locker(hp: Vector3, title: String) -> void:
+	var space := get_world_3d().direct_space_state
+	var front := Vector3(1, 0, 0)
+	var best := -1.0
+	for d in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
+		var q := PhysicsRayQueryParameters3D.create(hp + Vector3(0, 1, 0), hp + Vector3(0, 1, 0) + d * 3.0)
+		var hit := space.intersect_ray(q)
+		var free := 3.0 if hit.is_empty() else hp.distance_to(hit.position)
+		if free > best:
+			best = free
+			front = d
+	var root := Node3D.new()
+	root.position = hp
+	root.rotation.y = atan2(front.x, front.z)
+	add_child(root)
+	var steel := mat_steel.duplicate() as StandardMaterial3D
+	steel.albedo_color = Color(0.32, 0.38, 0.42)
+	# الجدران (الواجهة نحو +z المحلّي)
+	for part in [[Vector3(0, 1.05, -0.4), Vector3(1.0, 2.1, 0.05)], [Vector3(-0.5, 1.05, 0), Vector3(0.05, 2.1, 0.8)], [Vector3(0.5, 1.05, 0), Vector3(0.05, 2.1, 0.8)], [Vector3(0, 2.1, 0), Vector3(1.0, 0.05, 0.8)], [Vector3(0, 0.02, 0), Vector3(1.0, 0.04, 0.8)]]:
+		var b := StaticBody3D.new()
+		b.position = part[0]
+		var cs := CollisionShape3D.new()
+		var sh := BoxShape3D.new()
+		sh.size = part[1]
+		cs.shape = sh
+		b.add_child(cs)
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = part[1]
+		mi.mesh = bm
+		mi.material_override = steel
+		b.add_child(mi)
+		root.add_child(b)
+	# الباب: محور على الحافّة اليسرى
+	var pivot := Node3D.new()
+	pivot.position = Vector3(-0.48, 0, 0.4)
+	root.add_child(pivot)
+	var door := MeshInstance3D.new()
+	var dm := BoxMesh.new()
+	dm.size = Vector3(0.96, 2.06, 0.04)
+	door.mesh = dm
+	door.material_override = steel
+	door.position = Vector3(0.48, 1.05, 0)
+	pivot.add_child(door)
+	for k in 4:
+		var vent := MeshInstance3D.new()
+		var vm := BoxMesh.new()
+		vm.size = Vector3(0.5, 0.025, 0.01)
+		vent.mesh = vm
+		vent.material_override = mat_dark
+		vent.position = Vector3(0.48, 1.75 + k * 0.06, 0.025)
+		pivot.add_child(vent)
+	var handle := MeshInstance3D.new()
+	var hm := BoxMesh.new()
+	hm.size = Vector3(0.04, 0.18, 0.04)
+	handle.mesh = hm
+	handle.material_override = mat_dark
+	handle.position = Vector3(0.85, 1.05, 0.04)
+	pivot.add_child(handle)
+	var lb := _label3d(title, hp + Vector3(0, 2.35, 0), 24, Color(0.75, 0.85, 1.0))
+	lb.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lockers.append([hp, pivot, front])
+
+
 ## يبني شيئاً في إحداثيات الخزنة الأصلية ثم ينقله مع الخزنة (جدارها في كل خريطة).
 func _in_vault_frame(f: Callable) -> void:
 	var before := get_child_count()
@@ -2635,11 +2866,7 @@ func _spawn_guards() -> void:
 		gg.decorate()
 	# خزائن وصناديق لإخفاء الأجسام، وعلب للرمي
 	for h in hide_spots:
-		var hp: Vector3 = h[0]
-		var lk := _box(hp + Vector3(0, 1.0, 0), Vector3(0.7, 2.0, 0.55), mat_steel)
-		lk.set_meta("hide", true)
-		var hl := _label3d("📦 " + str(h[1]), hp + Vector3(0, 2.25, 0), 26, Color(0.75, 0.85, 1.0))
-		hl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_build_locker(h[0], str(h[1]))
 	var rngc := RandomNumberGenerator.new()
 	rngc.seed = seed_value + 99
 	for cp in [checkpoints[0] + Vector3(1.2, 0, -1.4), checkpoints[1] + Vector3(1.0, 0, 3.0), checkpoints[2] + Vector3(1.2, 0, 3.4)]:

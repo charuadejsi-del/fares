@@ -32,6 +32,9 @@ var _cap: CapsuleShape3D
 var _pivot: Node3D
 var _mv := Vector2.ZERO # حركة العصا بعد التنعيم
 var _cam_d := 3.7
+var _look_t := 0.0 # بعد نظر يدوي بالإصبع: الكاميرا تنتظر ثم تعود خلف الظهر
+var turning := 0.0
+const TURN_SPEED := 2.5
 
 
 func _ready() -> void:
@@ -160,6 +163,8 @@ func _physics_process(delta: float) -> void:
 
 	var applied := look_delta * minf(1.0, delta * 18.0)
 	look_delta -= applied
+	if applied.length() > 0.5:
+		_look_t = 1.3
 	var k_look := 0.0036 if third else 0.0042
 	yaw -= applied.x * k_look * sens
 	pitch = clampf(pitch - applied.y * k_look * sens, -0.95 if third else -1.25, 0.45 if third else 1.25)
@@ -168,6 +173,15 @@ func _physics_process(delta: float) -> void:
 	var fwd := -basis_y.z
 	var right := basis_y.x
 	var dir := fwd * mv.y + right * mv.x
+	if third:
+		# تحكّم بالعصا وحدها: أعلى/أسفل = أمام/خلف، يمين/يسار = يدور الجسم والكاميرا تتبعه
+		turning = mv.x
+		face -= mv.x * TURN_SPEED * (0.75 + 0.25 * absf(mv.y)) * delta
+		var ff := -Basis(Vector3.UP, face).z
+		dir = ff * mv.y * (0.6 if mv.y < 0.0 else 1.0)
+		_look_t = maxf(0.0, _look_t - delta)
+		if _look_t <= 0.0:
+			yaw = lerp_angle(yaw, face, minf(1.0, delta * 5.0))
 	var speed := SPEED
 	if running and mv.length() > 0.3:
 		speed = RUN_SPEED
@@ -204,14 +218,12 @@ func _physics_process(delta: float) -> void:
 func _third_update(delta: float, dir: Vector3) -> void:
 	# الجسم: واقفاً يلتفت نحو اتّجاه المشي؛ منحنياً يبقى نحو الكاميرا ويمشي جانبياً (حركات الاتّجاهات الأربعة)
 	var flat := Vector2(velocity.x, velocity.z)
-	if crouch or dragging:
-		face = lerp_angle(face, yaw, minf(1.0, delta * 10.0))
-	elif flat.length() > 0.2:
-		face = lerp_angle(face, atan2(-dir.x, -dir.z), minf(1.0, delta * 9.0))
 	if body:
-		body.rotation.y = face
-		var local := Basis(Vector3.UP, face).inverse() * Vector3(velocity.x, 0, velocity.z)
-		body.drive(local, crouch, running and flat.length() > 3.5)
+		# عند السحب يلتفت الجسم نحو الحارس المجرور ويمشي إلى الخلف
+		var vis := face + (PI if dragging else 0.0)
+		body.rotation.y = lerp_angle(body.rotation.y, vis, minf(1.0, delta * 12.0))
+		var local := Basis(Vector3.UP, vis).inverse() * Vector3(velocity.x, 0, velocity.z)
+		body.drive(local, crouch, running and flat.length() > 3.5, dragging, turning)
 	flash.rotation = Vector3(pitch * 0.6, yaw, 0)
 	# الكاميرا خلف الكتف: تدور بنعومة، ولا تدخل الجدران (ثلاثة أشعّة)، تقترب بسرعة وتبتعد ببطء
 	_pivot.rotation = Vector3(pitch, yaw, 0)

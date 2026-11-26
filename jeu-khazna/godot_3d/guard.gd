@@ -199,6 +199,29 @@ func hide_body() -> void:
 	visible = false
 
 
+## بعد نزع البدلة: يبقى بملابس داخلية (لون جلد مع قميص أبيض تقريباً).
+func strip_look() -> void:
+	var skin := StandardMaterial3D.new()
+	skin.albedo_color = Color(0.78, 0.6, 0.48)
+	skin.roughness = 0.7
+	for mi in find_children("*", "MeshInstance3D", true, false):
+		if mi != _cone and mi != _card and mi.get_parent() == self:
+			continue
+		if mi == _cone or mi == _card:
+			continue
+		(mi as MeshInstance3D).material_override = skin
+
+
+## داخل الخزانة: مسنود واقفاً (أول لقطة من حركة الوقوف)، والباب يخفيه.
+func into_locker(p: Vector3, ry: float) -> void:
+	hidden = true
+	position = p
+	rotation.y = ry + PI
+	_play("idle", 0.0)
+	if _anim:
+		_anim.speed_scale = 0.0
+
+
 ## يذهب ليفحص صوتاً (علبة مرميّة، إنذار كاذب) ثم يبحث حوله ويعود إلى دوريّته.
 func investigate(p: Vector3) -> void:
 	if ko or _state == "chase" or _state == "attack":

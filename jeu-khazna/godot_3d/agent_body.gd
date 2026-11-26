@@ -14,8 +14,11 @@ const CLIPS := {
 	"c_right": "res://characters/agent/c_right.fbx",
 	"hook": "res://characters/agent/hook.fbx",
 	"throw": "res://characters/agent/throw.fbx",
+	"pick": "res://characters/agent/pick.fbx",
+	"open": "res://characters/agent/open.fbx",
+	"drag": "res://characters/agent/drag.fbx",
 }
-const LOOPED := ["idle", "walk", "run", "c_idle", "c_fwd", "c_back", "c_left", "c_right"]
+const LOOPED := ["idle", "walk", "run", "c_idle", "c_fwd", "c_back", "c_left", "c_right", "drag"]
 
 var clip := "idle"
 var disguised := false
@@ -168,7 +171,7 @@ func has_clip(c: String) -> bool:
 
 ## يشغّل حركة على النموذجين معاً (البدلة وزيّ الحارس) فيبقى التنكّر متزامناً.
 func play(c: String, blend := 0.2, speed := 1.0) -> void:
-	if _one_shot > 0.0 and not (c == "hook" or c == "throw"):
+	if _one_shot > 0.0 and not (c == "hook" or c == "throw" or c == "pick" or c == "open"):
 		return
 	clip = c
 	for ap in _anims:
@@ -196,9 +199,25 @@ func _process(delta: float) -> void:
 	_one_shot = maxf(0.0, _one_shot - delta)
 
 
+func clip_length(c: String) -> float:
+	if _anims.is_empty() or not (_anims[0] as AnimationPlayer).has_animation("g/" + c):
+		return 1.0
+	return (_anims[0] as AnimationPlayer).get_animation("g/" + c).length
+
+
 ## يختار الحركة من السرعة واتّجاه المشي بالنسبة للجسم.
-func drive(local_vel: Vector3, crouch: bool, running: bool) -> void:
+func drive(local_vel: Vector3, crouch: bool, running: bool, dragging := false, turning := 0.0) -> void:
 	var sp := Vector2(local_vel.x, local_vel.z).length()
+	if dragging:
+		play("drag" if sp > 0.15 else "c_idle", 0.2, clampf(sp / 1.0, 0.6, 1.3))
+		return
+	if sp < 0.15 and absf(turning) > 0.2:
+		# دوران في المكان
+		if crouch:
+			play("c_right" if turning > 0.0 else "c_left", 0.2, 0.8)
+		else:
+			play("walk", 0.2, 0.7)
+		return
 	if crouch:
 		if sp < 0.15:
 			play("c_idle")
