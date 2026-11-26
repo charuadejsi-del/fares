@@ -32,11 +32,11 @@ const LIST := [
 		"killswitch": true,
 	},
 	{
-		"id": "mountain", "name": "الجبل", "sub": "ساحة ثلجية وبرج كشّاف، غرفة خوادم، وكهف صخري — اهرب إلى المروحية",
-		"theme": "mountain", "mission": 660.0, "guard_speed": 1.15, "guard_sight": 1.1, "extra_guard": true,
-		"lasers": [[15.6, 0.2, 9.8, "blink", [0.45, 1.0, 1.55], 0.0], [23.0, 0.2, 9.8, "static", [1.38, 1.65], 0.0]],
-		"cams": [[Vector3(14.0, 2.85, 0.25), 180.0, 55.0, 6.0], [Vector3(25.0, 2.85, 9.75), 0.0, 55.0, 5.0]],
-		"killswitch": true,
+		"id": "mountain", "name": "الجبل", "sub": "ساحة ثلجية وبرج كشّاف، خوادم مخترَقة، أنفاق مظلمة، وكهف — المحلّل في كوخ الثلج",
+		"theme": "mountain", "mission": 900.0, "guard_speed": 1.1, "guard_sight": 1.1, "extra_guard": true, "sync": true,
+		"lasers": [[16.0, 0.2, 9.8, "blink", [0.45, 1.0, 1.55], 0.0], [33.0, 0.2, 9.8, "static", [1.38, 1.65], 0.0]],
+		"cams": [[Vector3(13.0, 2.85, 0.25), 180.0, 55.0, 6.0], [Vector3(35.0, 2.85, 9.75), 0.0, 55.0, 5.0]],
+		"killswitch": false,
 	},
 ]
 

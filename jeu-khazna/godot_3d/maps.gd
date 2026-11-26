@@ -257,6 +257,8 @@ func data(theme: String) -> void:
 			m.ARCHIVE = Vector3(-24, 0, -14)
 			m.analyst_spawn = m.ARCHIVE + Vector3(5, 0, 6.2)
 			m.KILL_POS = Vector3(4.3, 0, 12.0)
+		"mountain":
+			mountain_data()
 
 
 # ═════════ النهر ═════════
@@ -266,6 +268,7 @@ func data(theme: String) -> void:
 var _patrol: Node3D
 var _patrol_lamp: SpotLight3D
 var _patrol_search: Node3D
+var _path := [-34.0, 18.0, -4.6, -0.5, 70.0] # [x0، x1، z، y، الدورة]
 
 
 func river() -> void:
@@ -478,10 +481,10 @@ func river() -> void:
 func patrol_update(t: float) -> Dictionary:
 	if _patrol == null:
 		return {}
-	var ph := fmod(t + 20.0, 70.0) / 70.0
+	var ph := fmod(t + 20.0, float(_path[4])) / float(_path[4])
 	var k := ph * 2.0 if ph < 0.5 else 2.0 - ph * 2.0
-	var x := lerpf(-34.0, 18.0, k)
-	_patrol.position = Vector3(x, -0.5, -4.6)
+	var x := lerpf(float(_path[0]), float(_path[1]), k)
+	_patrol.position = Vector3(x, float(_path[3]), float(_path[2]))
 	_patrol.rotation.y = 0.0 if ph < 0.5 else PI
 	_patrol.rotation.z = sin(t * 1.3) * 0.03
 	var cx: float = m.ARCHIVE.x + 5.0
@@ -542,25 +545,56 @@ func _boat(at: Vector3, planks: Material, white: Material) -> void:
 
 
 # ═════════ الجبل ═════════
+# ساحة ثلجية (برج كشّاف) → غرفة الخوادم (أيّ خادم مخترَق؟) → أنفاق مظلمة (المحلّل يوجّه بالمخطّط)
+# → قاطع الكهرباء → الكهف الصخري (الخزنة + قفل زمني) → الهروب إلى مهبط المروحية.
+# المحلّل في كوخ جنوب السياج، يرى الساحة والبرج من نافذته؛ زلّاجة دورية تمرّ بأضوائها أمام الكوخ.
+var _leds: Array = [] # [مادة، عدد الومضات، الطور]
+var maze_lights: Array = []
+
+
+func mountain_data() -> void:
+	m.SPAWN = Vector3(2, 0, 6)
+	m.spawn_yaw = -PI / 2.0
+	m.vault_xf = Transform3D(Basis(), Vector3(10, 0, 0))
+	m.term_specs = [[Vector3(17.4, 0, 1.3), 1.0, "لوحة الخوادم"], [Vector3(29.0, 0, 4.35), 1.0, "قاطع الكهرباء"]]
+	m.door_specs = [[Vector3(18, 0, 5), 0.0, Vector3(1, 0, 0)], [Vector3(30, 0, 5), 0.0, Vector3(1, 0, 0)]]
+	m.checkpoints = [Vector3(2, 0, 6), Vector3(9.2, 0, 4.6), Vector3(19.0, 0, 5.0)]
+	m.guard_routes = [
+		[[Vector3(9.5, 0, 8.9), Vector3(16.5, 0, 8.9), Vector3(16.5, 0, 5.0), Vector3(9.5, 0, 5.0)], 1.2, Rect2(8.5, 0.5, 9.0, 9.0)],
+		[[Vector3(32, 0, 8.2), Vector3(37.2, 0, 8.2), Vector3(37.2, 0, 1.6), Vector3(32, 0, 1.6)], 1.0, Rect2(30.5, 0.5, 8.6, 9.0)],
+		[[Vector3(-6.5, 0, -3.0), Vector3(-6.5, 0, 13.5), Vector3(5.5, 0, 13.5), Vector3(5.5, 0, -3.0)], 1.0, Rect2(-7.5, -5.5, 15.0, 21.0)],
+	]
+	m.reach_rect = Rect2(-8, -6, 50, 22)
+	m.feed_cams = [
+		[Vector3(7.4, 5.0, -5.4), Vector3(0, 0, 6), "كاميرا 1 · الساحة"],
+		[Vector3(8.6, 2.9, 9.4), Vector3(15, 0.6, 3), "كاميرا 2 · الخوادم"],
+		[Vector3(30.6, 2.9, 0.6), Vector3(38, 0.8, 6), "كاميرا 3 · الكهف"],
+	]
+	m.alarm_spots = [Vector3(0, 4.0, 5), Vector3(13, 3.0, 5), Vector3(35, 3.0, 5)]
+	m.gate_types = ["servers", "maze"]
+	m.analyst_kind = "hut"
+	m.ARCHIVE = Vector3(-6, 0, -20)
+	m.analyst_spawn = m.ARCHIVE + Vector3(5, 0, 6.2)
+
+
 func mountain() -> void:
 	var snow := _mat("snow_02", m.mat_floor, 4.0, Color(0.95, 0.97, 1.0), 0.9)
 	var rock := _mat("rock_wall_08", m.mat_wall_dark, 3.0, Color(0.62, 0.64, 0.68))
 	var rock_floor := _mat("rock_ground", m.mat_floor, 3.0, Color(0.55, 0.57, 0.6))
 	var plate := _mat("metal_plate_02", m.mat_steel, 1.5, Color(0.55, 0.58, 0.62), 0.45, 0.7)
 	var bunker := _mat("rusty_painted_metal", m.mat_rust, 2.0, Color(0.7, 0.75, 0.72))
-	var concrete = m.mat_wall.duplicate() as StandardMaterial3D
+	var concrete = m.mat_wall.duplicate()
 	concrete.albedo_color = concrete.albedo_color * Color(0.8, 0.86, 0.95)
 	m.mat_wall = concrete
-
 	_sky(Color(0.03, 0.04, 0.07), Color(0.18, 0.21, 0.27), Color(0.6, 0.63, 0.7))
 	_moon(Color(0.7, 0.8, 1.0), 0.55, -32.0, -130.0)
-
-	# ── الساحة الثلجية (المنطقة أ) ──
-	m._box(Vector3(0.0, -0.1, 5), Vector3(16.0, 0.2, 22.0), snow) # x -8..8 · z -6..16
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 23
+
+	# ── الساحة الثلجية x −8..8 · z −6..16، وأرض ثلجية حتى الكوخ جنوباً ──
+	m._box(Vector3(0.0, -0.12, -2), Vector3(26.0, 0.2, 36.0), snow)
 	var white := _plain(Color(0.92, 0.94, 0.98), 0.95)
-	for i in 14:
+	for k in 16:
 		var dm := MeshInstance3D.new()
 		var sm := SphereMesh.new()
 		sm.radius = rng.randf_range(0.5, 1.1)
@@ -568,17 +602,14 @@ func mountain() -> void:
 		dm.mesh = sm
 		dm.material_override = white
 		dm.scale = Vector3(rng.randf_range(1.4, 2.4), 0.25, rng.randf_range(0.8, 1.4))
-		var along := rng.randf_range(-5.5, 13.5)
-		dm.position = Vector3(-7.4 if i % 2 == 0 else rng.randf_range(-6.0, 5.0), 0.0, along if i % 2 == 0 else (-5.4 if i % 3 == 0 else 15.4))
+		dm.position = Vector3(-7.4 if k % 2 == 0 else rng.randf_range(-6.0, 5.0), 0.0, rng.randf_range(-5.0, 15.0) if k % 2 == 0 else 15.4)
 		dm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		m.add_child(dm)
-	# سياج شبكي بأسلاك شائكة
 	var post := _plain(Color(0.22, 0.23, 0.25), 0.5, 0.8)
 	var mesh := StandardMaterial3D.new()
 	mesh.albedo_color = Color(0.35, 0.37, 0.4, 0.28)
 	mesh.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mesh.metallic = 0.7
 	for seg in [[Vector3(-8, 0, -6), Vector3(-8, 0, 16)], [Vector3(-8, 0, -6), Vector3(8, 0, -6)], [Vector3(-8, 0, 16), Vector3(8, 0, 16)]]:
 		var a: Vector3 = seg[0]
 		var b: Vector3 = seg[1]
@@ -588,15 +619,14 @@ func mountain() -> void:
 			_cyl(a.lerp(b, float(k) / n) + Vector3(0, 1.4, 0), 0.05, 2.8, post, false)
 		var mid := (a + b) * 0.5 + Vector3(0, 1.3, 0)
 		var fence := MeshInstance3D.new()
-		var fb := BoxMesh.new()
-		fb.size = Vector3(0.02 if a.x == b.x else length, 2.6, length if a.x == b.x else 0.02)
-		fence.mesh = fb
+		var fbm := BoxMesh.new()
+		fbm.size = Vector3(0.02 if a.x == b.x else length, 2.6, length if a.x == b.x else 0.02)
+		fence.mesh = fbm
 		fence.material_override = mesh
 		fence.position = mid
 		m.add_child(fence)
 		_invisible(mid, Vector3(0.3 if a.x == b.x else length, 3.0, length if a.x == b.x else 0.3))
-		m._box(mid + Vector3(0, 1.45, 0), Vector3(0.03 if a.x == b.x else length, 0.03, length if a.x == b.x else 0.03), post, false)
-	# مهبط المروحية عند نقطة البداية (مخرج الهروب)
+	# مهبط المروحية (البداية والهروب)
 	var pad := MeshInstance3D.new()
 	var pc := CylinderMesh.new()
 	pc.top_radius = 2.6
@@ -613,56 +643,41 @@ func mountain() -> void:
 	for k in 8:
 		var a2 := k * TAU / 8.0
 		m._box(Vector3(2.0 + cos(a2) * 2.5, 0.06, 6.0 + sin(a2) * 2.5), Vector3(0.12, 0.08, 0.12), m._glow(Color(0.3, 1.0, 0.4), 3.0), false)
-	var pl := OmniLight3D.new()
-	pl.position = Vector3(2.0, 0.6, 6.0)
-	pl.light_color = Color(0.35, 1.0, 0.45)
-	pl.light_energy = 0.8
-	pl.omni_range = 4.0
-	m.add_child(pl)
-	m.flickers.append(pl)
-	# زلّاجة ثلج وبراميل
 	var sled := _plain(Color(0.6, 0.08, 0.06), 0.45, 0.4)
 	m._box(Vector3(5.0, 0.45, 12.5), Vector3(0.9, 0.5, 2.0), sled)
-	m._box(Vector3(5.0, 0.85, 12.8), Vector3(0.7, 0.3, 0.9), _plain(Color(0.08, 0.08, 0.08), 0.6))
-	for sx in [-0.38, 0.38]:
-		m._box(Vector3(5.0 + sx, 0.06, 12.5), Vector3(0.08, 0.06, 2.4), post, false)
 	m._prop("Barrel_01", Vector3(-6.5, 0, 12.8))
 	m._prop("barrel_03", Vector3(-5.8, 0, 13.4), 50)
-	for p in [Vector3(5.6, 0, 9.6), Vector3(6.5, 0, 9.6), Vector3(-1.5, 0, -1.0)]:
+	for p in [Vector3(5.6, 0, 9.6), Vector3(6.5, 0, 9.6), Vector3(-1.5, 0, -1.0), Vector3(-3.0, 0, 9.0), Vector3(-2.1, 0, 9.0)]:
 		m._box(p + Vector3(0, 0.45, 0), Vector3(0.9, 0.9, 0.9), m.mat_crate)
-	# برج الحراسة بكشّافه الدوّار (عائق جديد في الخارج)
+	# برج الحراسة: كشّاف دوّار + لوحة الحدّ الحراري (يقرؤها المحلّل بالمنظار)
 	var tower := Vector3(-5.5, 0, -3.5)
 	for dx in [-0.9, 0.9]:
 		for dz in [-0.9, 0.9]:
 			_cyl(tower + Vector3(dx, 3.0, dz), 0.1, 6.0, post, true)
 	m._box(tower + Vector3(0, 6.05, 0), Vector3(2.4, 0.15, 2.4), plate, false)
-	m._box(tower + Vector3(0, 6.6, 1.15), Vector3(2.4, 1.0, 0.06), post, false)
-	m._box(tower + Vector3(-1.15, 6.6, 0), Vector3(0.06, 1.0, 2.4), post, false)
 	m._box(tower + Vector3(0, 7.6, 0), Vector3(2.8, 0.12, 2.8), bunker, false)
+	m._box(tower + Vector3(0, 2.2, -0.95), Vector3(1.6, 1.0, 0.05), _plain(Color(0.85, 0.82, 0.7), 0.8), false)
+	var tl = m._label3d("⚠ الخادم المخترَق\nحرارته فوق %d°" % int(m.puzzle.srv_t), tower + Vector3(0, 2.2, -0.99), 18, Color(0.6, 0.05, 0.05))
+	tl.rotation_degrees.y = 180
 	var search = preload("res://cctv.gd").new()
 	m.add_child(search)
 	search.setup_search(tower + Vector3(0.6, 6.9, 0.6), -135.0, 32.0, 11.0)
 	m.cctvs.append(search)
-	_weather(Vector3(0.0, 9.0, 5.0), Vector3(8.5, 0.3, 11.5), true, 420)
+	_weather(Vector3(0.0, 9.0, 0.0), Vector3(11.0, 0.3, 17.0), true, 460)
 
-	# ── وجه الجبل والمخبأ على x=8 ──
+	# ── وجه الجبل ومدخل المخبأ المفتوح على x=8 ──
 	m._box(Vector3(8.2, 4.5, -3.25), Vector3(0.7, 9.0, 5.5), rock)
 	m._box(Vector3(8.2, 4.5, 13.25), Vector3(0.7, 9.0, 5.5), rock)
 	m._box(Vector3(8, 1.6, 1.75), Vector3(0.3, 3.2, 3.5), concrete)
 	m._box(Vector3(8, 1.6, 7.75), Vector3(0.3, 3.2, 4.5), concrete)
 	m._box(Vector3(8.2, 6.1, 5.0), Vector3(0.7, 5.8, 10.0), rock)
-	# صخور بارزة من الجبل (بعيداً عن الباب واللوحة)
-	for i in 10:
-		var z := rng.randf_range(-5.5, -0.8) if i % 2 == 0 else rng.randf_range(10.2, 15.5)
+	for k in 10:
+		var z := rng.randf_range(-5.5, -0.8) if k % 2 == 0 else rng.randf_range(10.2, 15.5)
 		var r = m._box(Vector3(rng.randf_range(7.2, 7.7), rng.randf_range(0.4, 6.5), z), Vector3(rng.randf_range(0.8, 1.6), rng.randf_range(0.8, 2.0), rng.randf_range(1.0, 2.2)), rock, false)
 		r.rotation = Vector3(rng.randf_range(-0.4, 0.4), rng.randf_range(-0.5, 0.5), rng.randf_range(-0.4, 0.4))
-	# إطار باب المخبأ الخرساني بخطوط تحذير
 	var hz = m._glow(Color(0.95, 0.75, 0.1), 0.5)
-	m._box(Vector3(7.75, 1.7, 3.3), Vector3(0.3, 3.4, 0.35), concrete)
-	m._box(Vector3(7.75, 1.7, 5.7), Vector3(0.3, 3.4, 0.35), concrete)
-	m._box(Vector3(7.75, 3.45, 4.5), Vector3(0.3, 0.35, 2.75), concrete)
-	m._box(Vector3(7.58, 3.45, 4.5), Vector3(0.02, 0.12, 2.5), hz, false)
-	var bl = m._label3d("مخبأ B-7 · ممنوع الدخول", Vector3(7.55, 4.1, 4.5), 40, Color(0.95, 0.85, 0.6))
+	m._box(Vector3(7.58, 3.3, 4.5), Vector3(0.02, 0.12, 2.0), hz, false)
+	var bl = m._label3d("مخبأ B-7", Vector3(7.55, 3.9, 4.5), 44, Color(0.95, 0.85, 0.6))
 	bl.rotation_degrees.y = -90
 	var flood := SpotLight3D.new()
 	m.add_child(flood)
@@ -673,68 +688,172 @@ func mountain() -> void:
 	flood.spot_angle = 40.0
 	flood.shadow_enabled = true
 
-	# ── غرفة الخوادم داخل الجبل (المنطقة ب) ──
-	m._box(Vector3(14.0, -0.1, 5), Vector3(12.3, 0.2, 10.6), plate)
-	m._box(Vector3(14.0, WALL_H() + 0.1, 5), Vector3(12.3, 0.2, 10.6), m.mat_ceil)
-	m._wall_x(0, 8, 20, concrete)
-	m._wall_x(10, 8, 20, concrete)
-	m._wall_z(20, 0, 4, concrete)
-	m._wall_z(20, 6, 10, concrete)
+	# ── غرفة الخوادم x 8..18 ──
+	m._box(Vector3(13.0, -0.1, 5), Vector3(10.3, 0.2, 10.6), plate)
+	m._box(Vector3(13.0, 3.3, 5), Vector3(10.3, 0.2, 10.6), m.mat_ceil)
+	m._wall_x(0, 8, 18, concrete)
+	m._wall_x(10, 8, 18, concrete)
+	m._wall_z(18, 0, 4, concrete)
+	m._wall_z(18, 6, 10, concrete)
+	m._box(Vector3(18, 2.95, 5), Vector3(0.3, 0.5, 2.0), concrete)
 	var rack := _plain(Color(0.06, 0.065, 0.07), 0.4, 0.7)
-	var led_cols := [Color(0.2, 0.6, 1.0), Color(0.3, 1.0, 0.4), Color(1.0, 0.6, 0.15)]
-	for row in [2.6, 7.4]:
-		for k in 5:
-			var x := 10.9 + k * 0.72
-			m._box(Vector3(x, 1.0, row), Vector3(0.66, 2.0, 1.0), rack)
-			var face: float = row + (0.51 if row < 5.0 else -0.51)
-			for j in 6:
-				m._box(Vector3(x - 0.2 + (j % 2) * 0.4, 0.4 + j * 0.27, face), Vector3(0.05, 0.03, 0.01), m._glow(led_cols[(k + j) % 3], 4.0), false)
-	for row in [2.6, 7.4]:
-		var gl := OmniLight3D.new()
-		gl.position = Vector3(12.3, 1.2, row + (0.9 if row < 5.0 else -0.9))
-		gl.light_color = Color(0.3, 0.6, 1.0)
-		gl.light_energy = 0.6
-		gl.omni_range = 3.0
-		m.add_child(gl)
-	m._box(Vector3(14.0, 3.0, 5.0), Vector3(10.0, 0.06, 0.4), post, false)
-	m._prop("power_box_01", Vector3(19.75, 1.1, 2.6), -90, false)
-	m._prop("korean_fire_extinguisher_01", Vector3(8.5, 0, 9.4), 0, false)
-	m._lamp(Vector3(11.0, WALL_H(), 5), Color(0.82, 0.9, 1.0), 1.1)
-	m._lamp(Vector3(17.0, WALL_H(), 5), Color(0.82, 0.9, 1.0), 1.0, true)
+	var cols := {"أخضر": Color(0.2, 1.0, 0.35), "برتقالي": Color(1.0, 0.55, 0.1), "أحمر": Color(1.0, 0.12, 0.08), "أزرق": Color(0.25, 0.55, 1.0)}
+	var srv: Array = m.puzzle.servers
+	for k in srv.size():
+		var row := 2.6 if k < 6 else 7.4
+		var x := 10.0 + (k % 6) * 0.75
+		m._box(Vector3(x, 1.0, row), Vector3(0.68, 2.0, 1.0), rack)
+		var face := row + (0.51 if row < 5.0 else -0.51)
+		var e: Dictionary = srv[k]
+		var lm := StandardMaterial3D.new()
+		lm.albedo_color = cols[e.led]
+		lm.emission_enabled = true
+		lm.emission = cols[e.led]
+		lm.emission_energy_multiplier = 5.0
+		lm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		var led := MeshInstance3D.new()
+		var sp := SphereMesh.new()
+		sp.radius = 0.045
+		sp.height = 0.09
+		led.mesh = sp
+		led.material_override = lm
+		led.position = Vector3(x, 1.75, face)
+		m.add_child(led)
+		_leds.append([lm, int(e.blink), k * 0.37])
+		for j2 in 5:
+			m._box(Vector3(x - 0.2 + (j2 % 2) * 0.4, 0.4 + j2 * 0.27, face), Vector3(0.05, 0.03, 0.01), m._glow(Color(0.25, 0.5, 0.9), 2.0), false)
+		var lab = m._label3d("%s\n%d°" % [e.id, int(e.temp)], Vector3(x, 1.35, face + (0.02 if row < 5.0 else -0.02)), 16, Color(0.85, 0.95, 1.0))
+		if row > 5.0:
+			lab.rotation_degrees.y = 180
+	m._prop("power_box_01", Vector3(17.75, 1.1, 8.6), -90, false)
+	m._lamp(Vector3(11.0, 3.2, 5), Color(0.82, 0.9, 1.0), 1.0)
+	m._lamp(Vector3(15.5, 3.2, 5), Color(0.82, 0.9, 1.0), 0.9, true)
 
-	# ── الكهف الصخري (المنطقة ج) ──
-	m._box(Vector3(25.0, -0.1, 5), Vector3(10.3, 0.2, 10.6), rock_floor)
-	m._box(Vector3(25.0, WALL_H() + 0.1, 5), Vector3(10.3, 0.2, 10.6), rock)
-	m._box(Vector3(25.0, WALL_H() / 2.0, 0), Vector3(10.3, WALL_H(), 0.3), rock)
-	m._box(Vector3(25.0, WALL_H() / 2.0, 10), Vector3(10.3, WALL_H(), 0.3), rock)
-	m._vault_wall(rock)
-	# جدران غير منتظمة: كتل صخرية بارزة قليلاً (لا تسدّ طريق الحرّاس)
-	for i in 14:
-		var zz := 0.3 if i % 2 == 0 else 9.7
-		var c := Vector3(20.8 + (i / 2) * 1.3 + rng.randf_range(-0.3, 0.3), rng.randf_range(0.4, 2.8), zz)
-		var b = m._box(c, Vector3(rng.randf_range(0.9, 1.6), rng.randf_range(0.7, 1.4), 0.5), rock, false)
-		b.rotation = Vector3(rng.randf_range(-0.3, 0.3), rng.randf_range(-0.4, 0.4), rng.randf_range(-0.3, 0.3))
-	# هوابط صخرية وجليد يتوهّج
+	# ── الأنفاق المظلمة x 18..30 (متاهة تتولّد من الكود) ──
+	m._box(Vector3(24, -0.1, 5), Vector3(12.3, 0.2, 10.6), rock_floor)
+	m._box(Vector3(24, 3.3, 5), Vector3(12.3, 0.2, 10.6), rock)
+	m._wall_x(0, 18, 30, rock)
+	m._wall_x(10, 18, 30, rock)
+	for sg in maze_segments():
+		var a: Vector2 = sg[0]
+		var b: Vector2 = sg[1]
+		var c := Vector3((a.x + b.x) * 0.5, 1.6, (a.y + b.y) * 0.5)
+		var vertical := absf(a.x - b.x) < 0.01
+		var ln := a.distance_to(b)
+		if c.x <= 18.01 or c.x >= 29.99 or c.z <= 0.01 or c.z >= 9.99:
+			continue # الحدّان الغربي والشرقي يبنيهما جدارا البابين
+		m._box(c, Vector3(0.22, 3.2, ln + 0.22) if vertical else Vector3(ln + 0.22, 3.2, 0.22), rock)
+	# شرائط طوارئ حمراء خافتة على الأرض، وأضواء الأنفاق مطفأة حتى يُعاد التيار
+	for k in 6:
+		m._box(Vector3(19 + k * 2, 0.01, 0.35), Vector3(1.2, 0.02, 0.05), m._glow(Color(0.8, 0.05, 0.03), 0.6), false)
+	for p in [Vector3(21, 3.2, 3), Vector3(25, 3.2, 7), Vector3(27, 3.2, 3)]:
+		var l = m._lamp(p, Color(0.9, 0.85, 0.7), 0.9)
+		l.visible = false
+		maze_lights.append(l)
+	# ── الكهف الصخري x 30..40 ──
+	m._box(Vector3(35.0, -0.1, 5), Vector3(10.3, 0.2, 10.6), rock_floor)
+	m._box(Vector3(35.0, 3.3, 5), Vector3(10.3, 0.2, 10.6), rock)
+	m._box(Vector3(35.0, 1.6, 0), Vector3(10.3, 3.2, 0.3), rock)
+	m._box(Vector3(35.0, 1.6, 10), Vector3(10.3, 3.2, 0.3), rock)
+	m._wall_z(30, 0, 4, rock)
+	m._wall_z(30, 6, 10, rock)
+	m._box(Vector3(30, 2.95, 5), Vector3(0.3, 0.5, 2.0), rock)
+	m._in_vault_frame(func(): m._vault_wall(rock))
+	for k in 14:
+		var zz := 0.3 if k % 2 == 0 else 9.7
+		var c2 := Vector3(30.8 + (k / 2) * 1.3 + rng.randf_range(-0.3, 0.3), rng.randf_range(0.4, 2.8), zz)
+		var bb = m._box(c2, Vector3(rng.randf_range(0.9, 1.6), rng.randf_range(0.7, 1.4), 0.5), rock, false)
+		bb.rotation = Vector3(rng.randf_range(-0.3, 0.3), rng.randf_range(-0.4, 0.4), rng.randf_range(-0.3, 0.3))
 	var ice = m._glow(Color(0.5, 0.85, 1.0), 0.9)
-	for i in 16:
-		var p := Vector3(rng.randf_range(20.6, 29.4), WALL_H() - 0.25, rng.randf_range(0.6, 9.4))
+	for k in 16:
+		var p := Vector3(rng.randf_range(30.6, 39.4), 3.0, rng.randf_range(0.6, 9.4))
 		_cyl(p, rng.randf_range(0.08, 0.18), rng.randf_range(0.35, 0.75), rock, false, Vector3(180, 0, 0), 0.01)
-		if i % 3 == 0:
-			_cyl(Vector3(p.x, 0.25, clampf(p.z, 0.7, 9.3) if absf(p.z - 5.0) > 2.0 else 0.7), 0.1, 0.5, ice, false, Vector3.ZERO, 0.01)
-	m.vault_lamp = m._lamp(Vector3(25.5, WALL_H(), 5), Color(0.55, 0.8, 1.0), 0.9, true)
-	for tp in [Vector3(21.0, 0, 1.0), Vector3(28.8, 0, 9.0)]:
+		if k % 3 == 0:
+			_cyl(Vector3(p.x, 0.25, 0.7 if p.z < 5.0 else 9.3), 0.1, 0.5, ice, false, Vector3.ZERO, 0.01)
+	m.vault_lamp = m._lamp(Vector3(35.5, 3.2, 5), Color(0.55, 0.8, 1.0), 0.9, true)
+	for tp in [Vector3(31.0, 0, 1.0), Vector3(38.8, 0, 9.0)]:
 		var lamp := SpotLight3D.new()
 		m.add_child(lamp)
-		lamp.look_at_from_position(tp + Vector3(0, 1.8, 0), Vector3(25.0, 0.5, 5.0))
+		lamp.look_at_from_position(tp + Vector3(0, 1.8, 0), Vector3(35.0, 0.5, 5.0))
 		lamp.light_color = Color(1.0, 0.7, 0.4)
 		lamp.light_energy = 2.2
 		lamp.spot_range = 10.0
 		lamp.spot_angle = 35.0
-		_cyl(tp + Vector3(0, 0.9, 0), 0.03, 1.8, post, false)
-		m._box(tp + Vector3(0, 1.85, 0), Vector3(0.3, 0.2, 0.2), m._glow(Color(1.0, 0.8, 0.5), 2.0), false)
-	m._probe(Vector3(14, 1.6, 5), Vector3(12, WALL_H(), 10.5))
-	m._probe(Vector3(25, 1.6, 5), Vector3(10, WALL_H(), 10.5))
-	m._dust(Vector3(19, 1.6, 5), Vector3(11, 1.5, 5))
+	m._probe(Vector3(13, 1.6, 5), Vector3(10, 3.2, 10.5))
+	m._probe(Vector3(35, 1.6, 5), Vector3(10, 3.2, 10.5))
+	m._dust(Vector3(24, 1.6, 5), Vector3(16, 1.5, 5))
+
+	# ── زلّاجة الدورية أمام الكوخ ──
+	_patrol = Node3D.new()
+	m.add_child(_patrol)
+	var body := MeshInstance3D.new()
+	var bxm := BoxMesh.new()
+	bxm.size = Vector3(2.2, 0.8, 1.0)
+	body.mesh = bxm
+	body.material_override = sled
+	body.position = Vector3(0, 0.5, 0)
+	_patrol.add_child(body)
+	for hx in [1.1]:
+		var hl := SpotLight3D.new()
+		hl.position = Vector3(hx, 0.7, 0)
+		hl.rotation_degrees = Vector3(-6, -90, 0)
+		hl.light_color = Color(1.0, 0.95, 0.8)
+		hl.light_energy = 3.0
+		hl.spot_range = 12.0
+		hl.spot_angle = 25.0
+		_patrol.add_child(hl)
+	_patrol_lamp = SpotLight3D.new()
+	_patrol_lamp.position = Vector3(0, 1.4, -0.4)
+	_patrol_lamp.light_color = Color(1.0, 0.96, 0.85)
+	_patrol_lamp.light_energy = 0.0
+	_patrol_lamp.spot_range = 12.0
+	_patrol_lamp.spot_angle = 22.0
+	_patrol.add_child(_patrol_lamp)
+	_path = [-18.0, 14.0, -9.0, 0.1, 60.0]
+
+
+## حدود المتاهة (للبناء ولمخطّط المحلّل): خلايا 2×2 م، 6×5، من (18، 0).
+func maze_segments() -> Array:
+	var segs := []
+	var mz: Dictionary = m.puzzle.maze
+	var W := 6
+	var H := 5
+	for cy in H:
+		for cx in W:
+			var x0 := 18.0 + cx * 2.0
+			var z0 := cy * 2.0
+			if cx < W - 1 and mz.v[cy * W + cx]:
+				segs.append([Vector2(x0 + 2.0, z0), Vector2(x0 + 2.0, z0 + 2.0)])
+			if cy < H - 1 and mz.h[cy * W + cx]:
+				segs.append([Vector2(x0, z0 + 2.0), Vector2(x0 + 2.0, z0 + 2.0)])
+	# الحدود: شمال وجنوب كاملة، وغرب وشرق بفتحة الصفّ 2 (البابان)
+	segs.append([Vector2(18, 0), Vector2(30, 0)])
+	segs.append([Vector2(18, 10), Vector2(30, 10)])
+	segs.append([Vector2(18, 0), Vector2(18, 4)])
+	segs.append([Vector2(18, 6), Vector2(18, 10)])
+	segs.append([Vector2(30, 0), Vector2(30, 4)])
+	segs.append([Vector2(30, 6), Vector2(30, 10)])
+	return segs
+
+
+## يُستدعى كل إطار: ومضات أضواء الخوادم.
+func tick(t: float) -> void:
+	for e in _leds:
+		var mat: StandardMaterial3D = e[0]
+		var n: int = e[1]
+		var u := fmod(t + float(e[2]), 2.6)
+		var on := false
+		for k in n:
+			if u > k * 0.36 and u < k * 0.36 + 0.2:
+				on = true
+		mat.emission_energy_multiplier = 6.0 if on else 0.15
+
+
+## بعد إعادة التيار تضيء الأنفاق.
+func on_stage(st: int) -> void:
+	if st >= 2:
+		for l in maze_lights:
+			(l as Light3D).visible = true
 
 
 func WALL_H() -> float:

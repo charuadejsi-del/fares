@@ -70,6 +70,9 @@ var valves := [0, 0, 0, 0]
 var radio_cur := 150.0
 var _radio_open := false
 var _gauges_open := false
+var _bp_open := false
+var _bp_t := 0.0
+var _dark_warned := false
 var _gauge_t := 0.0
 var _morse_units: Array = []
 var s_morse: AudioStreamPlayer
@@ -339,6 +342,22 @@ func _smoke_gate(i: int) -> void:
 			print("SMOKE valves burst=", burst, " blocked=", blocked, " stage=", stage)
 			if stage == i + 1 and blocked:
 				print("SMOKE valves ok")
+		"servers":
+			_pick_server((int(puzzle.hacked) + 1) % 12)
+			var blocked := stage == i
+			lockout = 0.0
+			_pick_server(int(puzzle.hacked))
+			# الحلّ وحيد: لا خادم آخر يطابق الشروط الثلاثة
+			var matches := 0
+			for e in puzzle.servers:
+				if e.led == puzzle.srv_led and int(e.blink) == int(puzzle.srv_blink) and int(e.temp) > int(puzzle.srv_t):
+					matches += 1
+			print("SMOKE servers blocked=", blocked, " unique=", matches, " stage=", stage)
+			if blocked and matches == 1 and stage == i + 1:
+				print("SMOKE servers ok")
+		"maze":
+			_advance()
+			print("SMOKE maze ok segs=", maps.maze_segments().size())
 		"radio":
 			radio_cur = 150.0
 			_radio_open = true
@@ -744,8 +763,73 @@ func _make_puzzle(s: int) -> Dictionary:
 	var morse := ""
 	for i in 4:
 		morse += str(r3.randi_range(0, 9))
+	# الخوادم: واحد مخترَق؛ يُعرف بلون ضوئه وعدد ومضاته (سجلّ المحلّل) وحرارته فوق حدّ (لوحة البرج)
+	var r4 := RandomNumberGenerator.new()
+	r4.seed = s + 4242
+	var leds := ["أخضر", "برتقالي", "أحمر", "أزرق"]
+	var led_t: String = leds[r4.randi_range(0, 3)]
+	var blink_t := r4.randi_range(1, 3)
+	var srv_t := r4.randi_range(55, 68)
+	var ids := []
+	for k in range(1, 25):
+		ids.append(k)
+	for k in range(ids.size() - 1, 0, -1):
+		var j := r4.randi_range(0, k)
+		var tmp = ids[k]
+		ids[k] = ids[j]
+		ids[j] = tmp
+	var servers := []
+	var hacked := r4.randi_range(0, 11)
+	for k in 12:
+		var e := {"id": "SRV-%02d" % int(ids[k]), "led": leds[r4.randi_range(0, 3)], "blink": r4.randi_range(1, 3), "temp": r4.randi_range(38, 84)}
+		var role_k := (k - hacked + 12) % 12
+		if role_k == 0:
+			e.led = led_t
+			e.blink = blink_t
+			e.temp = srv_t + r4.randi_range(3, 12)
+		elif role_k <= 2:
+			e.led = led_t # يشبهه في الضوء والومضات… لكنه بارد
+			e.blink = blink_t
+			e.temp = srv_t - r4.randi_range(1, 12)
+		elif role_k <= 4:
+			e.led = led_t # نفس اللون وحارّ… لكن ومضاته مختلفة
+			e.blink = (blink_t % 3) + 1
+			e.temp = srv_t + r4.randi_range(2, 14)
+		elif e.led == led_t and e.blink == blink_t and e.temp > srv_t:
+			e.temp = srv_t - r4.randi_range(2, 10)
+		servers.append(e)
+	# المتاهة: شجرة ممرّات (DFS) على شبكة 6×5 تبدأ من الصفّ 2 غرباً
+	var r5 := RandomNumberGenerator.new()
+	r5.seed = s + 777
+	var W := 6
+	var H := 5
+	var vw := []
+	var hw := []
+	for k in W * H:
+		vw.append(true)
+		hw.append(true)
+	var seen := {Vector2i(0, 2): true}
+	var stack := [Vector2i(0, 2)]
+	while not stack.is_empty():
+		var c: Vector2i = stack[stack.size() - 1]
+		var nb := []
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n2: Vector2i = c + d
+			if n2.x >= 0 and n2.x < W and n2.y >= 0 and n2.y < H and not seen.has(n2):
+				nb.append(n2)
+		if nb.is_empty():
+			stack.pop_back()
+			continue
+		var nx: Vector2i = nb[r5.randi_range(0, nb.size() - 1)]
+		if nx.x != c.x:
+			vw[c.y * W + mini(c.x, nx.x)] = false
+		else:
+			hw[mini(c.y, nx.y) * W + c.x] = false
+		seen[nx] = true
+		stack.append(nx)
 	return {"code": code, "serial": serial, "table": table, "answer": answer, "wires": wires, "symbols": syms, "combo": combo, "laser": laser,
-		"vmat": mat, "vsol": sol, "vbase": base, "vtarget": target, "freq": freq, "morse": morse}
+		"vmat": mat, "vsol": sol, "vbase": base, "vtarget": target, "freq": freq, "morse": morse,
+		"servers": servers, "hacked": hacked, "srv_led": led_t, "srv_blink": blink_t, "srv_t": srv_t, "maze": {"v": vw, "h": hw}}
 
 
 func _gauges() -> Array:
@@ -1228,6 +1312,43 @@ func _morse_update() -> void:
 		_morse_phase = fmod(_morse_phase + 700.0 / 22050.0, 1.0)
 		var v := (sin(_morse_phase * TAU) * 0.45 if on else 0.0) + randf_range(-noise, noise)
 		_morse_pb.push_frame(Vector2(v, v))
+
+
+func _pick_server(i: int) -> void:
+	if lockout > 0.0:
+		hud.flash("اللوحة مقفلة… انتظر", Color(0.9, 0.28, 0.3))
+		return
+	if i == int(puzzle.hacked):
+		hud.close_panel()
+		hud.flash("✔ سحبتَ قرص الخادم المخترَق — باب الأنفاق يُفتح", Color(0.42, 0.85, 0.58))
+		_advance()
+	else:
+		lockout = 6.0
+		mission_left = maxf(10.0, mission_left - 20.0)
+		hud.close_panel()
+		hud.flash("✖ خادم خاطئ! إنذار — الحارس قادم (−20 ث)", Color(0.9, 0.28, 0.3))
+		hud.hit()
+		shake = 0.4
+		if s_beep.stream:
+			s_beep.play()
+		var g = _nearest_guard(agent.global_position)
+		if g and not g.is_chasing():
+			g.chase(agent)
+
+
+## الأنفاق مظلمة قبل إعادة التيار: مصباح العميل يموت داخلها، فيعتمد على مخطّط المحلّل.
+func _maze_dark() -> void:
+	if agent == null or not gate_types.has("maze"):
+		return
+	var p: Vector3 = agent.global_position
+	var inside := stage == 1 and p.x > 18.2 and p.x < 29.9 and p.z > 0.0 and p.z < 10.0
+	agent.flash.visible = (not inside) and active == agent
+	if inside and not _dark_warned and active == agent:
+		_dark_warned = true
+		hud.flash("🔦 فرغت بطارية المصباح… اطلب من المحلّل أن يوجّهك بالمخطّط", Color(0.9, 0.6, 0.3))
+		if s_creep.stream:
+			s_creep.global_position = p + Vector3(0, 1.5, -3)
+			s_creep.play()
 
 
 # ═════════ المحلّل: منظار، أضواء، ودورية ═════════
@@ -2205,8 +2326,30 @@ func _build_archive() -> void:
 		gs.position = Vector3(0, 0, 0.045)
 		gauge_node.add_child(gs)
 		_label3d("ضغط المضخّات", o + Vector3(7.3, 1.42, 1.0), 24, Color(0.7, 0.9, 1.0))
+	var log_node: Node3D = null
+	if gate_types.has("servers"):
+		log_node = _box(o + Vector3(7.3, 1.08, 0.95), Vector3(0.75, 0.5, 0.08), mat_dark)
+		log_node.set_meta("kind", "serverlog")
+		var ls := MeshInstance3D.new()
+		var lq := QuadMesh.new()
+		lq.size = Vector2(0.68, 0.42)
+		ls.mesh = lq
+		ls.material_override = _glow(Color(0.85, 0.25, 0.2), 1.4)
+		ls.position = Vector3(0, 0, 0.045)
+		log_node.add_child(ls)
+		_label3d("سجلّ الاختراق", o + Vector3(7.3, 1.42, 1.0), 24, Color(1.0, 0.7, 0.6))
+	var bp_node: Node3D = null
+	if gate_types.has("maze"):
+		bp_node = _box(o + Vector3(0.25, 1.6, 6.3), Vector3(0.06, 1.0, 1.4), _glow(Color(0.1, 0.3, 0.6), 0.9))
+		bp_node.set_meta("kind", "blueprint")
+		var bpl := _label3d("مخطّط الأنفاق", o + Vector3(0.3, 2.25, 6.3), 26, Color(0.6, 0.85, 1.0))
+		bpl.rotation_degrees.y = 90
 	for gt in gate_types:
 		match str(gt):
+			"servers":
+				analyst_targets.append(log_node)
+			"maze":
+				analyst_targets.append(bp_node)
 			"keypad":
 				analyst_targets.append(drawer)
 			"wires", "radio":
@@ -2399,6 +2542,21 @@ func _process(delta: float) -> void:
 	_morse_update()
 	_sync_update()
 	_patrol_update(delta)
+	if maps.has_method("tick"):
+		maps.tick(htime)
+	_maze_dark()
+	if _bp_open:
+		if hud.panel_open():
+			_bp_t -= delta
+			if _bp_t <= 0.0:
+				_bp_t = 0.15
+				var ap: Vector3 = agent.global_position if agent else (avatar.position if avatar else Vector3(-999, 0, -999))
+				var gp := []
+				for g in guards:
+					gp.append(Vector2((g.global_position as Vector3).x, (g.global_position as Vector3).z))
+				hud.update_blueprint(Vector2(ap.x, ap.z), gp)
+		else:
+			_bp_open = false
 	if _gauges_open:
 		if hud.panel_open():
 			_gauge_t -= delta
@@ -2710,7 +2868,7 @@ func _analyst_logic() -> void:
 		if col is Node and (col as Node).has_meta("kind"):
 			obj = col
 	var kind := str((obj as Node).get_meta("kind")) if obj else ""
-	var labels := {"drawer": "اقرأ الورقة" if drawer_open else "افتح الدرج", "book": "اقرأ دليل الأسلاك", "computer": "شغّل الحاسوب", "monitor": "كبّر الشاشة", "laserdoc": "اقرأ سجلّ الليزر", "gauges": "افتح مخطّط الضغط", "morse": "اقرأ دليل مورس"}
+	var labels := {"drawer": "اقرأ الورقة" if drawer_open else "افتح الدرج", "book": "اقرأ دليل الأسلاك", "computer": "شغّل الحاسوب", "monitor": "كبّر الشاشة", "laserdoc": "اقرأ سجلّ الليزر", "gauges": "افتح مخطّط الضغط", "morse": "اقرأ دليل مورس", "serverlog": "اقرأ سجلّ الاختراق", "blueprint": "افتح مخطّط الأنفاق"}
 	hud.show_interact(str(labels.get(kind, "")))
 	analyst.set_meta("looking", obj)
 
@@ -2741,6 +2899,14 @@ func _on_interact() -> void:
 		"radio":
 			_radio_open = true
 			hud.open_radio(radio_cur, _tune_radio, _submit_morse)
+		"servers":
+			hud.open_servers(puzzle.servers, _pick_server)
+		"maze":
+			hud.close_panel()
+			hud.flash("⚡ أعدتَ التيار — الأنفاق تضيء والباب يُفتح", Color(0.42, 0.85, 0.58))
+			if s_clunk.stream:
+				s_clunk.play()
+			_advance()
 
 
 func _analyst_interact() -> void:
@@ -2755,6 +2921,17 @@ func _analyst_interact() -> void:
 		hud.open_gauges(GAUGE_NAMES)
 		_gauges_open = true
 		_gauge_t = 0.0
+		return
+	if kind == "serverlog":
+		var icons := {"أخضر": "🟢", "برتقالي": "🟠", "أحمر": "🔴", "أزرق": "🔵"}
+		var dots := ""
+		for k in int(puzzle.srv_blink):
+			dots += str(icons.get(puzzle.srv_led, ""))
+		hud.open_text("🛰 سجلّ الاختراق", "الخادم المصاب:\n• ضوؤه %s يومض %d مرّة في كل دورة  %s\n• حرارته أعلى من حدّ الإنذار — الحدّ مكتوب على لوحة برج الحراسة (استعمل المنظار 🔭 من النافذة)\n\n⚠ خوادم كثيرة تشبهه في الضوء أو الحرارة. اسأل العميل عن الثلاثة معاً." % [puzzle.srv_led, int(puzzle.srv_blink), dots])
+		return
+	if kind == "blueprint":
+		hud.open_blueprint(maps.maze_segments(), Rect2(17.5, -0.5, 13.0, 11.0), Vector2(terminals[1].pos.x, terminals[1].pos.z))
+		_bp_open = true
 		return
 	if kind == "morse":
 		var lines := []
@@ -2846,6 +3023,8 @@ func _apply_stage() -> void:
 	if stage >= 3 and _applied_stage < 3:
 		_open_vault_door()
 	if stage != _applied_stage:
+		if maps and maps.has_method("on_stage"):
+			maps.on_stage(stage)
 		_applied_stage = stage
 		_update_objective()
 
@@ -2860,6 +3039,8 @@ func _update_objective() -> void:
 		"wires": ["افتح لوحة الأسلاك، اقرأ الرقم التسلسلي لشريكك، واقطع السلك الذي يقوله", "اسأل العميل عن آخر رقم في الرقم التسلسلي، وابحث عنه في الدليل الأحمر المضيء"],
 		"valves": ["في بيت المضخّات: أدِر الصمّامات الأربعة حتى يقول المحلّل إن كل العدّادات خضراء، ثم ثبّت الضغط", "افتح «مخطّط الضغط» المضيء: اطلب من العميل أن يدير صمّاماً واحداً، وراقب أيّ عدّاد يتحرّك"],
 		"radio": ["في غرفة اللاسلكي: اضبط التردّد الذي يقوله المحلّل، صِف له إشارات مورس، وأدخل الأرقام", "انظر من النافذة بالمنظار 🔭 إلى جدار المضخّات واقرأ التردّد، ثم ترجم إشارات العميل بدليل مورس"],
+		"servers": ["في غرفة الخوادم: صِف لكل خادم ضوءه وومضاته وحرارته، واسحب قرص الذي يحدّده المحلّل", "اقرأ «سجلّ الاختراق»، وبالمنظار 🔭 اقرأ حدّ الحرارة على لوحة البرج، ثم حدّد الخادم المخترَق"],
+		"maze": ["الأنفاق مظلمة ومصباحك فارغ: اتبع كلام المحلّل حتى قاطع الكهرباء", "افتح «مخطّط الأنفاق»: ترى العميل والحرّاس — وجّهه بالكلام إلى قاطع الكهرباء الأخضر"],
 	}
 	if stage < 2 and stage < gate_types.size():
 		var pair: Array = OBJ.get(str(gate_types[stage]), ["", ""])

@@ -51,6 +51,7 @@ var _valve_lbls: Array = []
 var _radio_freq: Label
 var _radio_led: ColorRect
 var _radio_code: Label
+var _bp: Control
 var _switch: Button
 var _alert_mat: ShaderMaterial
 var _hit := 0.0
@@ -627,6 +628,55 @@ func set_radio(freq: float, led: bool) -> void:
 		_radio_freq.text = "%.1f MHz" % freq
 	if _radio_led and is_instance_valid(_radio_led):
 		_radio_led.color = Color(1.0, 0.25, 0.15) if led else Color(0.15, 0.05, 0.05)
+
+
+# ───────── الخوادم (العميل) ─────────
+func open_servers(list: Array, on_pick: Callable) -> void:
+	var v := _open("غرفة الخوادم — أيّها مخترَق؟")
+	var hint := _label(19, Color(0.6, 0.64, 0.68))
+	hint.text = "صِف للمحلّل الأضواء والحرارة. هو يملك سجلّ الاختراق، والحدّ الحراري مكتوب على البرج (يقرؤه بالمنظار). اختيار خاطئ = إنذار."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(hint)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	v.add_child(grid)
+	var icons := {"أخضر": "🟢", "برتقالي": "🟠", "أحمر": "🔴", "أزرق": "🔵"}
+	for i in list.size():
+		var e: Dictionary = list[i]
+		var dots := ""
+		for k in int(e.blink):
+			dots += str(icons.get(e.led, "⚪"))
+		var b := _button("%s\n%s  %d°" % [e.id, dots, int(e.temp)], Color(0.12, 0.14, 0.17), Color(0.9, 0.95, 1.0), 22)
+		b.custom_minimum_size = Vector2(200, 84)
+		var idx := i
+		b.pressed.connect(func(): on_pick.call(idx))
+		grid.add_child(b)
+
+
+# ───────── مخطّط المتاهة (المحلّل) ─────────
+func open_blueprint(segs: Array, area: Rect2, goal: Vector2) -> void:
+	var v := _open("مخطّط الأنفاق — العميل في الظلام")
+	var hint := _label(19, Color(0.6, 0.64, 0.68))
+	hint.text = "🟠 العميل · 🔴 الحرّاس · 🟢 قاطع الكهرباء. وجّهه بالكلام: يمين، يسار، تقدّم…"
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(hint)
+	_bp = preload("res://blueprint.gd").new()
+	_bp.custom_minimum_size = Vector2(640, 520)
+	_bp.segs = segs
+	_bp.area = area
+	_bp.goal = goal
+	v.add_child(_bp)
+
+
+func update_blueprint(agent: Vector2, guards: Array) -> void:
+	if _bp and is_instance_valid(_bp):
+		_bp.agent_p = agent
+		_bp.guards_p = guards
+		_bp.queue_redraw()
 
 
 # ───────── القفل الزمني: الضغط معاً ─────────
