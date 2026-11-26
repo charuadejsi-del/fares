@@ -100,6 +100,9 @@ var instinct_cd := 0.0
 var _act := "" # الفعل الأساسي القريب (زرّ التفاعل)
 var _act2 := "" # الفعل الثاني
 var _act_g = null
+var _act_id := ""
+var _act2_id := ""
+var _busy := 0.0 # أثناء حركة الإسقاط
 var stats := {"seen": 0, "ko": 0, "found": 0, "start": 0.0}
 var _found_alarm := false
 var _tip_t := 0.0
@@ -350,21 +353,24 @@ func _on_gate_smoke() -> void:
 func _smoke_hitman() -> void:
 	var g = guards[0]
 	var gp: Vector3 = g.global_position
+	# من الجانب وعلى بعد مترين تقريباً (يجب أن يظهر زرّ الإسقاط)
+	var side: Vector3 = (g.global_transform.basis.x as Vector3).normalized()
 	var back: Vector3 = (g.global_transform.basis.z as Vector3).normalized()
-	agent.global_position = gp + back * 1.0
+	agent.global_position = gp + side * 1.4 + back * 0.6
 	await get_tree().physics_frame
 	_hitman_update(0.016)
-	var saw_ko: bool = _act.begins_with("👊")
+	var saw_ko: bool = _act_id == "ko"
 	var had_card: bool = g.has_card
-	if _act2.begins_with("🤏"):
+	if _act2_id == "steal":
 		_do_act(true)
 	var card_ok: bool = (not had_card) or has_card or has_chief_card
 	_takedown(g)
-	await get_tree().create_timer(0.5).timeout
+	await get_tree().create_timer(0.6).timeout
 	var ko_ok: bool = g.ko and g.state_name() == "ko"
+	_busy = 0.0
 	agent.global_position = g.global_position + Vector3(0.6, 0, 0)
 	_hitman_update(0.016)
-	var strip_ok: bool = _act.begins_with("👕")
+	var strip_ok: bool = _act_id == "suit"
 	_do_act(false)
 	var dis_ok: bool = disguised and agent.body.disguised
 	_hitman_update(0.016)
@@ -391,6 +397,17 @@ func _smoke_hitman() -> void:
 	print("SMOKE hitman sawko=", saw_ko, " card=", card_ok, " ko=", ko_ok, " strip=", strip_ok, " disguise=", dis_ok, " drag=", drag_ok, " hide=", hide_ok, " throw=", throw_ok, " body=", agent.body.debug)
 	if saw_ko and card_ok and ko_ok and strip_ok and dis_ok and drag_ok and hide_ok and throw_ok:
 		print("SMOKE hitman ok")
+	# الكاميرا لا تدخل الجدار: العميل ملاصق للجدار الغربي وظهره له
+	agent.global_position = Vector3(0.55, 0, 4.0)
+	agent.yaw = -PI / 2.0
+	var inside := false
+	for k in 40:
+		await get_tree().physics_frame
+		if k > 15 and agent.cam_inside_wall():
+			inside = true
+	print("SMOKE camera inside_wall=", inside, " dist=", agent.cam.position.z)
+	if not inside:
+		print("SMOKE camera ok")
 
 
 ## حلّ بوّابة في الاختبار الآلي (ويجرّب الخطأ أولاً حيث يفيد).
@@ -1238,12 +1255,12 @@ func _glow(color: Color, energy: float) -> StandardMaterial3D:
 func _environment() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.004, 0.005, 0.007)
+	env.background_color = Color(0.02, 0.022, 0.028)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.3, 0.36, 0.46)
-	env.ambient_light_energy = 0.42
+	env.ambient_light_color = Color(0.58, 0.58, 0.62)
+	env.ambient_light_energy = 0.95
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.05
+	env.tonemap_exposure = 1.3
 	env.glow_enabled = true
 	env.glow_intensity = 1.0
 	env.glow_strength = 1.15
@@ -1251,7 +1268,7 @@ func _environment() -> void:
 	env.glow_hdr_threshold = 0.8
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.03, 0.035, 0.045)
-	env.fog_density = 0.035
+	env.fog_density = 0.018
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.15
 	env.adjustment_saturation = 0.85
@@ -1259,7 +1276,7 @@ func _environment() -> void:
 		"river":
 			# رطوبة: ضباب مائل للأخضر، ضوء بارد خافت
 			env.fog_light_color = Color(0.02, 0.045, 0.05)
-			env.fog_density = 0.045
+			env.fog_density = 0.025
 			env.ambient_light_color = Color(0.25, 0.42, 0.45)
 			env.adjustment_saturation = 0.8
 		"mountain":
@@ -1267,7 +1284,7 @@ func _environment() -> void:
 			env.fog_light_color = Color(0.07, 0.085, 0.11)
 			env.fog_density = 0.03
 			env.ambient_light_color = Color(0.5, 0.6, 0.8)
-			env.ambient_light_energy = 0.45
+			env.ambient_light_energy = 0.95
 			env.adjustment_saturation = 0.62
 			env.adjustment_contrast = 1.2
 	var we := WorldEnvironment.new()
@@ -1295,10 +1312,14 @@ func _apply_low_quality() -> void:
 
 # ═════════ Hitman: الإسقاط، الإخفاء، التنكّر، الرمي، الحاسّة ═════════
 func _behind(g) -> bool:
+	# من الخلف أو من الجانب (ليس أمام وجهه)، على بعد مترين، وهو لا يطاردك
 	var to: Vector3 = agent.global_position - (g.global_position as Vector3)
 	to.y = 0.0
 	var fwd: Vector3 = -(g.global_transform.basis.z as Vector3)
-	return to.length() < 1.5 and fwd.dot(to.normalized()) < -0.25
+	return to.length() < 2.2 and fwd.dot(to.normalized()) < 0.25
+
+
+const ACT_TXT := {"ko": "أسقِطه", "steal": "اسرق البطاقة", "suit": "تنكّر بزيّه", "drag": "اسحب الجسم", "drop": "اترك الجسم", "hide": "أخفِ الجسم", "can": "التقط العلبة"}
 
 
 func _hitman_update(delta: float) -> void:
@@ -1306,86 +1327,96 @@ func _hitman_update(delta: float) -> void:
 	instinct_cd = maxf(0.0, instinct_cd - delta)
 	hud.instinct_fx(clampf(instinct_t, 0.0, 1.0) if active == agent else 0.0)
 	var p: Vector3 = agent.global_position
-	# الجسم المسحوب يتبع العميل
 	if drag_g:
 		var back := Basis(Vector3.UP, agent.face).z
 		drag_g.position = drag_g.position.lerp(p + back * 0.95, minf(1.0, delta * 10.0))
 	_act = ""
 	_act2 = ""
+	_act_id = ""
+	_act2_id = ""
 	_act_g = null
-	if vault_mode or result != "":
+	if vault_mode or result != "" or _busy > 0.0:
+		_busy = maxf(0.0, _busy - delta)
 		return
 	if drag_g:
 		var spot := _near_hide(p)
-		_act = "📦 أخفِ الجسم في " + spot if spot != "" else ""
-		_act2 = "✋ اترك الجسم"
+		if spot != "":
+			_set_act("hide", "drop")
+			_act = "أخفِ الجسم في " + spot
+		else:
+			_set_act("", "drop")
 		_act_g = drag_g
 		return
 	for g in guards:
-		if g.ko or g.is_chasing():
-			continue
-		if _behind(g):
-			_act = "👊 أسقطه"
-			_act2 = "🤏 اسرق البطاقة" if g.has_card else ""
+		if not g.ko and not g.is_chasing() and _behind(g):
+			_set_act("ko", "steal" if g.has_card else "")
 			_act_g = g
 			return
 	for g in guards:
-		if g.ko and not g.hidden and (g.global_position as Vector3).distance_to(p) < 1.6:
+		if g.ko and not g.hidden and (g.global_position as Vector3).distance_to(p) < 1.8:
 			_act_g = g
 			if not g.stripped and not disguised:
-				_act = "👕 خذ بدلته"
-				_act2 = "🫳 اسحب الجسم"
+				_set_act("suit", "drag")
 			else:
-				_act = "🫳 اسحب الجسم"
+				_set_act("drag", "")
 			return
 	for c in can_nodes:
-		if (c as Node3D).visible and (c as Node3D).global_position.distance_to(p) < 1.3:
-			_act = "🥫 التقط العلبة"
+		if (c as Node3D).visible and (c as Node3D).global_position.distance_to(p) < 1.4:
+			_set_act("can", "")
 			_act_g = c
 			return
 
 
+func _set_act(a: String, b: String) -> void:
+	_act_id = a
+	_act2_id = b
+	_act = str(ACT_TXT.get(a, ""))
+	_act2 = str(ACT_TXT.get(b, ""))
+
+
 func _near_hide(p: Vector3) -> String:
 	for h in hide_spots:
-		if (h[0] as Vector3).distance_to(p) < 1.8:
+		if (h[0] as Vector3).distance_to(p) < 2.0:
 			return str(h[1])
 	return ""
 
 
 func _do_act(second: bool) -> void:
-	var a := _act2 if second else _act
+	var a := _act2_id if second else _act_id
 	var g = _act_g
 	if a == "" or g == null:
 		return
-	if a.begins_with("👊"):
-		_takedown(g)
-	elif a.begins_with("🤏"):
-		_take_card_from(g)
-		hud.flash("🤏 سرقتَ البطاقة دون أن يشعر", Color(0.42, 0.85, 0.58))
-	elif a.begins_with("👕"):
-		g.stripped = true
-		disguised = true
-		agent.body.set_disguised(true)
-		_take_card_from(g)
-		hud.flash("👕 أنت الآن بزيّ الحارس — الحرّاس لا يشكّون إلا إن ركضت أو انحنيت. الرئيس (قبّعة حمراء) يكشفك!", Color(0.6, 0.85, 1.0))
-	elif a.begins_with("🫳"):
-		drag_g = g
-		agent.dragging = true
-		agent.set_running(false)
-		_take_card_from(g)
-	elif a.begins_with("✋"):
-		_drop_body()
-	elif a.begins_with("📦"):
-		g.hide_body()
-		_drop_body()
-		hud.flash("📦 أخفيتَ الجسم — لن يجده أحد", Color(0.42, 0.85, 0.58))
-		if s_door.stream:
-			s_door.global_position = agent.global_position
-			s_door.play()
-	elif a.begins_with("🥫"):
-		(g as Node3D).visible = false
-		cans += 1
-		hud.flash("🥫 علبة — ارمِها لتشتيت حارس", Color(0.9, 0.85, 0.6))
+	match a:
+		"ko":
+			_takedown(g)
+		"steal":
+			_take_card_from(g)
+		"suit":
+			g.stripped = true
+			disguised = true
+			agent.body.set_disguised(true)
+			_take_card_from(g)
+			shake = 0.15
+			hud.flash("تنكّرتَ بزيّ الحارس — الحرّاس لا يشكّون إلا إن ركضت أو انحنيت أمامهم. الرئيس (قبّعة حمراء) يكشفك!", Color(0.6, 0.85, 1.0))
+		"drag":
+			drag_g = g
+			agent.dragging = true
+			agent.set_running(false)
+			_take_card_from(g)
+			hud.flash("تسحب الجسم — خذه إلى خزانة أو صندوق", Color(0.9, 0.85, 0.6))
+		"drop":
+			_drop_body()
+		"hide":
+			g.hide_body()
+			_drop_body()
+			hud.flash("أخفيتَ الجسم — لن يجده أحد", Color(0.42, 0.85, 0.58))
+			if s_door.stream:
+				s_door.global_position = agent.global_position
+				s_door.play()
+		"can":
+			(g as Node3D).visible = false
+			cans += 1
+			hud.flash("علبة — ارمِها لتشتيت حارس", Color(0.9, 0.85, 0.6))
 
 
 func _drop_body() -> void:
@@ -1405,18 +1436,30 @@ func _take_card_from(g) -> void:
 
 
 func _takedown(g) -> void:
-	agent.body.one_shot("hook", 0.75)
-	agent.face = atan2(-((g.global_position as Vector3) - agent.global_position).x, -((g.global_position as Vector3) - agent.global_position).z)
-	await get_tree().create_timer(0.3).timeout
+	# العميل يقفز خلف الحارس ويضربه بالـ Hook
+	_busy = 0.9
+	invuln = maxf(invuln, 1.2)
+	g.sus = 0.0
+	var gp: Vector3 = g.global_position
+	var gback: Vector3 = (g.global_transform.basis.z as Vector3)
+	gback.y = 0.0
+	var spot: Vector3 = gp + gback.normalized() * 0.85
+	spot.y = agent.global_position.y
+	var tw := create_tween()
+	tw.tween_property(agent, "global_position", spot, 0.16).set_trans(Tween.TRANS_QUAD)
+	var to := gp - spot
+	agent.face = atan2(-to.x, -to.z)
+	agent.body.one_shot("hook", 0.8)
+	await get_tree().create_timer(0.35).timeout
 	if g.ko:
 		return
 	g.knock_out()
 	stats.ko += 1
-	shake = 0.25
-	Input.vibrate_handheld(60)
+	shake = 0.3
+	Input.vibrate_handheld(70)
 	if s_clunk.stream:
 		s_clunk.play()
-	hud.flash("👊 أسقطتَه — أخفِ الجسم قبل أن يراه أحد", Color(0.9, 0.85, 0.6))
+	hud.flash("أسقطتَه! تنكّر بزيّه أو اسحبه إلى خزانة قبل أن يراه أحد", Color(0.9, 0.85, 0.6))
 
 
 func _do_throw() -> void:
@@ -2265,6 +2308,7 @@ func _build_core() -> void:
 
 
 func _dust(center: Vector3, extents: Vector3) -> void:
+	return # الغبار كان يشوّش الصورة (نقاط بيضاء) — أُلغي
 	var dust := CPUParticles3D.new()
 	dust.amount = 200
 	dust.lifetime = 9.0
@@ -3197,8 +3241,9 @@ func _agent_logic(delta: float, t: float) -> void:
 		# الشكّ: بلا تنكّر يمتلئ بسرعة؛ بالتنكّر لا يشكّ الحارس إلا إن ركضت أو انحنيت أمامه أو التصقت به، والرئيس يكشفك
 		var rate := 0.0
 		if sees_now:
+			var near_k := lerpf(1.7, 0.55, clampf(dist / 9.0, 0.0, 1.0)) # القريب يكشف أسرع
 			if not disguised:
-				rate = 1.0 / 0.6
+				rate = near_k / 1.8
 			elif g.chief:
 				rate = 1.1 if dist < 7.0 else 0.35
 			elif agent.running:
@@ -3212,8 +3257,12 @@ func _agent_logic(delta: float, t: float) -> void:
 		if rate > 0.0:
 			g.sus = minf(1.0, g.sus + rate * delta)
 			_seer = g
+			# قبل المطاردة: يلتفت ويأتي ليفحص — وقت لتهرب أو تختبئ
+			if g.sus > 0.45 and not g.is_chasing() and g.state_name() != "investigate":
+				g.investigate(ap)
 		else:
-			g.sus = maxf(0.0, g.sus - delta * 0.5)
+			g.sus = maxf(0.0, g.sus - delta * 0.35)
+		g.show_cone = dist < 14.0
 		# الركض يُسمع: الحارس القريب يذهب ليرى
 		if agent.running and not disguised and dist < 6.5 and not g.is_chasing() and g.state_name() == "walk":
 			g.investigate(ap)

@@ -6,8 +6,9 @@ const SPEED := 3.0
 const RUN_SPEED := 5.6
 const EYE_STAND := 1.62
 const EYE_CROUCH := 0.98
-const CAM_DIST := 3.1
-const CAM_SIDE := 0.55
+const CAM_DIST := 3.7
+const CAM_SIDE := 0.5
+const CAM_UP := 0.45
 
 var third := false # كاميرا خلف الكتف (العميل)
 var cam: Camera3D
@@ -29,6 +30,8 @@ var _eye := 1.62
 var _col: CollisionShape3D
 var _cap: CapsuleShape3D
 var _pivot: Node3D
+var _mv := Vector2.ZERO # حركة العصا بعد التنعيم
+var _cam_d := 3.7
 
 
 func _ready() -> void:
@@ -49,7 +52,8 @@ func _ready() -> void:
 	cam.far = 70
 	if third:
 		_pivot.add_child(cam)
-		cam.position = Vector3(CAM_SIDE, 0.25, CAM_DIST)
+		cam.position = Vector3(CAM_SIDE, CAM_UP, CAM_DIST)
+		pitch = -0.22
 		body = preload("res://agent_body.gd").new()
 		add_child(body)
 	else:
@@ -125,7 +129,7 @@ func set_active(v: bool) -> void:
 func reset_cam() -> void:
 	locked = false
 	if third:
-		cam.position = Vector3(CAM_SIDE, 0.25, CAM_DIST)
+		cam.position = Vector3(CAM_SIDE, CAM_UP, CAM_DIST)
 		cam.rotation = Vector3.ZERO
 	else:
 		cam.position = Vector3(0, EYE_STAND, 0)
@@ -144,16 +148,21 @@ func _physics_process(delta: float) -> void:
 		if body:
 			body.drive(Vector3.ZERO, crouch, false)
 		return
-	var mv := move_input + _keys()
-	if mv.length() > 1.0:
-		mv = mv.normalized()
+	var raw := move_input + _keys()
+	if raw.length() > 1.0:
+		raw = raw.normalized()
+	if raw.length() < 0.14:
+		raw = Vector2.ZERO # منطقة ميتة: لا ارتجاف
+	_mv = _mv.lerp(raw, minf(1.0, delta * 11.0))
+	var mv := _mv
 	if not OS.has_feature("mobile"):
 		set_running(Input.is_key_pressed(KEY_SHIFT) or running and mv.length() > 0.1)
 
 	var applied := look_delta * minf(1.0, delta * 18.0)
 	look_delta -= applied
-	yaw -= applied.x * 0.0042 * sens
-	pitch = clampf(pitch - applied.y * 0.0042 * sens, -1.1 if third else -1.25, 0.7 if third else 1.25)
+	var k_look := 0.0036 if third else 0.0042
+	yaw -= applied.x * k_look * sens
+	pitch = clampf(pitch - applied.y * k_look * sens, -0.95 if third else -1.25, 0.45 if third else 1.25)
 
 	var basis_y := Basis(Vector3.UP, yaw)
 	var fwd := -basis_y.z
@@ -198,23 +207,34 @@ func _third_update(delta: float, dir: Vector3) -> void:
 	if crouch or dragging:
 		face = lerp_angle(face, yaw, minf(1.0, delta * 10.0))
 	elif flat.length() > 0.2:
-		face = lerp_angle(face, atan2(-dir.x, -dir.z), minf(1.0, delta * 12.0))
+		face = lerp_angle(face, atan2(-dir.x, -dir.z), minf(1.0, delta * 9.0))
 	if body:
 		body.rotation.y = face
 		var local := Basis(Vector3.UP, face).inverse() * Vector3(velocity.x, 0, velocity.z)
 		body.drive(local, crouch, running and flat.length() > 3.5)
 	flash.rotation = Vector3(pitch * 0.6, yaw, 0)
-	# الكاميرا خلف الكتف: تدور مع الإصبع، وتقترب إن كان خلفها جدار
+	# الكاميرا خلف الكتف: تدور بنعومة، ولا تدخل الجدران (ثلاثة أشعّة)، تقترب بسرعة وتبتعد ببطء
 	_pivot.rotation = Vector3(pitch, yaw, 0)
-	_pivot.position.y = lerpf(_pivot.position.y, 1.05 if crouch else 1.55, minf(1.0, delta * 8.0))
-	var want := _pivot.global_transform * Vector3(CAM_SIDE, 0.25, CAM_DIST)
+	_pivot.position.y = lerpf(_pivot.position.y, 1.1 if crouch else 1.6, minf(1.0, delta * 8.0))
 	var from := _pivot.global_position
-	var q := PhysicsRayQueryParameters3D.create(from, want)
-	q.exclude = [get_rid()]
-	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	var space := get_world_3d().direct_space_state
 	var dist := CAM_DIST
-	if not hit.is_empty():
-		dist = maxf(0.4, from.distance_to(hit.position) - 0.25)
-	var k := dist / CAM_DIST
-	cam.position = cam.position.lerp(Vector3(CAM_SIDE * k, 0.25 * k, dist), minf(1.0, delta * 14.0))
+	for side in [0.0, -0.3, 0.3]:
+		var want := _pivot.global_transform * Vector3(CAM_SIDE + side, CAM_UP + absf(side) * 0.2, CAM_DIST)
+		var q := PhysicsRayQueryParameters3D.create(from, want)
+		q.exclude = [get_rid()]
+		var hit := space.intersect_ray(q)
+		if not hit.is_empty():
+			dist = minf(dist, maxf(0.55, from.distance_to(hit.position) - 0.35))
+	_cam_d = lerpf(_cam_d, dist, minf(1.0, delta * (22.0 if dist < _cam_d else 4.0)))
+	var k := _cam_d / CAM_DIST
+	cam.position = Vector3(CAM_SIDE * k, CAM_UP * k, _cam_d)
 	cam.rotation = Vector3.ZERO
+
+
+## هل الكاميرا داخل جسم صلب؟ (للاختبار الآلي)
+func cam_inside_wall() -> bool:
+	var q := PhysicsPointQueryParameters3D.new()
+	q.position = cam.global_position
+	q.exclude = [get_rid()]
+	return not get_world_3d().direct_space_state.intersect_point(q, 1).is_empty()

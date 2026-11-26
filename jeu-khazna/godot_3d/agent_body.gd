@@ -31,6 +31,17 @@ func _ready() -> void:
 	_guard = _load("res://characters/walk.fbx")
 	if _suit == null:
 		_suit = _capsule(Color(0.06, 0.07, 0.09))
+	else:
+		# بدلة رمادية داكنة بلا نقاط التقاط الحركة، مع حافّة ضوء تُظهر الشكل في الظلّ
+		var suit := StandardMaterial3D.new()
+		suit.albedo_color = Color(0.2, 0.22, 0.26)
+		suit.roughness = 0.55
+		suit.metallic = 0.15
+		suit.rim_enabled = true
+		suit.rim = 0.7
+		suit.rim_tint = 0.25
+		for mi in _suit.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).material_override = suit
 	if _guard == null:
 		_guard = _capsule(Color(0.15, 0.2, 0.32))
 	_guard.visible = false

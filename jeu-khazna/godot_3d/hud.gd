@@ -166,29 +166,24 @@ void fragment() {
 	_root.add_child(_switch)
 
 	# زرّ الانحناء (للعميل): فوق زرّ التفاعل
-	_crouch = _button("🧎 انحنِ", Color(0.12, 0.14, 0.17, 0.9), Color(0.9, 0.91, 0.92), 24)
-	_crouch.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_crouch.offset_left = -200
-	_crouch.offset_right = -36
-	_crouch.offset_top = -230
-	_crouch.offset_bottom = -150
+	_crouch = _round("crouch", "انحنِ", -150, -360)
 	_crouch.visible = false
 	_crouch.pressed.connect(func(): crouch_pressed.emit())
 	_root.add_child(_crouch)
 
 	# أزرار العميل (Hitman): ركض، حاسّة، رمي، وفعل ثانٍ (اسحب/اسرق)
-	_run = _mk_side("🏃 اركض", -200, -36, -330, -250)
+	_run = _round("run", "اركض", -150, -490)
 	_run.pressed.connect(func(): run_pressed.emit())
-	_inst = _mk_side("👁 حاسّة", -200, -36, -430, -350)
+	_inst = _round("eye", "حاسّة", -150, -620)
 	_inst.pressed.connect(func(): instinct_pressed.emit())
-	_throw = _mk_side("🥫 ارمِ", -400, -220, -230, -150)
+	_throw = _round("throw", "ارمِ", -280, -360)
 	_throw.pressed.connect(func(): throw_pressed.emit())
 	_act2 = _button("", Color(0.16, 0.2, 0.26, 0.95), Color(0.9, 0.95, 1.0), 26)
 	_act2.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_act2.offset_left = -820
-	_act2.offset_right = -436
-	_act2.offset_top = -130
-	_act2.offset_bottom = -40
+	_act2.offset_left = -420
+	_act2.offset_right = -170
+	_act2.offset_top = -230
+	_act2.offset_bottom = -150
 	_act2.visible = false
 	_act2.pressed.connect(func(): act2_pressed.emit())
 	_root.add_child(_act2)
@@ -384,7 +379,7 @@ func _input(event) -> void:
 					if _on_step.is_valid():
 						_on_step.call(st)
 			else:
-				player.look_delta += event.relative * 1.5
+				player.look_delta += event.relative * (1.05 if player.third else 1.5)
 
 
 func release_touches() -> void:
@@ -458,12 +453,10 @@ func set_compass(angle: float, dist: float, escape: bool) -> void:
 
 func set_crouch(visible_: bool, on: bool) -> void:
 	_crouch.visible = visible_ and _panel == null
-	_crouch.text = "🧍 قِف" if on else "🧎 انحنِ"
-	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(10)
-	sb.bg_color = Color(0.2, 0.45, 0.28, 0.95) if on else Color(0.12, 0.14, 0.17, 0.9)
-	for st in ["normal", "hover", "pressed", "focus"]:
-		_crouch.add_theme_stylebox_override(st, sb)
+	_crouch.kind = "stand" if on else "crouch"
+	_crouch.caption = "قِف" if on else "انحنِ"
+	_crouch.set_on(on)
+	_crouch.queue_redraw()
 
 
 func set_cam_meter(v: float) -> void:
@@ -489,6 +482,21 @@ func set_analyst_buttons(visible_: bool, binoc_on: bool, dark_on: bool) -> void:
 	_dark.text = "💡 أشعل الأضواء" if dark_on else "🌑 أطفئ الأضواء"
 
 
+## زرّ دائري بأيقونة (110 بكسل) — أسفل يمين الشاشة.
+func _round(kind: String, cap: String, left: float, top: float) -> Button:
+	var b = preload("res://icon_btn.gd").new()
+	b.kind = kind
+	b.caption = cap
+	b.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	b.offset_left = left
+	b.offset_right = left + 116
+	b.offset_top = top
+	b.offset_bottom = top + 116
+	b.visible = false
+	_root.add_child(b)
+	return b
+
+
 func _mk_side(t: String, l: float, r: float, top: float, bot: float) -> Button:
 	var b := _button(t, Color(0.12, 0.14, 0.17, 0.9), Color(0.9, 0.91, 0.92), 22)
 	b.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -505,12 +513,17 @@ func _mk_side(t: String, l: float, r: float, top: float, bot: float) -> Button:
 func set_agent_buttons(on: bool, running: bool, inst_cd: float, cans: int, act2: String) -> void:
 	var show := on and _panel == null and _vault == null
 	_run.visible = show
-	_run.text = "🚶 امشِ" if running else "🏃 اركض"
+	_run.kind = "walk" if running else "run"
+	_run.caption = "امشِ" if running else "اركض"
+	_run.set_on(running)
+	_run.queue_redraw()
 	_inst.visible = show
 	_inst.disabled = inst_cd > 0.0
-	_inst.text = "👁 حاسّة" if inst_cd <= 0.0 else "👁 %d" % int(ceil(inst_cd))
+	_inst.caption = "حاسّة" if inst_cd <= 0.0 else str(int(ceil(inst_cd)))
+	_inst.queue_redraw()
 	_throw.visible = show and cans > 0
-	_throw.text = "🥫 ارمِ (%d)" % cans
+	_throw.caption = "ارمِ ×%d" % cans
+	_throw.queue_redraw()
 	_act2.visible = show and act2 != ""
 	_act2.text = act2
 

@@ -37,6 +37,7 @@ var _cone: MeshInstance3D
 var _cone_mat: StandardMaterial3D
 var _mark: Label3D
 var _card: MeshInstance3D
+var show_cone := true # يظهر مجال الرؤية فقط للحارس القريب من العميل
 var _r_pos := Vector3.ZERO
 var _r_rot := 0.0
 var _r_state := "walk"
@@ -124,7 +125,7 @@ func _ready() -> void:
 func _build_cone() -> void:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var r := RANGE * 0.95
+	var r := RANGE * 0.8
 	var n := 14
 	var half := deg_to_rad(HALF_ANGLE)
 	for i in n:
@@ -626,13 +627,13 @@ func _steps_on(on: bool) -> void:
 func _update_marks() -> void:
 	if ko:
 		return
-	var c := Color(1, 1, 1, 0.12)
+	var c := Color(1, 1, 1, 0.045)
 	if _state == "chase" or _r_state == "chase":
-		c = Color(1.0, 0.15, 0.1, 0.3)
+		c = Color(1.0, 0.15, 0.1, 0.16)
 	elif sus > 0.05 or _state == "alert" or _state == "investigate" or _state == "search":
-		c = Color(1.0, 0.6, 0.15, 0.2 + sus * 0.15)
+		c = Color(1.0, 0.6, 0.15, 0.06 + sus * 0.1)
 	_cone_mat.albedo_color = c
-	_cone.visible = visible
+	_cone.visible = visible and show_cone
 	var chasing := _state == "chase" or _r_state == "chase"
 	_mark.visible = chasing or sus > 0.05
 	_mark.text = "!" if chasing or sus > 0.95 else "?"

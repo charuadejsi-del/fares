@@ -192,6 +192,7 @@ jobs:
           grep -q "SMOKE reach ok" run.log || { echo "العميل لا يستطيع الوصول إلى كل الأهداف"; exit 1; }
           grep -E "SMOKE (hitman|keycard|checkpoint|agent)" run.log || true
           grep -q "SMOKE hitman ok" run.log || { echo "آليات Hitman لا تعمل"; exit 1; }
+          grep -q "SMOKE camera ok" run.log || { echo "الكاميرا تدخل في الجدران"; grep "SMOKE camera" run.log; exit 1; }
           grep -q "SMOKE keycard ok" run.log || { echo "بطاقة الدخول لا تعمل"; exit 1; }
           grep -q "SMOKE checkpoint ok" run.log || { echo "نقطة التفتيش لا تعمل"; exit 1; }
           grep -q "has_run=true has_crouch=true has_hook=true" run.log || { echo "حركات العميل غير محمّلة"; exit 1; }
