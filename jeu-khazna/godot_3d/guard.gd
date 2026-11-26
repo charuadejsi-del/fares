@@ -217,7 +217,7 @@ func into_locker(p: Vector3, ry: float) -> void:
 	hidden = true
 	position = p
 	rotation.y = ry + PI
-	_play("idle", 0.0)
+	_play("idle_sweat", 0.0)
 	if _anim:
 		_anim.speed_scale = 0.0
 
