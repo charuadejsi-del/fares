@@ -539,7 +539,6 @@ func fade(color: Color, to_alpha: float, secs: float) -> void:
 		_root.add_child(_fade)
 	_fade.color = Color(color.r, color.g, color.b, _fade.color.a)
 	var tw := create_tween()
-	tw.set_ignore_time_scale(true)
 	tw.tween_property(_fade, "color:a", to_alpha, secs)
 
 
