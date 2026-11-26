@@ -234,7 +234,9 @@ func tick(delta: float, agent_pos: Vector3, disguised: bool, noisy: bool) -> voi
 		"wait":
 			unit.play(_idle_clip)
 			_wait_t -= delta
-			if _wait_t <= 0.0:
+			if _route.is_empty():
+				state = "still"
+			elif _wait_t <= 0.0:
 				_ri = (_ri + 1) % _route.size()
 				_next_leg()
 		"still":

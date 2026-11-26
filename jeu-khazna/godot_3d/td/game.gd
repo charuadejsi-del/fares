@@ -1218,7 +1218,6 @@ func _wait(secs: float) -> void:
 func _takedown(g) -> void:
 	locked = true
 	g.sus = 0.0
-	g.state = "wait"
 	var gp: Vector3 = g.global_position
 	var back := -(g.forward() as Vector3)
 	var spot := gp + back * 0.7
