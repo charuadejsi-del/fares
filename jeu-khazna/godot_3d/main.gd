@@ -354,7 +354,7 @@ func _smoke_hitman() -> void:
 	agent.global_position = gp + back * 1.0
 	await get_tree().physics_frame
 	_hitman_update(0.016)
-	var saw_ko := _act.begins_with("👊")
+	var saw_ko: bool = _act.begins_with("👊")
 	var had_card: bool = g.has_card
 	if _act2.begins_with("🤏"):
 		_do_act(true)
@@ -364,9 +364,9 @@ func _smoke_hitman() -> void:
 	var ko_ok: bool = g.ko and g.state_name() == "ko"
 	agent.global_position = g.global_position + Vector3(0.6, 0, 0)
 	_hitman_update(0.016)
-	var strip_ok := _act.begins_with("👕")
+	var strip_ok: bool = _act.begins_with("👕")
 	_do_act(false)
-	var dis_ok := disguised and agent.body.disguised
+	var dis_ok: bool = disguised and agent.body.disguised
 	_hitman_update(0.016)
 	_do_act(false) # اسحب
 	var drag_ok: bool = drag_g == g and agent.dragging
