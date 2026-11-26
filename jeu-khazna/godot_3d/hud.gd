@@ -8,6 +8,10 @@ signal tool_pressed(kind: String)
 signal mic_pressed
 signal crouch_pressed
 signal binoc_pressed
+signal run_pressed
+signal instinct_pressed
+signal throw_pressed
+signal act2_pressed
 signal dark_pressed
 signal sync_pressed
 signal next_pressed
@@ -43,6 +47,11 @@ var _crouch: Button
 var _cam_meter: ProgressBar
 var _tip: Label
 var _binoc: Button
+var _run: Button
+var _inst: Button
+var _throw: Button
+var _act2: Button
+var _instinct_fx: ColorRect
 var _dark: Button
 var _sync: Control
 var _sync_lbl: Label
@@ -167,6 +176,29 @@ void fragment() {
 	_crouch.pressed.connect(func(): crouch_pressed.emit())
 	_root.add_child(_crouch)
 
+	# أزرار العميل (Hitman): ركض، حاسّة، رمي، وفعل ثانٍ (اسحب/اسرق)
+	_run = _mk_side("🏃 اركض", -200, -36, -330, -250)
+	_run.pressed.connect(func(): run_pressed.emit())
+	_inst = _mk_side("👁 حاسّة", -200, -36, -430, -350)
+	_inst.pressed.connect(func(): instinct_pressed.emit())
+	_throw = _mk_side("🥫 ارمِ", -400, -220, -230, -150)
+	_throw.pressed.connect(func(): throw_pressed.emit())
+	_act2 = _button("", Color(0.16, 0.2, 0.26, 0.95), Color(0.9, 0.95, 1.0), 26)
+	_act2.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_act2.offset_left = -820
+	_act2.offset_right = -436
+	_act2.offset_top = -130
+	_act2.offset_bottom = -40
+	_act2.visible = false
+	_act2.pressed.connect(func(): act2_pressed.emit())
+	_root.add_child(_act2)
+	_instinct_fx = ColorRect.new()
+	_instinct_fx.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_instinct_fx.color = Color(0.2, 0.45, 0.9, 0.0)
+	_instinct_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_instinct_fx)
+	_root.move_child(_instinct_fx, 1)
+
 	# أزرار المحلّل في غرفة المراقبة ذات النافذة: منظار، وإطفاء الأضواء عند مرور الدورية
 	_binoc = _button("🔭 منظار", Color(0.1, 0.13, 0.16, 0.92), Color(0.85, 0.92, 1.0), 22)
 	_binoc.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -239,7 +271,7 @@ void fragment() {
 	_tools.add_theme_constant_override("separation", 10)
 	_tools.visible = false
 	_root.add_child(_tools)
-	for t in [["mark", "📍 علامة على الحرّاس"], ["distract", "🔊 شتّت الحارس"], ["freeze", "📹 جمّد الكاميرات"], ["warn", "⚠ حذّر العميل"]]:
+	for t in [["mark", "📍 علامة على الحرّاس"], ["distract", "🔊 شتّت الحارس"], ["freeze", "📹 جمّد الكاميرات"], ["blackout", "⚡ اقطع الكهرباء"], ["warn", "⚠ حذّر العميل"]]:
 		var b := _button(t[1], Color(0.1, 0.16, 0.12, 0.92), Color(0.75, 1.0, 0.8), 20)
 		b.custom_minimum_size = Vector2(260, 64)
 		var k: String = t[0]
@@ -310,7 +342,7 @@ func _input(event) -> void:
 			for c2 in _tools.get_children():
 				if _tools.visible and (c2 as Control).get_global_rect().has_point(event.position):
 					return
-			for b in [_interact, _switch, _mic, _crouch, _binoc, _dark]:
+			for b in [_interact, _switch, _mic, _crouch, _binoc, _dark, _run, _inst, _throw, _act2]:
 				if b.visible and b.get_global_rect().has_point(event.position):
 					return
 			if _sync != null:
@@ -376,6 +408,7 @@ func _process(delta: float) -> void:
 			_hold_t = 0.09
 			_on_step.call(_hold)
 	_hit = maxf(0.0, _hit - delta * 1.5)
+	_hack_draw(delta)
 	if _flash.modulate.a > 0.0:
 		_flash.modulate.a = maxf(0.0, _flash.modulate.a - delta * 0.45)
 
@@ -454,6 +487,127 @@ func set_analyst_buttons(visible_: bool, binoc_on: bool, dark_on: bool) -> void:
 	_dark.visible = visible_ and _panel == null
 	_binoc.text = "🔭 أنزل المنظار" if binoc_on else "🔭 منظار"
 	_dark.text = "💡 أشعل الأضواء" if dark_on else "🌑 أطفئ الأضواء"
+
+
+func _mk_side(t: String, l: float, r: float, top: float, bot: float) -> Button:
+	var b := _button(t, Color(0.12, 0.14, 0.17, 0.9), Color(0.9, 0.91, 0.92), 22)
+	b.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	b.offset_left = l
+	b.offset_right = r
+	b.offset_top = top
+	b.offset_bottom = bot
+	b.visible = false
+	_root.add_child(b)
+	return b
+
+
+## أزرار العميل: تظهر فقط حين يتحكّم فيه.
+func set_agent_buttons(on: bool, running: bool, inst_cd: float, cans: int, act2: String) -> void:
+	var show := on and _panel == null and _vault == null
+	_run.visible = show
+	_run.text = "🚶 امشِ" if running else "🏃 اركض"
+	_inst.visible = show
+	_inst.disabled = inst_cd > 0.0
+	_inst.text = "👁 حاسّة" if inst_cd <= 0.0 else "👁 %d" % int(ceil(inst_cd))
+	_throw.visible = show and cans > 0
+	_throw.text = "🥫 ارمِ (%d)" % cans
+	_act2.visible = show and act2 != ""
+	_act2.text = act2
+
+
+func instinct_fx(v: float) -> void:
+	_instinct_fx.color.a = v * 0.22
+
+
+# ───────── الاختراق السريع (المحلّل): اضغط حين يكون المؤشّر في الأخضر، 3 مرّات ─────────
+var _hack_t := 0.0
+var _hack_hits := 0
+var _hack_bar: Control
+var _hack_zone := Vector2(0.4, 0.58)
+var _hack_cb: Callable
+var _hack_lbl: Label
+
+
+func open_hack(on_done: Callable) -> void:
+	var v := _open("اختراق الباب")
+	_hack_cb = on_done
+	_hack_hits = 0
+	_hack_t = 0.0
+	var hint := _label(20, Color(0.6, 0.64, 0.68))
+	hint.text = "اضغط «⏺» حين يمرّ المؤشّر في المنطقة الخضراء — 3 مرّات. الخطأ يعيدك للصفر."
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(hint)
+	_hack_lbl = _label(34, OK)
+	_hack_lbl.text = "○ ○ ○"
+	_hack_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hack_lbl.text_direction = Control.TEXT_DIRECTION_LTR
+	v.add_child(_hack_lbl)
+	_hack_bar = Control.new()
+	_hack_bar.custom_minimum_size = Vector2(560, 56)
+	v.add_child(_hack_bar)
+	var b := _button("⏺", Color(0.2, 0.45, 0.28), Color.WHITE, 40)
+	b.custom_minimum_size = Vector2(0, 90)
+	b.pressed.connect(_hack_press)
+	v.add_child(b)
+	_new_zone()
+
+
+func _new_zone() -> void:
+	var w := 0.18 - _hack_hits * 0.035
+	var st := randf_range(0.08, 0.92 - w)
+	_hack_zone = Vector2(st, st + w)
+
+
+func _hack_pos() -> float:
+	var sp := 0.9 + _hack_hits * 0.35
+	var x := fmod(_hack_t * sp, 2.0)
+	return x if x < 1.0 else 2.0 - x
+
+
+func _hack_press() -> void:
+	var p := _hack_pos()
+	if p >= _hack_zone.x and p <= _hack_zone.y:
+		_hack_hits += 1
+		if _hack_hits >= 3:
+			close_panel()
+			_hack_bar = null
+			if _hack_cb.is_valid():
+				_hack_cb.call(true)
+			return
+		_new_zone()
+	else:
+		_hack_hits = 0
+		hit()
+		_new_zone()
+	var dots := []
+	for i in 3:
+		dots.append("●" if i < _hack_hits else "○")
+	if is_instance_valid(_hack_lbl):
+		_hack_lbl.text = " ".join(dots)
+
+
+func _hack_draw(delta: float) -> void:
+	if _hack_bar == null or not is_instance_valid(_hack_bar):
+		return
+	_hack_t += delta
+	for c in _hack_bar.get_children():
+		c.queue_free()
+	var w := _hack_bar.custom_minimum_size.x
+	var bg := ColorRect.new()
+	bg.color = Color(0.1, 0.11, 0.13)
+	bg.size = Vector2(w, 56)
+	_hack_bar.add_child(bg)
+	var z := ColorRect.new()
+	z.color = Color(0.2, 0.65, 0.35)
+	z.position = Vector2(_hack_zone.x * w, 0)
+	z.size = Vector2((_hack_zone.y - _hack_zone.x) * w, 56)
+	_hack_bar.add_child(z)
+	var nd := ColorRect.new()
+	nd.color = Color(1, 0.85, 0.3)
+	nd.position = Vector2(_hack_pos() * w - 3, -6)
+	nd.size = Vector2(6, 68)
+	_hack_bar.add_child(nd)
 
 
 # ───────── الصمّامات (العميل) ─────────
@@ -1124,7 +1278,7 @@ func loading(on: bool, progress := 0.0, text := "") -> void:
 	_load_txt.text = text
 
 
-func end_screen(won: bool, next_name := "") -> void:
+func end_screen(won: bool, next_name := "", stats := "") -> void:
 	close_panel()
 	vault_ui(false, Callable(), Callable(), Callable())
 	_interact.visible = false
@@ -1140,6 +1294,17 @@ func end_screen(won: bool, next_name := "") -> void:
 	l.offset_top = -70
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	e.add_child(l)
+	if stats != "":
+		var st := _label(26, Color(0.9, 0.91, 0.92))
+		st.text = stats
+		st.set_anchors_preset(Control.PRESET_CENTER)
+		st.offset_left = -560
+		st.offset_right = 560
+		st.offset_top = -250
+		st.offset_bottom = -90
+		st.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		st.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		e.add_child(st)
 	var b := _button("  القائمة الرئيسية  ", AMBER, Color(0.07, 0.05, 0.01), 28)
 	b.set_anchors_preset(Control.PRESET_CENTER)
 	b.offset_left = -170

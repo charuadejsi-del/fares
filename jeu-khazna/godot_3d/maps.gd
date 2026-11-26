@@ -233,6 +233,15 @@ func _lightning(moon: DirectionalLight3D) -> void:
 ## تُستدعى قبل البناء: تضبط نقاط اللعب، الحرّاس، الكاميرات، الألغاز، وغرفة المحلّل لكل خريطة.
 func data(theme: String) -> void:
 	match theme:
+		"port":
+			# الميناء على طريقة Hitman: حارس المدخل يحمل البطاقة، والرئيس (قبّعة حمراء) في قاعة الخزنة
+			m.gate_types = ["keycard", "checkpoint"]
+			m.guard_routes = [
+				[[Vector3(3.5, 0, 1.0), Vector3(6.8, 0, 1.0), Vector3(6.8, 0, 3.4), Vector3(3.5, 0, 3.4)], 1.0, Rect2(0.5, 0.5, 7.0, 7.0), {"card": true}],
+				[[Vector3(9.5, 0, 8.6), Vector3(18.5, 0, 8.6), Vector3(18.5, 0, 1.3), Vector3(9.5, 0, 1.3)], 1.2, Rect2(8.5, 0.5, 11.0, 9.0), {}],
+				[[Vector3(22, 0, 8.2), Vector3(27.2, 0, 8.2), Vector3(27.2, 0, 1.6), Vector3(22, 0, 1.6)], 0.9, Rect2(20.5, 0.5, 8.6, 9.0), {"chief": true, "card": true}],
+			]
+			m.hide_spots = [[Vector3(0.7, 0, 7.2), "الخزانة"], [Vector3(9.0, 0, 9.3), "الخزانة"], [Vector3(20.7, 0, 9.3), "الخزانة"]]
 		"river":
 			m.SPAWN = Vector3(-7, 0, 4)
 			m.spawn_yaw = -PI / 2.0
@@ -257,6 +266,7 @@ func data(theme: String) -> void:
 			m.ARCHIVE = Vector3(-24, 0, -14)
 			m.analyst_spawn = m.ARCHIVE + Vector3(5, 0, 6.2)
 			m.KILL_POS = Vector3(4.3, 0, 12.0)
+			m.hide_spots = [[Vector3(5.0, 0, 21.0), "الصندوق"], [Vector3(-3.5, 0, 8.2), "الصندوق"], [Vector3(15.0, 0, -1.0), "الصندوق"]]
 		"mountain":
 			mountain_data()
 
@@ -575,6 +585,7 @@ func mountain_data() -> void:
 	m.analyst_kind = "hut"
 	m.ARCHIVE = Vector3(-6, 0, -20)
 	m.analyst_spawn = m.ARCHIVE + Vector3(5, 0, 6.2)
+	m.hide_spots = [[Vector3(-2.5, 0, 8.2), "الصندوق"], [Vector3(9.3, 0, 9.0), "الخزانة"], [Vector3(31.0, 0, 9.0), "الشقّ الصخري"]]
 
 
 func mountain() -> void:

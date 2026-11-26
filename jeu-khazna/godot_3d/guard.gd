@@ -25,6 +25,18 @@ var _turn_t := 18.0
 # المزامنة: عند المحلّل يُحرَّك الحارس بما يرسله هاتف العميل (المرجع)
 var remote := false
 var sight := 1.0 # حدّة البصر حسب المرحلة
+# ───── Hitman ─────
+var ko := false # فاقد الوعي على الأرض
+var hidden := false # جسمه مخبّأ في حاوية/خزانة
+var stripped := false # أخذ العميل بدلته
+var chief := false # رئيس الحرّاس: يكشف التنكّر
+var has_card := false # يحمل بطاقة الدخول
+var sus := 0.0 # الشكّ في العميل 0..1
+var _inv := Vector3.ZERO
+var _cone: MeshInstance3D
+var _cone_mat: StandardMaterial3D
+var _mark: Label3D
+var _card: MeshInstance3D
 var _r_pos := Vector3.ZERO
 var _r_rot := 0.0
 var _r_state := "walk"
@@ -42,6 +54,7 @@ const CLIPS := {
 	"alert": "res://characters/alert.fbx",
 	"attack": "res://characters/attack.fbx",
 	"back": "res://characters/back.fbx",
+	"ko": "res://characters/agent/ko.fbx",
 }
 const LOOPED := ["walk", "idle_sweat", "idle_bugs", "alert", "back"]
 
@@ -95,7 +108,103 @@ func _ready() -> void:
 
 	_steps = _sound("guard_steps", true, -4.0)
 	_radio = _sound("radio", false, -2.0)
+	_build_cone()
+	_mark = Label3D.new()
+	_mark.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_mark.no_depth_test = true
+	_mark.font_size = 120
+	_mark.outline_size = 18
+	_mark.position.y = 2.25
+	_mark.visible = false
+	add_child(_mark)
 	_play("walk")
+
+
+## مجال الرؤية مرسوماً على الأرض (مروحة): أبيض = عادي، برتقالي = يشكّ، أحمر = رآك.
+func _build_cone() -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var r := RANGE * 0.95
+	var n := 14
+	var half := deg_to_rad(HALF_ANGLE)
+	for i in n:
+		var a0 := -half + 2.0 * half * float(i) / n
+		var a1 := -half + 2.0 * half * float(i + 1) / n
+		st.add_vertex(Vector3.ZERO)
+		st.add_vertex(Vector3(sin(a1) * -r, 0, -cos(a1) * r))
+		st.add_vertex(Vector3(sin(a0) * -r, 0, -cos(a0) * r))
+	_cone = MeshInstance3D.new()
+	_cone.mesh = st.commit()
+	_cone_mat = StandardMaterial3D.new()
+	_cone_mat.albedo_color = Color(1, 1, 1, 0.13)
+	_cone_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_cone_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_cone_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_cone.material_override = _cone_mat
+	_cone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_cone.position.y = 0.04
+	add_child(_cone)
+
+
+## يُضاف بعد التحميل: قبّعة حمراء للرئيس، وبطاقة على الحزام لحاملها.
+func decorate() -> void:
+	_cone.scale = Vector3.ONE * sight
+	if chief:
+		var cap := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.14
+		cm.bottom_radius = 0.16
+		cm.height = 0.1
+		cap.mesh = cm
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.75, 0.08, 0.06)
+		cap.material_override = m
+		cap.position = Vector3(0, 1.8, 0.02)
+		add_child(cap)
+	_card = MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.09, 0.13, 0.015)
+	_card.mesh = bm
+	var cmat := StandardMaterial3D.new()
+	cmat.albedo_color = Color(0.3, 0.75, 1.0)
+	cmat.emission_enabled = true
+	cmat.emission = Color(0.2, 0.6, 1.0)
+	cmat.emission_energy_multiplier = 1.5
+	_card.material_override = cmat
+	_card.position = Vector3(0.22, 0.98, 0.0)
+	_card.visible = has_card
+	add_child(_card)
+
+
+func take_card() -> void:
+	has_card = false
+	if _card:
+		_card.visible = false
+
+
+func knock_out() -> void:
+	ko = true
+	_state = "ko"
+	sus = 0.0
+	_play("ko", 0.1)
+	_steps_on(false)
+	_light.visible = false
+	_cone.visible = false
+	_mark.visible = false
+
+
+func hide_body() -> void:
+	hidden = true
+	visible = false
+
+
+## يذهب ليفحص صوتاً (علبة مرميّة، إنذار كاذب) ثم يبحث حوله ويعود إلى دوريّته.
+func investigate(p: Vector3) -> void:
+	if ko or _state == "chase" or _state == "attack":
+		return
+	_state = "investigate"
+	_inv = Vector3(p.x, 0, p.z)
+	_light.light_color = Color(1.0, 0.75, 0.35)
 
 
 func _sound(sound_name: String, loop: bool, db: float) -> AudioStreamPlayer3D:
@@ -293,10 +402,16 @@ func attack() -> void:
 
 ## اسم الحالة للإرسال عبر الشبكة.
 func state_name() -> String:
+	if ko:
+		return "hid" if hidden else "ko"
 	return _state
 
 
 func apply_remote(p: Vector3, ry: float, st: String) -> void:
+	if (st == "ko" or st == "hid") and not ko:
+		knock_out()
+	if st == "hid" and not hidden:
+		hide_body()
 	_r_pos = p
 	_r_rot = ry
 	_r_state = st
@@ -308,7 +423,7 @@ func mark(seconds: float) -> void:
 
 ## تشتيت: يلتفت بعيداً ويبحث (أداة المحلّل). لا أثر أثناء المطاردة أو الهجوم.
 func distract() -> void:
-	if _state == "chase" or _state == "attack":
+	if ko or _state == "chase" or _state == "attack":
 		return
 	_state = "search"
 	_wait = 5.0
@@ -319,6 +434,11 @@ func _process(delta: float) -> void:
 	_beacon.visible = _beacon_t > 0.0
 	if _beacon.visible:
 		_beacon.rotation.y += delta * 3.0
+	_update_marks()
+	if ko:
+		if remote:
+			position = position.lerp(_r_pos, minf(1.0, delta * 10.0))
+		return
 	if remote:
 		_remote_update(delta)
 		return
@@ -368,6 +488,23 @@ func _process(delta: float) -> void:
 			_wait -= delta
 			if _wait <= 0.0 or alarm:
 				_state = "walk"
+		"investigate":
+			var to2 := _inv - position
+			to2.y = 0.0
+			if to2.length() < 0.9:
+				_state = "search"
+				_wait = 4.0
+			else:
+				_play("walk")
+				_steps_on(true)
+				if _anim:
+					_anim.speed_scale = 1.3
+				var before := position
+				_move_safe(to2.normalized() * speed * 1.3 * delta)
+				rotation.y = lerp_angle(rotation.y, atan2(-to2.x, -to2.z), minf(1.0, delta * 6.0))
+				if position.distance_to(before) < 0.0005:
+					_state = "search"
+					_wait = 3.0
 		_:
 			_walk(delta)
 
@@ -462,6 +599,20 @@ func _move_safe(step: Vector3) -> void:
 			return
 
 
+## هل يرى نقطة (جسم حارس ساقط مثلاً)؟
+func sees_point(p: Vector3, space: PhysicsDirectSpaceState3D) -> bool:
+	if ko:
+		return false
+	var eye := global_position + Vector3(0, 1.6, 0)
+	var d := p + Vector3(0, 0.3, 0) - eye
+	if d.length() > RANGE * sight:
+		return false
+	if (-global_transform.basis.z).dot(d.normalized()) < cos(deg_to_rad(HALF_ANGLE + 10.0)):
+		return false
+	var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, p + Vector3(0, 0.3, 0)))
+	return hit.is_empty()
+
+
 func _steps_on(on: bool) -> void:
 	if _steps.stream == null:
 		return
@@ -472,7 +623,26 @@ func _steps_on(on: bool) -> void:
 
 
 ## هل يرى الحارس [player]؟ مخروط أمامي + لا جدار بينهما.
+func _update_marks() -> void:
+	if ko:
+		return
+	var c := Color(1, 1, 1, 0.12)
+	if _state == "chase" or _r_state == "chase":
+		c = Color(1.0, 0.15, 0.1, 0.3)
+	elif sus > 0.05 or _state == "alert" or _state == "investigate" or _state == "search":
+		c = Color(1.0, 0.6, 0.15, 0.2 + sus * 0.15)
+	_cone_mat.albedo_color = c
+	_cone.visible = visible
+	var chasing := _state == "chase" or _r_state == "chase"
+	_mark.visible = chasing or sus > 0.05
+	_mark.text = "!" if chasing or sus > 0.95 else "?"
+	_mark.modulate = Color(1, 0.15, 0.1) if chasing else Color(1, 1.0 - sus * 0.6, 1.0 - sus)
+	_mark.scale = Vector3.ONE * (0.6 + sus * 0.6)
+
+
 func sees(player: Node3D, space: PhysicsDirectSpaceState3D) -> bool:
+	if ko:
+		return false
 	var eye := global_position + Vector3(0, 1.6, 0)
 	var low: bool = player.get("crouch") == true
 	var tgt := player.global_position + Vector3(0, 0.7 if low else 1.2, 0)

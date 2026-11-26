@@ -88,3 +88,21 @@ static func set_low_quality(v: bool) -> void:
 	c.load(SETTINGS)
 	c.set_value("video", "low", v)
 	c.save(SETTINGS)
+
+
+static func save_best(id: String, stars: int, secs: float) -> void:
+	var c := ConfigFile.new()
+	c.load(SAVE)
+	var bs := int(c.get_value("best", id + "_stars", 0))
+	var bt := float(c.get_value("best", id + "_time", 99999.0))
+	if stars > bs or (stars == bs and secs < bt):
+		c.set_value("best", id + "_stars", stars)
+		c.set_value("best", id + "_time", secs)
+		c.save(SAVE)
+
+
+static func best(id: String) -> int:
+	var c := ConfigFile.new()
+	if c.load(SAVE) != OK:
+		return 0
+	return int(c.get_value("best", id + "_stars", 0))

@@ -87,6 +87,22 @@ var _patrol_warned := false
 var sync_go := -1.0
 var sync_a := -1.0
 var sync_b := -1.0
+# ───── Hitman ─────
+var disguised := false
+var has_card := false # بطاقة الدخول (الباب الأول)
+var has_chief_card := false # بطاقة الرئيس (الباب الثاني)
+var cans := 0
+var can_nodes: Array = []
+var drag_g = null # الحارس الذي يُسحب
+var hide_spots: Array = [] # [موضع، اسم]
+var instinct_t := 0.0
+var instinct_cd := 0.0
+var _act := "" # الفعل الأساسي القريب (زرّ التفاعل)
+var _act2 := "" # الفعل الثاني
+var _act_g = null
+var stats := {"seen": 0, "ko": 0, "found": 0, "start": 0.0}
+var _found_alarm := false
+var _tip_t := 0.0
 var net
 var hud
 var menu
@@ -148,15 +164,15 @@ var vault_ring: MeshInstance3D
 var ready_world := false
 var building_lights: Array = []
 var feed_mats: Array = []
-var _fear_t := 40.0
+var _fear_t := 120.0
 var _creep_t := 25.0
 var _glitch_t := 30.0
 var blackout := 0.0
 var shutters_closed: Array = [false, false]
 var s_creep: AudioStreamPlayer3D
 var s_music: AudioStreamPlayer
-var tool_cd := {"mark": 0.0, "distract": 0.0, "freeze": 0.0, "warn": 0.0}
-const TOOL_CD := {"mark": 20.0, "distract": 25.0, "freeze": 30.0, "warn": 5.0}
+var tool_cd := {"mark": 0.0, "distract": 0.0, "freeze": 0.0, "blackout": 0.0, "warn": 0.0}
+const TOOL_CD := {"mark": 20.0, "distract": 20.0, "freeze": 30.0, "blackout": 35.0, "warn": 5.0}
 var steam: CPUParticles3D
 var _prop_log: Array = []
 # الأصوات
@@ -229,6 +245,9 @@ func _smoke() -> void:
 	await get_tree().create_timer(0.5).timeout
 	print("SMOKE level: ", lv.id, " guards=", guards.size(), " lasers=", lasers.size(), " cams=", cctvs.size())
 	await _smoke_hazards()
+	if lv.id == "port":
+		await _smoke_hitman()
+	print("SMOKE agent clip=", agent.body.clip, " has_run=", agent.body.has_clip("run"), " has_crouch=", agent.body.has_clip("c_left"), " has_hook=", agent.body.has_clip("hook"))
 	var space := get_world_3d().direct_space_state
 	var sh := SphereShape3D.new()
 	sh.radius = 0.25
@@ -272,7 +291,7 @@ func _smoke() -> void:
 	_on_tool("distract")
 	_on_tool("warn")
 	var st0: String = guards[0].state_name()
-	var g0 = guards[0]
+	var g0 = guards[guards.size() - 1]
 	g0.remote = true
 	g0.apply_remote(Vector3(12, 0, 5), 1.0, "alert")
 	await get_tree().create_timer(0.6).timeout
@@ -292,7 +311,7 @@ func _smoke() -> void:
 	await get_tree().create_timer(0.7).timeout
 	_spotted()
 	await get_tree().create_timer(0.2).timeout
-	if not vault_mode and not agent.locked and agent.cam.position.distance_to(Vector3(0, 1.62, 0)) < 0.1:
+	if not vault_mode and agent.cam_ok():
 		print("SMOKE caught ok")
 	agent.global_position = VAULT_FRONT
 	_enter_vault()
@@ -318,9 +337,84 @@ func _smoke() -> void:
 
 
 ## يتحقّق أن العميل يستطيع المشي من البداية إلى كل جهاز وإلى الخزنة (بعد فتح الأبواب).
+## يضع العميل أمام جهاز المرحلة ويضغط التفاعل (كما يفعل اللاعب).
+func _on_gate_smoke() -> void:
+	_act = ""
+	agent.global_position = terminals[stage].pos + Vector3(0, 0, 0.9)
+	var keep := _act
+	_on_interact()
+	_act = keep
+
+
+## اختبار Hitman: إسقاط من الخلف، سرقة البطاقة، التنكّر، السحب والإخفاء، والرمي.
+func _smoke_hitman() -> void:
+	var g = guards[0]
+	var gp: Vector3 = g.global_position
+	var back: Vector3 = (g.global_transform.basis.z as Vector3).normalized()
+	agent.global_position = gp + back * 1.0
+	await get_tree().physics_frame
+	_hitman_update(0.016)
+	var saw_ko := _act.begins_with("👊")
+	var had_card: bool = g.has_card
+	if _act2.begins_with("🤏"):
+		_do_act(true)
+	var card_ok: bool = (not had_card) or has_card or has_chief_card
+	_takedown(g)
+	await get_tree().create_timer(0.5).timeout
+	var ko_ok: bool = g.ko and g.state_name() == "ko"
+	agent.global_position = g.global_position + Vector3(0.6, 0, 0)
+	_hitman_update(0.016)
+	var strip_ok := _act.begins_with("👕")
+	_do_act(false)
+	var dis_ok := disguised and agent.body.disguised
+	_hitman_update(0.016)
+	_do_act(false) # اسحب
+	var drag_ok: bool = drag_g == g and agent.dragging
+	if hide_spots.size() > 0:
+		agent.global_position = (hide_spots[0][0] as Vector3) + Vector3(0.9, 0, 0)
+		for k in 5:
+			await get_tree().process_frame
+		_hitman_update(0.016)
+		_do_act(false)
+	var hide_ok: bool = g.hidden and drag_g == null
+	# الرمي: حارس قريب يذهب ليفحص الصوت
+	cans = 1
+	var other = guards[1] if guards.size() > 1 else null
+	if other:
+		agent.global_position = (other.global_position as Vector3) + Vector3(3.5, 0, 0)
+		agent.yaw = PI / 2.0
+		await get_tree().physics_frame
+		await _do_throw()
+	var throw_ok: bool = cans == 0 and (other == null or other.state_name() == "investigate" or other.state_name() == "search")
+	disguised = false
+	agent.body.set_disguised(false)
+	print("SMOKE hitman sawko=", saw_ko, " card=", card_ok, " ko=", ko_ok, " strip=", strip_ok, " disguise=", dis_ok, " drag=", drag_ok, " hide=", hide_ok, " throw=", throw_ok, " body=", agent.body.debug)
+	if saw_ko and card_ok and ko_ok and strip_ok and dis_ok and drag_ok and hide_ok and throw_ok:
+		print("SMOKE hitman ok")
+
+
 ## حلّ بوّابة في الاختبار الآلي (ويجرّب الخطأ أولاً حيث يفيد).
 func _smoke_gate(i: int) -> void:
 	match str(gate_types[i]):
+		"keycard":
+			_on_gate_smoke()
+			var blocked := stage == i
+			has_card = true
+			_on_gate_smoke()
+			print("SMOKE keycard blocked=", blocked, " stage=", stage)
+			if blocked and stage == i + 1:
+				print("SMOKE keycard ok")
+		"checkpoint":
+			disguised = false
+			has_chief_card = false
+			_on_gate_smoke()
+			var blocked2 := stage == i
+			disguised = true
+			_on_gate_smoke()
+			disguised = false
+			print("SMOKE checkpoint blocked=", blocked2, " stage=", stage)
+			if blocked2 and stage == i + 1:
+				print("SMOKE checkpoint ok")
 		"keypad":
 			_submit_code(str(puzzle.code))
 		"wires":
@@ -510,6 +604,9 @@ func _on_msg(m: Dictionary) -> void:
 	elif t == "pos" and avatar:
 		avatar.set_meta("target", Vector3(float(m.get("x", 0)), 0, float(m.get("z", 0))))
 		avatar.set_meta("yaw", float(m.get("y", 0)))
+		avatar.play(str(m.get("a", "idle")))
+		if bool(m.get("d", false)) != avatar.disguised:
+			avatar.set_disguised(bool(m.get("d", false)))
 		_apply_hazard_sync(float(m.get("ht", htime)), float(m.get("lz", 0.0)), float(m.get("cf", 0.0)))
 		var gl = m.get("g", [])
 		if typeof(gl) == TYPE_ARRAY and ready_world:
@@ -524,6 +621,9 @@ func _on_msg(m: Dictionary) -> void:
 	elif t == "sync" and role == "analyst":
 		sync_go = float(m.get("go", -1.0))
 		sync_b = -1.0
+	elif t == "hack" and role == "agent" and ready_world and stage == 0:
+		hud.flash("🔓 المحلّل اخترق الباب!", Color(0.42, 0.85, 0.58))
+		_advance()
 	elif t == "press" and role == "agent":
 		sync_b = float(m.get("h", -1.0))
 	elif t == "spotted" and role == "agent" and ready_world and agent:
@@ -578,6 +678,12 @@ func _start(r: String, s: int) -> void:
 	hud.tool_pressed.connect(_on_tool)
 	hud.switch_pressed.connect(_on_switch)
 	hud.binoc_pressed.connect(_toggle_binoc)
+	hud.run_pressed.connect(func():
+		if agent and active == agent:
+			agent.set_running(not agent.running))
+	hud.instinct_pressed.connect(_instinct)
+	hud.throw_pressed.connect(_do_throw)
+	hud.act2_pressed.connect(func(): _do_act(true))
 	hud.dark_pressed.connect(_toggle_dark)
 	hud.sync_pressed.connect(_sync_press)
 	hud.crouch_pressed.connect(func():
@@ -590,10 +696,11 @@ func _start(r: String, s: int) -> void:
 		hud.hide_tool("freeze")
 	hud.set_switch_visible(role == "solo")
 	if role != "analyst":
-		agent = _make_player(SPAWN, spawn_yaw)
+		agent = _make_player(SPAWN, spawn_yaw, true)
 	if role != "agent":
 		analyst = _make_player(analyst_spawn, analyst_yaw)
-		avatar = _make_avatar()
+		if role == "analyst":
+			avatar = _make_avatar()
 		_build_feeds()
 	_set_active(analyst if role == "analyst" else agent)
 	hud.set_status("وضع فردي" if net == null else "")
@@ -613,6 +720,7 @@ func _start(r: String, s: int) -> void:
 	await get_tree().process_frame
 	hud.loading(false)
 	ready_world = true
+	stats.start = Time.get_ticks_msec() / 1000.0
 	_intro()
 	# الصوت داخل اللعبة (أونلاين فقط)
 	if net and room_code != "":
@@ -668,12 +776,15 @@ func _hints() -> void:
 	add_child(hint_arrow)
 
 
-func _make_player(at: Vector3, yaw: float):
+func _make_player(at: Vector3, yaw: float, third := false):
 	var p = preload("res://player.gd").new()
+	p.third = third
 	p.position = at
 	add_child(p)
 	p.yaw = yaw
-	p.rotation.y = yaw
+	p.face = yaw
+	if not third:
+		p.rotation.y = yaw
 	return p
 
 
@@ -1129,7 +1240,7 @@ func _environment() -> void:
 	env.background_color = Color(0.004, 0.005, 0.007)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.3, 0.36, 0.46)
-	env.ambient_light_energy = 0.12
+	env.ambient_light_energy = 0.42
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 1.05
 	env.glow_enabled = true
@@ -1139,7 +1250,7 @@ func _environment() -> void:
 	env.glow_hdr_threshold = 0.8
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.03, 0.035, 0.045)
-	env.fog_density = 0.06
+	env.fog_density = 0.035
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.15
 	env.adjustment_saturation = 0.85
@@ -1147,15 +1258,15 @@ func _environment() -> void:
 		"river":
 			# رطوبة: ضباب مائل للأخضر، ضوء بارد خافت
 			env.fog_light_color = Color(0.02, 0.045, 0.05)
-			env.fog_density = 0.075
+			env.fog_density = 0.045
 			env.ambient_light_color = Color(0.25, 0.42, 0.45)
 			env.adjustment_saturation = 0.8
 		"mountain":
 			# برد: ضباب أزرق شاحب، ألوان باهتة
 			env.fog_light_color = Color(0.07, 0.085, 0.11)
-			env.fog_density = 0.05
+			env.fog_density = 0.03
 			env.ambient_light_color = Color(0.5, 0.6, 0.8)
-			env.ambient_light_energy = 0.17
+			env.ambient_light_energy = 0.45
 			env.adjustment_saturation = 0.62
 			env.adjustment_contrast = 1.2
 	var we := WorldEnvironment.new()
@@ -1179,6 +1290,240 @@ func _apply_low_quality() -> void:
 	for f in feeds:
 		(f[0] as SubViewport).size = Vector2i(200, 112)
 	print("QUALITY: low")
+
+
+# ═════════ Hitman: الإسقاط، الإخفاء، التنكّر، الرمي، الحاسّة ═════════
+func _behind(g) -> bool:
+	var to: Vector3 = agent.global_position - (g.global_position as Vector3)
+	to.y = 0.0
+	var fwd: Vector3 = -(g.global_transform.basis.z as Vector3)
+	return to.length() < 1.5 and fwd.dot(to.normalized()) < -0.25
+
+
+func _hitman_update(delta: float) -> void:
+	instinct_t = maxf(0.0, instinct_t - delta)
+	instinct_cd = maxf(0.0, instinct_cd - delta)
+	hud.instinct_fx(clampf(instinct_t, 0.0, 1.0) if active == agent else 0.0)
+	var p: Vector3 = agent.global_position
+	# الجسم المسحوب يتبع العميل
+	if drag_g:
+		var back := Basis(Vector3.UP, agent.face).z
+		drag_g.position = drag_g.position.lerp(p + back * 0.95, minf(1.0, delta * 10.0))
+	_act = ""
+	_act2 = ""
+	_act_g = null
+	if vault_mode or result != "":
+		return
+	if drag_g:
+		var spot := _near_hide(p)
+		_act = "📦 أخفِ الجسم في " + spot if spot != "" else ""
+		_act2 = "✋ اترك الجسم"
+		_act_g = drag_g
+		return
+	for g in guards:
+		if g.ko or g.is_chasing():
+			continue
+		if _behind(g):
+			_act = "👊 أسقطه"
+			_act2 = "🤏 اسرق البطاقة" if g.has_card else ""
+			_act_g = g
+			return
+	for g in guards:
+		if g.ko and not g.hidden and (g.global_position as Vector3).distance_to(p) < 1.6:
+			_act_g = g
+			if not g.stripped and not disguised:
+				_act = "👕 خذ بدلته"
+				_act2 = "🫳 اسحب الجسم"
+			else:
+				_act = "🫳 اسحب الجسم"
+			return
+	for c in can_nodes:
+		if (c as Node3D).visible and (c as Node3D).global_position.distance_to(p) < 1.3:
+			_act = "🥫 التقط العلبة"
+			_act_g = c
+			return
+
+
+func _near_hide(p: Vector3) -> String:
+	for h in hide_spots:
+		if (h[0] as Vector3).distance_to(p) < 1.8:
+			return str(h[1])
+	return ""
+
+
+func _do_act(second: bool) -> void:
+	var a := _act2 if second else _act
+	var g = _act_g
+	if a == "" or g == null:
+		return
+	if a.begins_with("👊"):
+		_takedown(g)
+	elif a.begins_with("🤏"):
+		_take_card_from(g)
+		hud.flash("🤏 سرقتَ البطاقة دون أن يشعر", Color(0.42, 0.85, 0.58))
+	elif a.begins_with("👕"):
+		g.stripped = true
+		disguised = true
+		agent.body.set_disguised(true)
+		_take_card_from(g)
+		hud.flash("👕 أنت الآن بزيّ الحارس — الحرّاس لا يشكّون إلا إن ركضت أو انحنيت. الرئيس (قبّعة حمراء) يكشفك!", Color(0.6, 0.85, 1.0))
+	elif a.begins_with("🫳"):
+		drag_g = g
+		agent.dragging = true
+		agent.set_running(false)
+		_take_card_from(g)
+	elif a.begins_with("✋"):
+		_drop_body()
+	elif a.begins_with("📦"):
+		g.hide_body()
+		_drop_body()
+		hud.flash("📦 أخفيتَ الجسم — لن يجده أحد", Color(0.42, 0.85, 0.58))
+		if s_door.stream:
+			s_door.global_position = agent.global_position
+			s_door.play()
+	elif a.begins_with("🥫"):
+		(g as Node3D).visible = false
+		cans += 1
+		hud.flash("🥫 علبة — ارمِها لتشتيت حارس", Color(0.9, 0.85, 0.6))
+
+
+func _drop_body() -> void:
+	drag_g = null
+	agent.dragging = false
+
+
+func _take_card_from(g) -> void:
+	if g.has_card:
+		g.take_card()
+		if g.chief:
+			has_chief_card = true
+			hud.flash("💳 أخذتَ بطاقة الرئيس — تفتح نقطة التفتيش", Color(0.42, 0.85, 0.58))
+		else:
+			has_card = true
+			hud.flash("💳 أخذتَ بطاقة الدخول — تفتح الباب الأول", Color(0.42, 0.85, 0.58))
+
+
+func _takedown(g) -> void:
+	agent.body.one_shot("hook", 0.75)
+	agent.face = atan2(-((g.global_position as Vector3) - agent.global_position).x, -((g.global_position as Vector3) - agent.global_position).z)
+	await get_tree().create_timer(0.3).timeout
+	if g.ko:
+		return
+	g.knock_out()
+	stats.ko += 1
+	shake = 0.25
+	Input.vibrate_handheld(60)
+	if s_clunk.stream:
+		s_clunk.play()
+	hud.flash("👊 أسقطتَه — أخفِ الجسم قبل أن يراه أحد", Color(0.9, 0.85, 0.6))
+
+
+func _do_throw() -> void:
+	if cans <= 0 or agent == null:
+		return
+	cans -= 1
+	agent.face = agent.yaw
+	agent.body.one_shot("throw", 1.0)
+	var fwd := -Basis(Vector3.UP, agent.yaw).z
+	var from: Vector3 = agent.global_position + Vector3(0, 1.4, 0)
+	var to := from + fwd * 8.0 + Vector3(0, -1.2, 0)
+	var q := PhysicsRayQueryParameters3D.create(from, to)
+	q.exclude = [agent.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	var land: Vector3 = (hit.position as Vector3) - fwd * 0.3 if not hit.is_empty() else to
+	land.y = 0.05
+	await get_tree().create_timer(0.5).timeout
+	var can := _can_mesh(land)
+	get_tree().create_timer(6.0).timeout.connect(func(): can.queue_free())
+	if s_creep.stream:
+		s_creep.global_position = land + Vector3(0, 0.3, 0)
+		s_creep.pitch_scale = 1.6
+		s_creep.play()
+	var n := 0
+	for g in guards:
+		if not g.ko and not g.is_chasing() and (g.global_position as Vector3).distance_to(land) < 10.0:
+			g.investigate(land)
+			n += 1
+	hud.flash("🥫 صوت! %s" % ("حارس يذهب ليرى" if n > 0 else "لا أحد قريب"), Color(0.9, 0.85, 0.6))
+
+
+func _can_mesh(at: Vector3) -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.045
+	cm.bottom_radius = 0.045
+	cm.height = 0.13
+	m.mesh = cm
+	m.material_override = _glow(Color(0.85, 0.2, 0.15), 0.6)
+	m.position = at
+	add_child(m)
+	return m
+
+
+func _instinct() -> void:
+	if instinct_cd > 0.0 or agent == null:
+		return
+	instinct_t = 5.0
+	instinct_cd = 25.0
+	for g in guards:
+		if not g.ko:
+			g.mark(5.0)
+	hud.flash("👁 الحاسّة: ترى الحرّاس عبر الجدران", Color(0.6, 0.8, 1.0))
+
+
+func _body_found(g, b) -> void:
+	if _found_alarm:
+		return
+	_found_alarm = true
+	stats.found += 1
+	b.hidden = true # لا نكرّر الإنذار لنفس الجسم
+	g.investigate(b.global_position)
+	for o in guards:
+		if not o.ko:
+			o.sus = maxf(o.sus, 0.5)
+			o.speed *= 1.15
+	if active == agent:
+		hud.flash("🚨 وجدوا جسم الحارس! الحرّاس متأهّبون", Color(0.9, 0.28, 0.3))
+		hud.hit()
+	if s_beep.stream:
+		s_beep.play()
+	get_tree().create_timer(3.0).timeout.connect(func(): _found_alarm = false)
+
+
+## «فرص» يقرؤها المحلّل ويخبر بها شريكه (مثل ديانا في Hitman).
+func _analyst_tips(delta: float) -> void:
+	if analyst == null or active != analyst or lv.id == "tutorial":
+		return
+	_tip_t -= delta
+	if _tip_t > 0.0:
+		return
+	_tip_t = 6.0
+	var tip := ""
+	if stage < gate_types.size():
+		match str(gate_types[stage]):
+			"keycard":
+				tip = "💡 الحارس في غرفة المدخل يحمل بطاقة الدخول على حزامه — العميل يسرقها من الخلف. أو اخترق الباب من جهازك."
+			"checkpoint":
+				tip = "💡 نقطة التفتيش تسمح للحرّاس: إن لبس العميل زيّ حارس يمرّ. الرئيس بالقبّعة الحمراء يكشفه — أطفئ الكهرباء ⚡ أو شتّته."
+	elif stage == 2:
+		tip = "💡 أدخل رموز باب الخزنة في الحاسوب، ثم استعدّا للقفل الزمني."
+	elif stage >= 3:
+		tip = "💡 الإنذار! وجّه العميل إلى المخرج — شتّت الحرّاس في طريقه."
+	if tip != "":
+		hud.set_tip(tip)
+
+
+func _stars() -> Array:
+	var used: float = (Time.get_ticks_msec() / 1000.0) - float(stats.start)
+	var st := 1
+	var title := "عميل"
+	if stats.seen == 0 and stats.found == 0:
+		st = 3
+		title = "👻 شبح"
+	elif stats.seen <= 2 and stats.found == 0:
+		st = 2
+		title = "محترف"
+	return [st, title, used]
 
 
 # ═════════ ألغاز البوّابات الجديدة ═════════
@@ -1746,8 +2091,8 @@ func _lamp(pos: Vector3, color: Color, energy: float, flicker := false) -> OmniL
 	var l := OmniLight3D.new()
 	l.position = pos + Vector3(0, -0.35, 0)
 	l.light_color = color
-	l.light_energy = energy
-	l.omni_range = 7.0
+	l.light_energy = energy * 1.9
+	l.omni_range = 9.0
 	l.omni_attenuation = 1.5
 	add_child(l)
 	if flicker:
@@ -1807,7 +2152,7 @@ func _map_port() -> void:
 	_wall_x(0, 20, 30)
 	_wall_x(10, 20, 30)
 	_vault_wall(mat_wall)
-	for p in [Vector3(11, 0, 2), Vector3(11.9, 0, 2), Vector3(11.45, 0.9, 2), Vector3(16, 0, 7.5), Vector3(14, 0, 4.8), Vector3(23.5, 0, 2.2), Vector3(4.5, 0, 1.2), Vector3(24.4, 0, 2.2)]:
+	for p in [Vector3(11, 0, 2), Vector3(11.9, 0, 2), Vector3(11.45, 0.9, 2), Vector3(16, 0, 7.5), Vector3(14, 0, 4.8), Vector3(23.5, 0, 2.2), Vector3(1.3, 0, 1.3), Vector3(24.4, 0, 2.2)]:
 		_box(p + Vector3(0, 0.45, 0), Vector3(0.9, 0.9, 0.9), mat_crate)
 	# إضاءة مخيفة: مصباح خافت + مصابيح ترتعش + مصباح طوارئ أحمر
 	_lamp(Vector3(4, WALL_H, 4), Color(1.0, 0.82, 0.58), 1.0)
@@ -2228,38 +2573,42 @@ func _spawn_guards() -> void:
 		var g = preload("res://guard.gd").new()
 		add_child(g)
 		g.setup(r[0], float(r[1]), r[2])
+		if r.size() > 3:
+			g.chief = bool((r[3] as Dictionary).get("chief", false))
+			g.has_card = bool((r[3] as Dictionary).get("card", false))
 		guards.append(g)
 	for gg in guards:
 		gg.speed *= float(lv.guard_speed)
 		gg.sight = float(lv.guard_sight)
 		gg.remote = role == "analyst"
 		gg.apply_remote(gg.position, gg.rotation.y, "walk")
+		gg.decorate()
+	# خزائن وصناديق لإخفاء الأجسام، وعلب للرمي
+	for h in hide_spots:
+		var hp: Vector3 = h[0]
+		var lk := _box(hp + Vector3(0, 1.0, 0), Vector3(0.7, 2.0, 0.55), mat_steel)
+		lk.set_meta("hide", true)
+		var hl := _label3d("📦 " + str(h[1]), hp + Vector3(0, 2.25, 0), 26, Color(0.75, 0.85, 1.0))
+		hl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	var rngc := RandomNumberGenerator.new()
+	rngc.seed = seed_value + 99
+	for cp in [checkpoints[0] + Vector3(1.2, 0, -1.4), checkpoints[1] + Vector3(1.0, 0, 3.0), checkpoints[2] + Vector3(1.2, 0, 3.4)]:
+		var cn := _can_mesh(cp + Vector3(rngc.randf_range(-0.4, 0.4), 0.06, rngc.randf_range(-0.4, 0.4)))
+		can_nodes.append(cn)
 
 
 func _make_avatar() -> Node3D:
-	var a := Node3D.new()
-	var body := MeshInstance3D.new()
-	var cap := CapsuleMesh.new()
-	cap.radius = 0.28
-	cap.height = 1.75
-	body.mesh = cap
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.08, 0.1, 0.12)
-	m.roughness = 0.6
-	body.material_override = m
-	body.position.y = 0.88
-	body.layers = 2
-	a.add_child(body)
-	if agent == null:
-		var lamp := SpotLight3D.new()
-		lamp.position = Vector3(0.15, 1.4, -0.3)
-		lamp.light_color = Color(1.0, 0.94, 0.82)
-		lamp.light_energy = 2.5
-		lamp.spot_range = 9.0
-		lamp.spot_angle = 25.0
-		a.add_child(lamp)
+	# صورة العميل عند المحلّل: نفس الشخصية وحركاتها (تتحرّك بما يرسله هاتف العميل)
+	var a = preload("res://agent_body.gd").new()
 	a.position = SPAWN
 	add_child(a)
+	var lamp := SpotLight3D.new()
+	lamp.position = Vector3(0.15, 1.4, -0.3)
+	lamp.light_color = Color(1.0, 0.94, 0.82)
+	lamp.light_energy = 2.0
+	lamp.spot_range = 9.0
+	lamp.spot_angle = 25.0
+	a.add_child(lamp)
 	return a
 
 
@@ -2326,6 +2675,20 @@ func _build_archive() -> void:
 		gs.position = Vector3(0, 0, 0.045)
 		gauge_node.add_child(gs)
 		_label3d("ضغط المضخّات", o + Vector3(7.3, 1.42, 1.0), 24, Color(0.7, 0.9, 1.0))
+	var hack_node: Node3D = null
+	if gate_types.has("keycard"):
+		hack_node = _box(o + Vector3(7.3, 0.88, 1.0), Vector3(0.6, 0.04, 0.42), mat_dark)
+		hack_node.set_meta("kind", "hack")
+		var lid := _box(o + Vector3(7.3, 1.08, 0.8), Vector3(0.6, 0.4, 0.03), mat_dark, false)
+		lid.rotation.x = -0.25
+		var lsc := MeshInstance3D.new()
+		var lsq := QuadMesh.new()
+		lsq.size = Vector2(0.54, 0.34)
+		lsc.mesh = lsq
+		lsc.material_override = _glow(Color(0.2, 0.95, 0.45), 1.6)
+		lsc.position = Vector3(0, 0, 0.02)
+		lid.add_child(lsc)
+		_label3d("جهاز الاختراق", o + Vector3(7.3, 1.42, 0.9), 24, Color(0.6, 1.0, 0.7))
 	var log_node: Node3D = null
 	if gate_types.has("servers"):
 		log_node = _box(o + Vector3(7.3, 1.08, 0.95), Vector3(0.75, 0.5, 0.08), mat_dark)
@@ -2346,6 +2709,10 @@ func _build_archive() -> void:
 		bpl.rotation_degrees.y = 90
 	for gt in gate_types:
 		match str(gt):
+			"keycard":
+				analyst_targets.append(hack_node)
+			"checkpoint":
+				analyst_targets.append(null)
 			"servers":
 				analyst_targets.append(log_node)
 			"maze":
@@ -2489,10 +2856,7 @@ func _process(delta: float) -> void:
 
 	# جسم العميل كما يظهر في كاميرات المراقبة
 	if avatar:
-		if agent:
-			avatar.position = agent.global_position
-			avatar.rotation.y = agent.yaw
-		elif avatar.has_meta("target"):
+		if avatar.has_meta("target"):
 			avatar.position = avatar.position.lerp(avatar.get_meta("target"), minf(1.0, delta * 8.0))
 			avatar.rotation.y = lerp_angle(avatar.rotation.y, float(avatar.get_meta("yaw")), minf(1.0, delta * 8.0))
 
@@ -2505,7 +2869,7 @@ func _process(delta: float) -> void:
 				for g in guards:
 					var gp: Vector3 = g.global_position
 					gl.append([snappedf(gp.x, 0.01), snappedf(gp.z, 0.01), snappedf(g.rotation.y, 0.01), g.state_name()])
-				net.send({"t": "pos", "x": snappedf(agent.global_position.x, 0.01), "z": snappedf(agent.global_position.z, 0.01), "y": snappedf(agent.yaw, 0.01), "g": gl, "ht": snappedf(htime, 0.01), "lz": snappedf(_laser_off(), 0.1), "cf": snappedf(_cam_frozen(), 0.1)})
+				net.send({"t": "pos", "x": snappedf(agent.global_position.x, 0.01), "z": snappedf(agent.global_position.z, 0.01), "y": snappedf(agent.face, 0.01), "a": agent.body.clip if agent.body else "idle", "d": disguised, "g": gl, "ht": snappedf(htime, 0.01), "lz": snappedf(_laser_off(), 0.1), "cf": snappedf(_cam_frozen(), 0.1)})
 			_prog_t -= delta
 			if _prog_t <= 0.0:
 				_prog_t = 1.0
@@ -2590,6 +2954,12 @@ func _process(delta: float) -> void:
 			cam.v_offset = 0.0
 	if agent:
 		_agent_logic(delta, t)
+		if active == agent and _act != "" and not vault_mode and result == "":
+			hud.show_interact(_act)
+		hud.set_agent_buttons(active == agent and result == "" and not vault_mode, agent.running, instinct_cd, cans, _act2 if active == agent else "")
+	else:
+		hud.set_agent_buttons(false, false, 0.0, 0, "")
+	_analyst_tips(delta)
 	if analyst and active == analyst:
 		_analyst_logic()
 	_apply_stage()
@@ -2602,7 +2972,7 @@ func _fear_update(delta: float, t: float) -> void:
 	if in_play:
 		_fear_t -= delta
 		if _fear_t <= 0.0 and blackout <= 0.0:
-			_fear_t = randf_range(45.0, 75.0)
+			_fear_t = randf_range(110.0, 160.0)
 			blackout = 4.0
 			if s_clunk.stream:
 				s_clunk.play()
@@ -2624,7 +2994,8 @@ func _fear_update(delta: float, t: float) -> void:
 		_creep_t -= delta
 		if _creep_t <= 0.0 and s_creep.stream:
 			_creep_t = randf_range(20.0, 40.0)
-			var back: Vector3 = agent.global_transform.basis.z * 5.0 + agent.global_transform.basis.x * randf_range(-3.0, 3.0)
+			var ab := Basis(Vector3.UP, agent.yaw)
+			var back: Vector3 = ab.z * 5.0 + ab.x * randf_range(-3.0, 3.0)
 			s_creep.global_position = agent.global_position + back + Vector3(0, 1.5, 0)
 			s_creep.pitch_scale = randf_range(0.55, 0.8)
 			s_creep.play()
@@ -2685,7 +3056,7 @@ func _on_tool(kind: String) -> void:
 			c.frozen_t = 8.0
 	if role == "analyst" and net:
 		net.send({"t": "tool", "k": kind})
-		hud.flash({"mark": "📍 حُدِّد الحرّاس للعميل", "distract": "🔊 شُتِّت أقرب حارس", "freeze": "📹 جُمّدت الكاميرات 8 ثوانٍ", "warn": "⚠ وصل التحذير"}[kind], Color(0.6, 0.95, 0.7))
+		hud.flash({"mark": "📍 حُدِّد الحرّاس للعميل", "distract": "🔊 شُتِّت أقرب حارس", "freeze": "📹 جُمّدت الكاميرات 8 ثوانٍ", "blackout": "⚡ قطعتَ الكهرباء 6 ثوانٍ", "warn": "⚠ وصل التحذير"}[kind], Color(0.6, 0.95, 0.7))
 	else:
 		_do_tool(kind)
 
@@ -2705,8 +3076,18 @@ func _do_tool(kind: String) -> void:
 					bd = d
 					best = g
 			if best:
-				best.distract()
-			hud.flash("🔊 المحلّل شتّت الحارس — تحرّك الآن!", Color(0.6, 0.95, 0.7))
+				# إنذار كاذب بعيداً عن العميل: الحارس يذهب ليفحصه
+				var away: Vector3 = (best.global_position as Vector3) - agent.global_position
+				away.y = 0.0
+				best.investigate((best.global_position as Vector3) + away.normalized() * 5.0)
+			hud.flash("🔊 المحلّل أطلق إنذاراً كاذباً — الحارس يذهب بعيداً!", Color(0.6, 0.95, 0.7))
+		"blackout":
+			blackout = 6.0
+			for g in guards:
+				if not g.ko and not g.is_chasing():
+					g.distract()
+					g.sus = 0.0
+			hud.flash("⚡ المحلّل قطع الكهرباء — الحرّاس لا يرون، تحرّك!", Color(0.6, 0.95, 0.7))
 		"freeze":
 			for c in cctvs:
 				c.frozen_t = 8.0
@@ -2787,7 +3168,7 @@ func _audio_update(delta: float) -> void:
 func _agent_logic(delta: float, t: float) -> void:
 	var goal: Vector3 = SPAWN if stage >= 3 else (VAULT_FRONT if stage == 2 else (terminals[stage].pos as Vector3))
 	if active == agent and not vault_mode:
-		var local: Vector3 = (agent.global_transform.basis.inverse() * (goal - agent.global_position))
+		var local: Vector3 = (Basis(Vector3.UP, agent.yaw).inverse() * (goal - agent.global_position))
 		hud.set_compass(atan2(local.x, -local.z), Vector2(local.x, local.z).length(), stage >= 3)
 	else:
 		hud.set_compass(0.0, -1.0, false)
@@ -2798,37 +3179,66 @@ func _agent_logic(delta: float, t: float) -> void:
 	invuln = maxf(0.0, invuln - delta)
 	lockout = maxf(0.0, lockout - delta)
 	var space := get_world_3d().direct_space_state
-	var seen := false
+	var top_sus := 0.0
 	_seer = null
+	var ap: Vector3 = agent.global_position
 	for g in guards:
+		if g.ko:
+			continue
 		var sees_now: bool = invuln <= 0.0 and g.sees(agent, space)
 		g.saw = sees_now
+		var dist: float = (g.global_position as Vector3).distance_to(ap)
+		# الشكّ: بلا تنكّر يمتلئ بسرعة؛ بالتنكّر لا يشكّ الحارس إلا إن ركضت أو انحنيت أمامه أو التصقت به، والرئيس يكشفك
+		var rate := 0.0
 		if sees_now:
-			seen = true
+			if not disguised:
+				rate = 1.0 / 0.6
+			elif g.chief:
+				rate = 1.1 if dist < 7.0 else 0.35
+			elif agent.running:
+				rate = 0.9
+			elif agent.crouch or agent.dragging:
+				rate = 0.6
+			elif dist < 2.0:
+				rate = 0.25
+			if (active == agent and hud.panel_open()) or vault_mode:
+				rate *= 1.4
+		if rate > 0.0:
+			g.sus = minf(1.0, g.sus + rate * delta)
 			_seer = g
+		else:
+			g.sus = maxf(0.0, g.sus - delta * 0.5)
+		# الركض يُسمع: الحارس القريب يذهب ليرى
+		if agent.running and not disguised and dist < 6.5 and not g.is_chasing() and g.state_name() == "walk":
+			g.investigate(ap)
 		if not g.is_chasing():
-			g.set_alert(sees_now and seen_time > 0.15, agent.global_position)
+			if g.sus >= 1.0:
+				g.chase(agent)
+				g.sus = 1.0
+				stats.seen += 1
+				if active == agent:
+					hud.flash("🏃 كشفك الحارس! اهرب واختبئ" if not disguised else "🎭 كُشف تنكّرك! اهرب", Color(0.9, 0.28, 0.3))
+					hud.hit()
+					hud.close_panel()
+				if vault_mode:
+					_exit_vault()
+			else:
+				g.set_alert(sees_now and g.sus > 0.25, ap)
 		# أمسكه الحارس
-		elif invuln <= 0.0 and (g.global_position as Vector3).distance_to(agent.global_position) < 1.15:
+		elif invuln <= 0.0 and dist < 1.15:
 			_seer = g
 			_spotted()
 			return
-	if seen:
-		seen_time += delta * (1.6 if (active == agent and hud.panel_open()) or vault_mode else 1.0)
-		if seen_time > 0.6 and _seer and not _seer.is_chasing():
-			_seer.chase(agent)
-			seen_time = 0.6
-			if active == agent:
-				hud.flash("🏃 رآك الحارس! اهرب واختبئ خلف الصناديق", Color(0.9, 0.28, 0.3))
-				hud.hit()
-				hud.close_panel()
-			if vault_mode:
-				_exit_vault()
-	else:
-		seen_time = maxf(0.0, seen_time - delta * 2.0)
+		top_sus = maxf(top_sus, g.sus)
+		# جسم حارس ساقط ومكشوف؟
+		for b in guards:
+			if b.ko and not b.hidden and b != g and g.sees_point(b.global_position, space):
+				_body_found(g, b)
+	seen_time = top_sus * 0.6
 	if active == agent:
-		hud.set_alert(seen_time / 0.6)
+		hud.set_alert(top_sus)
 	_agent_hazards(delta)
+	_hitman_update(delta)
 
 	if vault_mode:
 		agent.look_delta = Vector2.ZERO
@@ -2868,7 +3278,7 @@ func _analyst_logic() -> void:
 		if col is Node and (col as Node).has_meta("kind"):
 			obj = col
 	var kind := str((obj as Node).get_meta("kind")) if obj else ""
-	var labels := {"drawer": "اقرأ الورقة" if drawer_open else "افتح الدرج", "book": "اقرأ دليل الأسلاك", "computer": "شغّل الحاسوب", "monitor": "كبّر الشاشة", "laserdoc": "اقرأ سجلّ الليزر", "gauges": "افتح مخطّط الضغط", "morse": "اقرأ دليل مورس", "serverlog": "اقرأ سجلّ الاختراق", "blueprint": "افتح مخطّط الأنفاق"}
+	var labels := {"drawer": "اقرأ الورقة" if drawer_open else "افتح الدرج", "book": "اقرأ دليل الأسلاك", "computer": "شغّل الحاسوب", "monitor": "كبّر الشاشة", "laserdoc": "اقرأ سجلّ الليزر", "gauges": "افتح مخطّط الضغط", "morse": "اقرأ دليل مورس", "serverlog": "اقرأ سجلّ الاختراق", "blueprint": "افتح مخطّط الأنفاق", "hack": "اخترق الباب"}
 	hud.show_interact(str(labels.get(kind, "")))
 	analyst.set_meta("looking", obj)
 
@@ -2876,6 +3286,9 @@ func _analyst_logic() -> void:
 func _on_interact() -> void:
 	if active == analyst:
 		_analyst_interact()
+		return
+	if _act != "" and not vault_mode:
+		_do_act(false)
 		return
 	if _near_kill():
 		if _laser_off() <= 0.0:
@@ -2899,6 +3312,18 @@ func _on_interact() -> void:
 		"radio":
 			_radio_open = true
 			hud.open_radio(radio_cur, _tune_radio, _submit_morse)
+		"keycard":
+			if has_card:
+				hud.flash("💳 مرّرتَ بطاقة الدخول — الباب يُفتح", Color(0.42, 0.85, 0.58))
+				_advance()
+			else:
+				hud.flash("🔒 تحتاج بطاقة الدخول (يحملها حارس) — أو اطلب من المحلّل اختراق الباب", Color(1.0, 0.63, 0.23))
+		"checkpoint":
+			if disguised or has_chief_card:
+				hud.flash("✔ " + ("الحارس المناوب يظنّك منهم — مُرّ" if disguised else "بطاقة الرئيس مقبولة"), Color(0.42, 0.85, 0.58))
+				_advance()
+			else:
+				hud.flash("🛂 نقطة تفتيش: تحتاج زيّ حارس أو بطاقة الرئيس (قبّعة حمراء)", Color(1.0, 0.63, 0.23))
 		"servers":
 			hud.open_servers(puzzle.servers, _pick_server)
 		"maze":
@@ -2921,6 +3346,18 @@ func _analyst_interact() -> void:
 		hud.open_gauges(GAUGE_NAMES)
 		_gauges_open = true
 		_gauge_t = 0.0
+		return
+	if kind == "hack":
+		if stage != 0 or not gate_types.has("keycard"):
+			hud.flash("الباب الأول مفتوح بالفعل", Color(0.6, 0.64, 0.68))
+			return
+		hud.open_hack(func(ok):
+			if ok and stage == 0:
+				hud.flash("🔓 اخترقتَ الباب الأول!", Color(0.42, 0.85, 0.58))
+				if role == "analyst" and net:
+					net.send({"t": "hack"})
+				else:
+					_advance())
 		return
 	if kind == "serverlog":
 		var icons := {"أخضر": "🟢", "برتقالي": "🟠", "أحمر": "🔴", "أزرق": "🔵"}
@@ -3039,6 +3476,8 @@ func _update_objective() -> void:
 		"wires": ["افتح لوحة الأسلاك، اقرأ الرقم التسلسلي لشريكك، واقطع السلك الذي يقوله", "اسأل العميل عن آخر رقم في الرقم التسلسلي، وابحث عنه في الدليل الأحمر المضيء"],
 		"valves": ["في بيت المضخّات: أدِر الصمّامات الأربعة حتى يقول المحلّل إن كل العدّادات خضراء، ثم ثبّت الضغط", "افتح «مخطّط الضغط» المضيء: اطلب من العميل أن يدير صمّاماً واحداً، وراقب أيّ عدّاد يتحرّك"],
 		"radio": ["في غرفة اللاسلكي: اضبط التردّد الذي يقوله المحلّل، صِف له إشارات مورس، وأدخل الأرقام", "انظر من النافذة بالمنظار 🔭 إلى جدار المضخّات واقرأ التردّد، ثم ترجم إشارات العميل بدليل مورس"],
+		"keycard": ["افتح الباب الأول: اسرق بطاقة الدخول من الحارس (من الخلف)، أو أسقطه وخذها — أو اطلب من المحلّل الاختراق", "اخترق الباب الأول من «جهاز الاختراق» المضيء، أو ساعد العميل ليسرق البطاقة"],
+		"checkpoint": ["نقطة التفتيش: البس زيّ حارس (أسقطه وخذ بدلته) أو خذ بطاقة الرئيس — احذر الرئيس بالقبّعة الحمراء", "راقب الرئيس (قبّعة حمراء) — هو وحده يكشف التنكّر. أطفئ الكهرباء أو شتّت الحرّاس لتفتح الطريق"],
 		"servers": ["في غرفة الخوادم: صِف لكل خادم ضوءه وومضاته وحرارته، واسحب قرص الذي يحدّده المحلّل", "اقرأ «سجلّ الاختراق»، وبالمنظار 🔭 اقرأ حدّ الحرارة على لوحة البرج، ثم حدّد الخادم المخترَق"],
 		"maze": ["الأنفاق مظلمة ومصباحك فارغ: اتبع كلام المحلّل حتى قاطع الكهرباء", "افتح «مخطّط الأنفاق»: ترى العميل والحرّاس — وجّهه بالكلام إلى قاطع الكهرباء الأخضر"],
 	}
@@ -3081,18 +3520,15 @@ func _exit_vault() -> void:
 	vault_mode = false
 	hud.vault_ui(false, Callable(), Callable(), Callable())
 	var tw := create_tween()
-	tw.tween_property(agent.cam, "position", Vector3(0, 1.62, 0), 0.35).set_trans(Tween.TRANS_CUBIC)
-	tw.parallel().tween_property(agent.cam, "rotation", Vector3(agent.pitch, 0, 0), 0.35)
-	tw.tween_callback(func(): agent.locked = false)
+	tw.tween_interval(0.05)
+	tw.tween_callback(func(): agent.reset_cam())
 
 
 ## إعادة الكاميرا فوراً (عند الإمساك بالعميل أو تبديل الدور).
 func _reset_agent_cam() -> void:
 	vault_mode = false
 	hud.vault_ui(false, Callable(), Callable(), Callable())
-	agent.cam.position = Vector3(0, 1.62, 0)
-	agent.cam.rotation = Vector3(agent.pitch, 0, 0)
-	agent.locked = false
+	agent.reset_cam()
 
 
 func _dial_step(st: int) -> void:
@@ -3243,4 +3679,9 @@ func _finish(won: bool) -> void:
 		Levels.complete(level_i)
 		if net == null and level_i + 1 < Levels.count():
 			next_name = str(Levels.get_level(level_i + 1).name)
-	hud.end_screen(won, next_name)
+	var info := ""
+	if won:
+		var r := _stars()
+		info = "%s   %s\nالوقت %d:%02d · رآك الحرّاس %d · أسقطت %d · وُجدت أجسام %d" % ["⭐".repeat(int(r[0])), r[1], int(r[2]) / 60, int(r[2]) % 60, int(stats.seen), int(stats.ko), int(stats.found)]
+		Levels.save_best(str(lv.id), int(r[0]), float(r[2]))
+	hud.end_screen(won, next_name, info)

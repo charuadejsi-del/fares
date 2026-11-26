@@ -190,6 +190,11 @@ jobs:
           grep -q "SMOKE sync ok" run.log || { echo "مزامنة الحرّاس لا تعمل"; exit 1; }
           grep -q "SMOKE tools ok" run.log || { echo "أدوات المحلّل لا تعمل"; exit 1; }
           grep -q "SMOKE reach ok" run.log || { echo "العميل لا يستطيع الوصول إلى كل الأهداف"; exit 1; }
+          grep -E "SMOKE (hitman|keycard|checkpoint|agent)" run.log || true
+          grep -q "SMOKE hitman ok" run.log || { echo "آليات Hitman لا تعمل"; exit 1; }
+          grep -q "SMOKE keycard ok" run.log || { echo "بطاقة الدخول لا تعمل"; exit 1; }
+          grep -q "SMOKE checkpoint ok" run.log || { echo "نقطة التفتيش لا تعمل"; exit 1; }
+          grep -q "has_run=true has_crouch=true has_hook=true" run.log || { echo "حركات العميل غير محمّلة"; exit 1; }
           grep -q "SMOKE voice channel ok" run.log || { echo "اسم قناة الصوت لا يطابق السيرفر"; exit 1; }
           CH=$(grep -o "SMOKE voice channel ok .*" run.log | awk '{print $5}')
           KEY=$(grep -oE 'eyJ[A-Za-z0-9._-]+' net.gd | head -1)
