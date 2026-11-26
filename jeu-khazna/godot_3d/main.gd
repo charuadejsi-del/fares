@@ -397,6 +397,7 @@ func _smoke_hitman() -> void:
 func _smoke_gate(i: int) -> void:
 	match str(gate_types[i]):
 		"keycard":
+			has_card = false
 			_on_gate_smoke()
 			var blocked := stage == i
 			has_card = true

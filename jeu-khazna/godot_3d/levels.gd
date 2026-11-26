@@ -18,8 +18,8 @@ const LIST := [
 		"killswitch": false,
 	},
 	{
-		"id": "port", "name": "الميناء", "sub": "مخزن الحاويات — حارسان وكاميرا",
-		"theme": "port", "mission": 720.0, "guard_speed": 1.0, "guard_sight": 1.0, "extra_guard": false,
+		"id": "port", "name": "الميناء", "sub": "على طريقة Hitman: اسرق البطاقة، تنكّر، واحذر الرئيس بالقبّعة الحمراء",
+		"theme": "port", "mission": 720.0, "guard_speed": 1.0, "guard_sight": 1.0, "extra_guard": true, "sync": true,
 		"lasers": [],
 		"cams": [[Vector3(14.0, 2.85, 0.25), 180.0, 55.0, 7.0]],
 		"killswitch": false,
