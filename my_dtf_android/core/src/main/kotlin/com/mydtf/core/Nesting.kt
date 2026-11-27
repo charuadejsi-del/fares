@@ -39,13 +39,13 @@ class NestingEngine(
 
     fun nest(items: List<NestItem>): NestResult {
         val copies = mutableListOf<Copy>()
-        for (it in items) {
-            if (it.widthCm <= 0 || it.heightCm <= 0 || it.quantity <= 0) continue
-            val fits = it.widthCm <= filmWidthCm || (allowRotation && it.heightCm <= filmWidthCm)
-            if (!fits) throw ItemTooWideException(it.id)
-            val turn = it.widthCm > filmWidthCm
-            repeat(it.quantity) {
-                copies += if (turn) Copy(it.id, it.heightCm, it.widthCm, true) else Copy(it.id, it.widthCm, it.heightCm)
+        for (item in items) {
+            if (item.widthCm <= 0 || item.heightCm <= 0 || item.quantity <= 0) continue
+            val fits = item.widthCm <= filmWidthCm || (allowRotation && item.heightCm <= filmWidthCm)
+            if (!fits) throw ItemTooWideException(item.id)
+            val turn = item.widthCm > filmWidthCm
+            repeat(item.quantity) {
+                copies += if (turn) Copy(item.id, item.heightCm, item.widthCm, true) else Copy(item.id, item.widthCm, item.heightCm)
             }
         }
         if (copies.isEmpty()) return NestResult(0.0, filmWidthCm, emptyList())
