@@ -57,6 +57,7 @@ data class OrderImage(
     @SerialName("width_cm") val widthCm: Double,
     @SerialName("height_cm") val heightCm: Double,
     val quantity: Int,
+    @SerialName("thumb_path") val thumbPath: String? = null,
 )
 
 @Serializable
@@ -96,6 +97,7 @@ data class NewOrderImage(
     @SerialName("width_cm") val widthCm: Double,
     @SerialName("height_cm") val heightCm: Double,
     val quantity: Int,
+    @SerialName("thumb_path") val thumbPath: String? = null,
 )
 
 @Serializable

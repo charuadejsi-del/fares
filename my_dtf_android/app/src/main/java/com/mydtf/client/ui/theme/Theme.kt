@@ -23,26 +23,26 @@ import com.mydtf.client.R
 
 // ---------- Palette « Nuit & Or » ----------
 object Lux {
-    val Gold = Color(0xFFD4AF37)
-    val GoldLight = Color(0xFFF2D27A)
-    val GoldDeep = Color(0xFFA8841F)
-    val Night = Color(0xFF0B0B0F)
-    val Night2 = Color(0xFF111118)
-    val Surface = Color(0xFF16161E)
-    val Surface2 = Color(0xFF1F1F2A)
-    val Ivory = Color(0xFFECE7DA)
-    val Muted = Color(0xFF9A958A)
+    val Gold = Color(0xFFE3C27A)
+    val GoldLight = Color(0xFFF1DCA6)
+    val GoldDeep = Color(0xFFB8955A)
+    val Night = Color(0xFF0F1420)
+    val Night2 = Color(0xFF131A28)
+    val Surface = Color(0xFF171E2E)
+    val Surface2 = Color(0xFF1F2840)
+    val Ivory = Color(0xFFE8EAF0)
+    val Muted = Color(0xFF9AA3B5)
     val Danger = Color(0xFFE5675F)
-    val Success = Color(0xFF5FC48A)
+    val Success = Color(0xFF5ED3C7)
 
     val goldBrush = Brush.linearGradient(listOf(GoldLight, Gold, GoldDeep))
-    val nightBrush = Brush.verticalGradient(listOf(Color(0xFF1A1710), Night2, Night))
+    val nightBrush = Brush.verticalGradient(listOf(Color(0xFF182033), Night2, Night))
 }
 
 private val DarkLux = darkColorScheme(
     primary = Lux.Gold,
     onPrimary = Lux.Night,
-    primaryContainer = Color(0xFF3A3018),
+    primaryContainer = Color(0xFF3A3322),
     onPrimaryContainer = Lux.GoldLight,
     secondary = Lux.GoldLight,
     onSecondary = Lux.Night,
@@ -54,10 +54,10 @@ private val DarkLux = darkColorScheme(
     onSurfaceVariant = Lux.Muted,
     surfaceContainer = Lux.Surface,
     surfaceContainerHigh = Lux.Surface2,
-    surfaceContainerHighest = Color(0xFF292936),
+    surfaceContainerHighest = Color(0xFF26304A),
     surfaceContainerLow = Lux.Night2,
-    outline = Color(0xFF3A3A48),
-    outlineVariant = Color(0xFF2A2A36),
+    outline = Color(0xFF2E3850),
+    outlineVariant = Color(0xFF242D42),
     error = Lux.Danger,
 )
 

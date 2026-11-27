@@ -258,7 +258,7 @@ private fun ImageCard(index: Int, img: PickedImage, onRemove: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(img.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
-                if (img.pxW > 0) Text("${img.pxW} × ${img.pxH} px", style = MaterialTheme.typography.bodySmall, color = Lux.Muted)
+                if (img.pxW > 0) Text(com.mydtf.core.ltr("${img.pxW} × ${img.pxH} px"), style = MaterialTheme.typography.bodySmall, color = Lux.Muted)
             }
             IconButton(onClick = onRemove) { Icon(Icons.Rounded.DeleteOutline, "حذف", tint = Lux.Muted) }
         }
@@ -345,10 +345,10 @@ private fun PreviewStep(vm: NewOrderViewModel) {
         )
         Spacer(Modifier.height(14.dp))
         LuxCard(Modifier.fillMaxWidth(), highlight = true) {
-            KeyValue("الطول المستعمل", String.format(java.util.Locale.US, "%.1f سم", r.lengthCm))
+            KeyValue("الطول المستعمل", com.mydtf.core.ltr(String.format(java.util.Locale.US, "%.1f", r.lengthCm)) + " سم")
             vm.quote?.let { q ->
                 KeyValue("الأمتار المحسوبة", meters(q.billedMeters))
-                KeyValue("نسبة استغلال الفيلم", "${(r.fillRatio * 100).toInt()}%")
+                KeyValue("نسبة استغلال الفيلم", com.mydtf.core.ltr("${(r.fillRatio * 100).toInt()}%"))
                 KeyValue("سعر الطباعة", formatDa(q.printAmount), strong = true)
             }
             vm.settings?.let { s ->
@@ -361,8 +361,8 @@ private fun PreviewStep(vm: NewOrderViewModel) {
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(14.dp).clip(CircleShape).background(previewPalette[i % previewPalette.size]))
                 Spacer(Modifier.width(10.dp))
-                Text("${i + 1}. ${img.width} × ${img.height} سم", modifier = Modifier.weight(1f))
-                Text("× ${img.qty}", color = Lux.Gold)
+                Text("${i + 1}. " + com.mydtf.client.ui.sizeCm(img.width, img.height), modifier = Modifier.weight(1f))
+                Text(com.mydtf.core.ltr("× ${img.qty}"), color = Lux.Gold)
             }
         }
         Spacer(Modifier.height(10.dp))

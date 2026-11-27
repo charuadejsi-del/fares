@@ -166,8 +166,8 @@ fun OrderDetailScreen(orderId: String, main: MainViewModel, onBack: () -> Unit, 
                             modifier = Modifier.size(92.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF0E0E13)),
                         )
                         Spacer(Modifier.height(4.dp))
-                        Text("${trim(img.widthCm)}×${trim(img.heightCm)} سم", style = MaterialTheme.typography.labelSmall)
-                        Text("× ${img.quantity}", style = MaterialTheme.typography.labelSmall, color = Lux.Gold)
+                        Text(com.mydtf.client.ui.sizeCm(trim(img.widthCm), trim(img.heightCm)), style = MaterialTheme.typography.labelSmall)
+                        Text(com.mydtf.core.ltr("× ${img.quantity}"), style = MaterialTheme.typography.labelSmall, color = Lux.Gold)
                     }
                 }
             }

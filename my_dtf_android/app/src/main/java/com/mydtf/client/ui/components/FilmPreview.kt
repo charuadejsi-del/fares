@@ -171,7 +171,7 @@ fun FilmPreview(
                 .padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
             Text(
-                String.format(java.util.Locale.US, "%.0f × %.1f سم", result.filmWidthCm, result.lengthCm),
+                com.mydtf.core.ltr(String.format(java.util.Locale.US, "%.0f × %.1f", result.filmWidthCm, result.lengthCm)) + " سم",
                 color = Lux.GoldLight, style = MaterialTheme.typography.labelMedium,
             )
         }

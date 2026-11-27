@@ -181,7 +181,14 @@ object Repo {
                 upsert = true
                 contentType = ContentType.parse(img.mime)
             }
-            sb.from("dtf_order_images").insert(NewOrderImage(order.id, path, img.widthCm, img.heightCm, img.quantity))
+            val thumb = makeThumb(img.bytes)?.let { t ->
+                val tp = "$me/${order.id}/thumb_${i + 1}.webp"
+                runCatching {
+                    sb.storage.from(Supa.BUCKET).upload(tp, t) { upsert = true; contentType = ContentType.parse("image/webp") }
+                    tp
+                }.getOrNull()
+            }
+            sb.from("dtf_order_images").insert(NewOrderImage(order.id, path, img.widthCm, img.heightCm, img.quantity, thumb))
             onProgress(i + 1, images.size)
         }
         return order
@@ -259,6 +266,23 @@ object Repo {
         runCatching { sb.realtime.removeAllChannels() }
     }
 }
+
+/** Miniature 400 px (WebP, transparence conservée) pour un affichage rapide côté atelier. */
+fun makeThumb(bytes: ByteArray, max: Int = 400): ByteArray? = runCatching {
+    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    var sample = 1
+    while (bounds.outWidth / (sample * 2) >= max && bounds.outHeight / (sample * 2) >= max) sample *= 2
+    val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size,
+        android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+    val scale = minOf(1f, max.toFloat() / maxOf(bmp.width, bmp.height))
+    val small = if (scale < 1f) android.graphics.Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt().coerceAtLeast(1), (bmp.height * scale).toInt().coerceAtLeast(1), true) else bmp
+    val out = java.io.ByteArrayOutputStream()
+    @Suppress("DEPRECATION")
+    val fmt = if (android.os.Build.VERSION.SDK_INT >= 30) android.graphics.Bitmap.CompressFormat.WEBP_LOSSY else android.graphics.Bitmap.CompressFormat.WEBP
+    small.compress(fmt, 78, out)
+    out.toByteArray()
+}.getOrNull()
 
 data class NewProfileInput(
     val fullName: String,

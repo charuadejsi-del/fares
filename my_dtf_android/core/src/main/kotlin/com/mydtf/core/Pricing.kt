@@ -22,8 +22,11 @@ fun computeQuote(lengthCm: Double, s: PricingSettings, deliveryFee: Double = 0.0
     return Quote(lengthCm, billedRounded, amount.roundToLong().toDouble(), deliveryFee)
 }
 
+/** Isole un nombre en gauche→droite pour qu'il ne s'inverse jamais dans un texte arabe. */
+fun ltr(s: String) = "\u2066$s\u2069"
+
 fun formatDa(v: Double): String {
     val n = v.roundToLong()
-    val s = n.toString().reversed().chunked(3).joinToString(" ").reversed()
-    return "$s دج"
+    val s = n.toString().reversed().chunked(3).joinToString(".").reversed()
+    return "${ltr(s)} دج"
 }

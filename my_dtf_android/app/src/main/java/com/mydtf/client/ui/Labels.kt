@@ -49,4 +49,7 @@ fun formatDate(iso: String): String = runCatching {
     OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault()).format(dateFmt)
 }.getOrDefault(iso.take(16).replace('T', ' '))
 
-fun meters(v: Double) = String.format(java.util.Locale.US, "%.2f م", v)
+fun meters(v: Double) = com.mydtf.core.ltr(String.format(java.util.Locale.US, "%.2f", v)) + " م"
+
+/** « 30 × 20 سم » sans inversion. */
+fun sizeCm(w: String, h: String) = com.mydtf.core.ltr("$w × $h") + " سم"
