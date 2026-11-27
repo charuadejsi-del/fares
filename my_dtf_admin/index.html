@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My DTF — لوحة الإدارة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{
+  --gold:#D4AF37;--gold2:#F2D27A;--gold3:#A8841F;--night:#0B0B0F;--night2:#111118;--card:#16161E;--card2:#1F1F2A;
+  --line:#2A2A36;--ivory:#ECE7DA;--muted:#9A958A;--ok:#5FC48A;--bad:#E5675F;--warn:#FFB25C;--info:#6FA8FF;--violet:#B98CFF;
+  --grad:linear-gradient(135deg,#F2D27A 0%,#D4AF37 45%,#A8841F 100%);
+  --r:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:Tajawal,system-ui,sans-serif;background:radial-gradient(1200px 600px at 85% -10%,#2a2310 0%,transparent 60%),var(--night);color:var(--ivory);font-size:15px}
+a{color:var(--gold2)}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:15px;color:var(--ivory);background:var(--night2);border:1px solid var(--line);border-radius:14px;padding:11px 14px;width:100%;outline:none;transition:.2s}
+input:focus,select:focus,textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px #d4af3722}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 4px 6px}
+.btn{border:0;border-radius:14px;padding:11px 18px;font-weight:800;background:var(--grad);color:var(--night);transition:transform .12s,filter .2s;display:inline-flex;align-items:center;gap:8px;justify-content:center}
+.btn:hover{filter:brightness(1.08)}.btn:active{transform:scale(.97)}
+.btn:disabled{background:#2c2c35;color:var(--muted);cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--gold);border:1px solid #d4af3799}
+.btn.danger{background:transparent;color:var(--bad);border:1px solid #e5675f88}
+.btn.sm{padding:7px 12px;font-size:13px;border-radius:11px}
+.muted{color:var(--muted)}.gold{color:var(--gold)}.ok{color:var(--ok)}.bad{color:var(--bad)}
+.card{background:linear-gradient(180deg,#1a1a23,#15151d);border:1px solid #d4af3722;border-radius:var(--r);padding:18px}
+.card.hl{border:1px solid transparent;background:linear-gradient(#17171f,#17171f) padding-box,var(--grad) border-box}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:1100px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){.g2,.g3,.g4{grid-template-columns:1fr}}
+.row{display:flex;align-items:center;gap:10px}.between{justify-content:space-between}.wrap{flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 11px;font-size:12.5px;font-weight:700;border:1px solid}
+h1{font-size:26px;font-weight:800}h2{font-size:19px;font-weight:800}h3{font-size:16px;font-weight:700}
+.title-bar{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.title-bar:before{content:"";width:5px;height:22px;border-radius:9px;background:var(--grad)}
+table{width:100%;border-collapse:collapse}
+th{font-size:12.5px;color:var(--muted);font-weight:700;text-align:right;padding:10px;border-bottom:1px solid var(--line)}
+td{padding:11px 10px;border-bottom:1px solid #22222c;vertical-align:middle}
+tr:hover td{background:#ffffff05}
+/* layout */
+#app{display:flex;min-height:100%}
+aside{width:250px;flex-shrink:0;background:linear-gradient(180deg,#14120c,#0e0e13 30%);border-left:1px solid #d4af3722;padding:20px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.logo{display:flex;align-items:center;gap:12px;padding:6px 8px 22px}
+.logo .mark{width:44px;height:44px;border-radius:14px;background:var(--grad);display:grid;place-items:center;color:var(--night);font-weight:800;font-size:15px;box-shadow:0 8px 30px #d4af3733}
+.nav a{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;color:var(--ivory);text-decoration:none;margin-bottom:4px;font-weight:500;transition:.15s;position:relative}
+.nav a:hover{background:#ffffff08}
+.nav a.on{background:#d4af3718;color:var(--gold2);font-weight:800}
+.nav a.on:before{content:"";position:absolute;right:-14px;top:10px;bottom:10px;width:4px;border-radius:4px;background:var(--grad)}
+.nav .ic{width:22px;text-align:center;font-size:17px}
+.nav .badge{margin-right:auto;background:var(--gold);color:var(--night);border-radius:999px;font-size:11px;font-weight:800;padding:1px 8px}
+main{flex:1;min-width:0;padding:24px 28px 60px}
+.topbar{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.me{margin-right:auto;display:flex;align-items:center;gap:10px}
+.avatar{width:38px;height:38px;border-radius:50%;background:var(--card2);display:grid;place-items:center;font-weight:800;color:var(--gold);border:1px solid #d4af3755}
+.menu-btn{display:none;background:var(--card);border:1px solid var(--line);color:var(--ivory);border-radius:12px;padding:8px 12px}
+@media(max-width:900px){aside{position:fixed;right:-270px;z-index:50;transition:.25s}aside.open{right:0}.menu-btn{display:block}main{padding:16px}}
+/* kpi */
+.kpi .v{font-size:26px;font-weight:800;margin-top:6px}
+.kpi .l{color:var(--muted);font-size:13px}
+.kpi .s{font-size:12.5px;margin-top:4px}
+/* kanban */
+.kanban{display:grid;grid-template-columns:repeat(6,minmax(230px,1fr));gap:12px;overflow-x:auto;padding-bottom:10px}
+.col{background:#111117;border:1px solid #ffffff0d;border-radius:18px;padding:10px;min-height:300px}
+.col h4{display:flex;align-items:center;gap:8px;padding:6px 6px 12px;font-size:14px}
+.col h4 .n{margin-right:auto;background:var(--card2);border-radius:999px;padding:1px 9px;font-size:12px;color:var(--muted)}
+.oc{background:var(--card);border:1px solid #ffffff10;border-radius:14px;padding:12px;margin-bottom:9px;cursor:pointer;transition:.15s}
+.oc:hover{border-color:#d4af3766;transform:translateY(-1px)}
+.oc .t{font-weight:800}.oc .m{font-size:12.5px;color:var(--muted);margin-top:4px}
+.age{font-size:11.5px;border-radius:8px;padding:2px 7px;background:#ffffff0c}
+.age.late{background:#e5675f22;color:var(--bad)}
+/* drawer */
+.overlay{position:fixed;inset:0;background:#000a;backdrop-filter:blur(3px);z-index:80;display:none}
+.overlay.on{display:block}
+.drawer{position:fixed;top:0;bottom:0;left:0;width:min(560px,100%);background:#101016;border-right:1px solid #d4af3733;z-index:90;transform:translateX(-105%);transition:.28s cubic-bezier(.2,.8,.2,1);overflow-y:auto;padding:22px}
+.drawer.on{transform:none}
+.modal{position:fixed;inset:0;z-index:100;display:none;place-items:center;padding:16px}
+.modal.on{display:grid}
+.modal .box{width:min(460px,100%);background:#14141b;border:1px solid #d4af3744;border-radius:24px;padding:22px;box-shadow:0 30px 80px #000c}
+.imgs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.imgs .im{background:#0b0b10;border-radius:14px;padding:6px;text-align:center;border:1px solid #ffffff0d}
+.imgs img{width:100%;height:110px;object-fit:contain;border-radius:10px;background:repeating-conic-gradient(#1a1a22 0 25%,#13131a 0 50%) 50%/16px 16px}
+.tl{border-right:2px solid #d4af3733;margin-right:8px;padding-right:16px}
+.tl div{position:relative;padding:6px 0}
+.tl div:before{content:"";position:absolute;right:-23px;top:12px;width:12px;height:12px;border-radius:50%;background:var(--gold)}
+/* gauge */
+.gauge{height:14px;border-radius:99px;background:#ffffff0d;overflow:hidden}
+.gauge>i{display:block;height:100%;border-radius:99px;background:var(--grad);transition:width .6s}
+.gauge.low>i{background:linear-gradient(90deg,#ff8c42,#e5675f)}
+.ring{width:150px;height:150px;border-radius:50%;display:grid;place-items:center;margin:auto}
+.ring>div{width:118px;height:118px;border-radius:50%;background:#15151d;display:grid;place-items:center;text-align:center}
+/* chat */
+.chat{display:grid;grid-template-columns:300px 1fr;gap:14px;height:calc(100vh - 150px)}
+@media(max-width:800px){.chat{grid-template-columns:1fr;height:auto}}
+.conv{padding:12px;border-radius:14px;cursor:pointer;border:1px solid transparent}
+.conv:hover{background:#ffffff06}.conv.on{background:#d4af3714;border-color:#d4af3744}
+.thread{display:flex;flex-direction:column;gap:8px;overflow-y:auto;padding:6px;flex:1}
+.bub{max-width:75%;padding:10px 14px;border-radius:18px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.bub.me{align-self:flex-start;background:var(--grad);color:var(--night);border-bottom-left-radius:6px}
+.bub.them{align-self:flex-end;background:var(--card2);border-bottom-right-radius:6px}
+.bub small{display:block;font-size:11px;opacity:.7;margin-top:3px}
+/* pin pad */
+.pin-wrap{min-height:100vh;display:grid;place-items:center;padding:20px}
+.pin-dots{display:flex;gap:14px;justify-content:center;margin:18px 0}
+.pin-dots i{width:16px;height:16px;border-radius:50%;border:2px solid var(--gold);transition:.15s}
+.pin-dots i.f{background:var(--gold);box-shadow:0 0 14px #d4af3788}
+.pad{display:grid;grid-template-columns:repeat(3,76px);gap:12px;justify-content:center}
+.pad button{height:76px;border-radius:50%;border:1px solid #d4af3744;background:#16161e;color:var(--ivory);font-size:24px;font-weight:700;transition:.12s}
+.pad button:hover{background:#d4af3718}.pad button:active{transform:scale(.93)}
+.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-10px)}40%,80%{transform:translateX(10px)}}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(120px);background:#1c1c25;border:1px solid #d4af3766;padding:12px 20px;border-radius:14px;z-index:200;transition:.3s;font-weight:700;max-width:90vw}
+.toast.on{transform:translateX(-50%) translateY(0)}
+.toast.err{border-color:var(--bad);color:#ffb4ae}
+.banner{background:linear-gradient(90deg,#3a2c10,#2a2110);border:1px solid #d4af3766;border-radius:14px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.score{font-size:34px;font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.bars{display:flex;align-items:flex-end;gap:6px;height:150px;padding-top:10px}
+.bars>div{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+.bars>div>i{width:100%;max-width:34px;border-radius:8px 8px 3px 3px;background:var(--grad);min-height:2px;transition:height .6s}
+.bars small{font-size:10.5px;color:var(--muted)}
+.seg{display:inline-flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:3px}
+.seg button{border:0;background:none;color:var(--muted);padding:7px 13px;border-radius:9px;font-weight:700}
+.seg button.on{background:var(--grad);color:var(--night)}
+.empty{text-align:center;color:var(--muted);padding:36px}
+.spinner{width:34px;height:34px;border:3px solid #d4af3733;border-top-color:var(--gold);border-radius:50%;animation:sp 0.8s linear infinite;margin:40px auto}
+@keyframes sp{to{transform:rotate(360deg)}}
+.fade{animation:fd .35s ease}
+@keyframes fd{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#2c2c38;border-radius:9px}
+</style>
+</head>
+<body>
+<div id="root"><div class="spinner"></div></div>
+<div class="overlay" id="ov"></div>
+<div class="drawer" id="drawer"></div>
+<div class="modal" id="modal"><div class="box" id="mbox"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// =====================================================================
+// My DTF — site d'administration (une seule page, sans build)
+// =====================================================================
+const SB_URL = "https://pxifieuohgthtqkwasug.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4aWZpZXVvaGd0aHRxa3dhc3VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxMzI3NDUsImV4cCI6MjEwODcwODc0NX0.pXYktWDzEcjzcwEFspJnul1zzdSkmiWlMra2ukQkG8k";
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+const S = { user:null, me:null, settings:null, shift:null, staff:[], view:null, unreadChat:0, newOrders:0, chatWith:null, range:'7' };
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const da = v => Math.round(+v || 0).toLocaleString('fr-FR').replace(/ | /g, ' ') + ' دج';
+const m2 = v => (+v || 0).toFixed(2) + ' م';
+const fdt = iso => iso ? new Date(iso).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+const ftime = iso => iso ? new Date(iso).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}) : '—';
+const fdate = d => d.toISOString().slice(0,10);
+const mins = iso => (Date.now() - new Date(iso)) / 60000;
+const dur = m => m < 60 ? Math.round(m) + ' د' : m < 1440 ? (m/60).toFixed(1) + ' سا' : (m/1440).toFixed(1) + ' يوم';
+
+const ROLE = { admin:'المدير', manager:'المسيّر', designer:'المصمّم', printer:'الطابع', client:'زبون' };
+const ST = {
+  new:['مستلمة','#6FA8FF','📥'], in_design:['في التصميم','#B98CFF','🎨'], ready_to_print:['تنتظر الطباعة','#FFB25C','⏳'],
+  printing:['في الطباعة','#FF8C42','🖨️'], printed:['انتهت الطباعة','#4FD1C5','📦'], ready_pickup:['جاهزة للاستلام','#4FD1C5','🏪'],
+  shipped:['في التوصيل','#7C8CFF','🚚'], delivered:['مُسلّمة','#5FC48A','✅'], rejected:['مرفوضة','#E5675F','⛔'], cancelled:['ملغاة','#E5675F','⛔']
+};
+const MODE = { pickup:'استلام من الورشة', home:'توصيل للمنزل', stopdesk:'مكتب التوصيل' };
+const chip = s => { const [l,c,i] = ST[s] || [s,'#999','•']; return `<span class="chip" style="color:${c};border-color:${c}66;background:${c}18">${i} ${l}</span>`; };
+
+function toast(msg, err=false){ const t=$('#toast'); t.textContent=msg; t.className='toast on'+(err?' err':''); clearTimeout(t._h); t._h=setTimeout(()=>t.className='toast',3200); }
+function errMsg(e){ const m=(e&&(e.message||e.error_description||e.error))||String(e); if(/Invalid login/i.test(m)) return 'البريد أو كلمة السر غير صحيحة'; return m; }
+async function rpc(fn, args={}){ const {data,error}=await sb.rpc(fn,args); if(error) throw error; return data; }
+async function q(p){ const {data,error}=await p; if(error) throw error; return data; }
+function modal(html){ $('#mbox').innerHTML=html; $('#modal').classList.add('on'); }
+function closeModal(){ $('#modal').classList.remove('on'); }
+$('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
+function drawer(html){ $('#drawer').innerHTML=html; $('#drawer').classList.add('on'); $('#ov').classList.add('on'); }
+function closeDrawer(){ $('#drawer').classList.remove('on'); $('#ov').classList.remove('on'); S.openOrder=null; }
+$('#ov').addEventListener('click', closeDrawer);
+
+const isAdmin = () => S.me?.role === 'admin';
+const isMgr = () => ['admin','manager'].includes(S.me?.role);
+
+// =====================================================================
+// Connexion
+// =====================================================================
+function loginView(err=''){
+  $('#root').innerHTML = `
+  <div class="pin-wrap fade"><div class="card hl" style="width:min(420px,100%);padding:30px">
+    <div style="text-align:center">
+      <div class="logo" style="justify-content:center;padding:0"><div class="mark" style="width:64px;height:64px;font-size:20px">DTF</div></div>
+      <h1 style="margin-top:14px">My DTF</h1><p class="muted">لوحة إدارة الورشة</p>
+    </div>
+    <form id="lf" style="margin-top:18px">
+      <label>البريد الإلكتروني</label><input id="le" type="email" dir="ltr" required autocomplete="username">
+      <label>كلمة السر</label><input id="lp" type="password" dir="ltr" required autocomplete="current-password">
+      <p class="bad" style="min-height:22px;margin-top:10px">${esc(err)}</p>
+      <button class="btn" style="width:100%;height:50px;font-size:16px">دخول</button>
+    </form>
+  </div></div>`;
+  $('#lf').onsubmit = async e => {
+    e.preventDefault(); const b=e.target.querySelector('button'); b.disabled=true; b.textContent='...';
+    const {error} = await sb.auth.signInWithPassword({email:$('#le').value.trim(), password:$('#lp').value});
+    if(error){ loginView(errMsg(error)); }
+  };
+}
+
+async function boot(){
+  const {data:{session}} = await sb.auth.getSession();
+  if(!session){ loginView(); return; }
+  S.user = session.user;
+  try {
+    S.me = await q(sb.from('dtf_profiles').select('*').eq('id', S.user.id).maybeSingle());
+    if(!S.me || S.me.role==='client' || !S.me.active){ await sb.auth.signOut(); loginView('هذا الحساب ليس من فريق الورشة'); return; }
+    S.settings = await q(sb.from('dtf_settings').select('*').single());
+    if(S.me.role==='admin'){ startApp(); return; }
+    const st = (await rpc('dtf_pin_status'))[0];
+    S.shift = st.clocked_in ? {since: st.since} : null; S.workEnd = st.work_end;
+    if(!st.has_pin) pinSetup(); else if(!st.clocked_in) pinClock(); else startApp();
+  } catch(e){ loginView(errMsg(e)); }
+}
+
+// =====================================================================
+// Pointage par code PIN
+// =====================================================================
+function pinPad(title, sub, onDone){
+  let v='';
+  $('#root').innerHTML = `
+  <div class="pin-wrap fade"><div style="text-align:center">
+    <div class="avatar" style="width:72px;height:72px;font-size:26px;margin:auto">${esc(S.me.full_name[0]||'?')}</div>
+    <h2 style="margin-top:14px">${esc(title)}</h2><p class="muted">${esc(sub)}</p>
+    <div class="pin-dots" id="dots">${'<i></i>'.repeat(4)}</div>
+    <p class="bad" id="perr" style="min-height:22px"></p>
+    <div class="pad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-k="${n}">${n}</button>`).join('')}
+      <button data-k="x" style="font-size:16px">مسح</button><button data-k="0">0</button><button data-k="ok" style="font-size:16px;background:var(--grad);color:var(--night)">تأكيد</button></div>
+    <p style="margin-top:22px"><a href="#" id="lo" class="muted">تسجيل الخروج من الحساب</a></p>
+  </div></div>`;
+  const paint=()=>{ const n=Math.max(4,v.length); $('#dots').innerHTML=Array.from({length:n},(_,i)=>`<i class="${i<v.length?'f':''}"></i>`).join(''); };
+  const submit=async()=>{ if(v.length<4) return; try{ await onDone(v); } catch(e){ $('#perr').textContent=errMsg(e); $('#dots').classList.add('shake'); setTimeout(()=>$('#dots')?.classList.remove('shake'),400); v=''; paint(); } };
+  document.querySelectorAll('.pad button').forEach(b=>b.onclick=()=>{ const k=b.dataset.k; if(k==='x') v=v.slice(0,-1); else if(k==='ok') return submit(); else if(v.length<6) v+=k; paint(); if(v.length===6) submit(); });
+  document.onkeydown = e=>{ if(!$('#dots')) return; if(/^\d$/.test(e.key)&&v.length<6){v+=e.key;paint();} else if(e.key==='Backspace'){v=v.slice(0,-1);paint();} else if(e.key==='Enter') submit(); };
+  $('#lo').onclick = async e=>{ e.preventDefault(); await sb.auth.signOut(); location.reload(); };
+}
+function pinSetup(){
+  pinPad('اختر رمزك السري', 'من 4 إلى 6 أرقام — ستستعمله كل صباح عند الدخول وعند الخروج', async v=>{
+    const first=v; pinPad('أعد كتابة الرمز', 'للتأكيد', async v2=>{
+      if(v2!==first) throw new Error('الرمزان غير متطابقين');
+      await rpc('dtf_pin_set', {p_new:v2}); toast('تم حفظ رمزك ✓'); pinClock();
+    });
+  });
+}
+function pinClock(){
+  const h=new Date().getHours(); const hi = h<12?'صباح الخير':'مساء الخير';
+  pinPad(`${hi} ${S.me.full_name.split(' ')[0]}`, 'أدخل رمزك السري لتسجيل بداية العمل', async v=>{
+    const a = await rpc('dtf_clock_in', {p_pin:v}); S.shift={since:a.clock_in}; toast('تم تسجيل دخولك على '+ftime(a.clock_in)); document.onkeydown=null; startApp();
+  });
+}
+function clockOutDialog(){
+  modal(`<h2>تسجيل الخروج</h2><p class="muted" style="margin:6px 0 10px">بدأت العمل على ${ftime(S.shift?.since)} — أدخل رمزك لتسجيل وقت الخروج.</p>
+    <input id="cop" type="password" inputmode="numeric" maxlength="6" dir="ltr" style="text-align:center;font-size:24px;letter-spacing:10px" placeholder="••••">
+    <p class="bad" id="coe" style="min-height:22px;margin-top:8px"></p>
+    <div class="row"><button class="btn" id="cok" style="flex:1">تسجيل الخروج</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
+  $('#cop').focus();
+  const go=async()=>{ try{ const a=await rpc('dtf_clock_out',{p_pin:$('#cop').value}); S.shift=null; closeModal(); window.onbeforeunload=null;
+    const h=((new Date(a.clock_out)-new Date(a.clock_in))/3600000).toFixed(1); $('#root').innerHTML=`<div class="pin-wrap fade"><div class="card hl" style="text-align:center;padding:34px"><div style="font-size:46px">👋</div><h2>إلى اللقاء ${esc(S.me.full_name.split(' ')[0])}</h2><p class="muted" style="margin:8px 0 18px">خرجت على ${ftime(a.clock_out)} — عملت ${h} ساعة اليوم</p><button class="btn" onclick="location.reload()">دخول جديد</button></div></div>`;
+    } catch(e){ $('#coe').textContent=errMsg(e); } };
+  $('#cok').onclick=go; $('#cop').onkeydown=e=>{ if(e.key==='Enter') go(); };
+}
+
+// =====================================================================
+// Application
+// =====================================================================
+const NAV = [
+  {id:'dash', ic:'◆', t:'لوحة القيادة', roles:['admin','manager']},
+  {id:'orders', ic:'▦', t:'الطلبيات', roles:['admin','manager']},
+  {id:'mywork', ic:'🎨', t:'مهامي', roles:['designer']},
+  {id:'queue', ic:'🖨️', t:'طابور الطباعة', roles:['printer']},
+  {id:'stock', ic:'🧻', t:'مخزون الفيلم', roles:['admin','manager','printer']},
+  {id:'perf', ic:'🏆', t:'الأداء الذكي', roles:['admin','manager']},
+  {id:'attendance', ic:'⏱', t:'الحضور', roles:['admin','manager']},
+  {id:'team', ic:'👥', t:'الفريق', roles:['admin']},
+  {id:'chat', ic:'💬', t:'الدردشة', roles:['admin','manager']},
+  {id:'settings', ic:'⚙', t:'الإعدادات', roles:['admin']},
+  {id:'account', ic:'🔐', t:'حسابي', roles:['manager','designer','printer']},
+];
+
+function startApp(){
+  const nav = NAV.filter(n=>n.roles.includes(S.me.role));
+  $('#root').innerHTML = `
+  <div id="app">
+    <aside id="side">
+      <div class="logo"><div class="mark">DTF</div><div><h3>My DTF</h3><div class="muted" style="font-size:12px">${ROLE[S.me.role]}</div></div></div>
+      <nav class="nav">${nav.map(n=>`<a href="#${n.id}" data-v="${n.id}"><span class="ic">${n.ic}</span>${n.t}<span class="badge" id="b-${n.id}" style="display:none"></span></a>`).join('')}</nav>
+      <div style="margin-top:auto">
+        ${S.shift?`<div class="card" style="padding:12px;margin-bottom:10px"><div class="muted" style="font-size:12px">بدأت العمل</div><div class="row between"><b class="gold">${ftime(S.shift.since)}</b><span id="elapsed" class="muted" style="font-size:12px"></span></div><button class="btn danger sm" style="width:100%;margin-top:8px" onclick="clockOutDialog()">⏏ تسجيل الخروج</button></div>`:''}
+        <button class="btn ghost sm" style="width:100%" id="logout">خروج من الحساب</button>
+      </div>
+    </aside>
+    <main>
+      <div class="topbar">
+        <button class="menu-btn" onclick="$('#side').classList.toggle('open')">☰</button>
+        <div><h1 id="vt"></h1><div class="muted" id="vs" style="font-size:13px"></div></div>
+        <div class="me"><div style="text-align:left"><b>${esc(S.me.full_name)}</b><div class="muted" style="font-size:12px">${ROLE[S.me.role]}</div></div><div class="avatar">${esc(S.me.full_name[0]||'?')}</div></div>
+      </div>
+      <div id="banner"></div>
+      <div id="view"></div>
+    </main>
+  </div>`;
+  $('#logout').onclick = async ()=>{
+    if(S.shift && !confirm('لم تسجّل خروجك من العمل بعد! هل تريد الخروج من الحساب دون تسجيل الخروج؟')) return;
+    await sb.auth.signOut(); location.reload();
+  };
+  if(S.shift){
+    window.onbeforeunload = e=>{ e.preventDefault(); e.returnValue='لا تنسَ تسجيل الخروج بالرمز السري'; return e.returnValue; };
+    const tick=()=>{ const el=$('#elapsed'); if(el) el.textContent=dur(mins(S.shift.since)); remindOut(); };
+    tick(); setInterval(tick, 30000);
+  }
+  window.onhashchange = route;
+  loadStaff().then(()=>{ route(); refreshBadges(); });
+  live();
+}
+
+function remindOut(){
+  if(!S.shift || !S.workEnd) return;
+  const [h,m]=S.workEnd.split(':').map(Number); const now=new Date(); const end=new Date(); end.setHours(h,m-15,0,0);
+  $('#banner').innerHTML = now>=end ? `<div class="banner">⏏️ <b>اقترب وقت المغادرة</b><span class="muted">لا تنسَ تسجيل خروجك بالرمز السري قبل أن تغادر.</span><button class="btn sm" style="margin-right:auto" onclick="clockOutDialog()">تسجيل الخروج</button></div>` : '';
+}
+
+async function loadStaff(){ S.staff = await q(sb.from('dtf_profiles').select('id,full_name,role,active,phone').neq('role','client').order('full_name')); }
+const staffName = id => S.staff.find(s=>s.id===id)?.full_name || '—';
+
+function route(){
+  const nav = NAV.filter(n=>n.roles.includes(S.me.role));
+  let v = location.hash.slice(1) || nav[0].id;
+  if(!nav.find(n=>n.id===v)) v = nav[0].id;
+  S.view = v; closeDrawer(); $('#side')?.classList.remove('open');
+  document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('on', a.dataset.v===v));
+  const n = NAV.find(x=>x.id===v); $('#vt').textContent = n.t; $('#vs').textContent = '';
+  $('#view').innerHTML = '<div class="spinner"></div>';
+  ({dash, orders, mywork, queue, stock, perf, attendance, team, chat, settings, account})[v]().catch(e=>{ $('#view').innerHTML=`<div class="card bad">${esc(errMsg(e))}</div>`; });
+}
+
+function live(){
+  let t; const again = ()=>{ clearTimeout(t); t=setTimeout(()=>{ refreshBadges(); if(['dash','orders','mywork','queue','stock'].includes(S.view)) route(); if(S.openOrder) openOrder(S.openOrder); },500); };
+  sb.channel('admin-live')
+    .on('postgres_changes',{event:'*',schema:'public',table:'dtf_orders'},again)
+    .on('postgres_changes',{event:'*',schema:'public',table:'dtf_rolls'},again)
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'dtf_messages'},p=>{ refreshBadges(); if(S.view==='chat') chatRefresh(p.new); })
+    .subscribe();
+}
+
+async function refreshBadges(){
+  try{
+    const set=(id,n)=>{ const b=$('#b-'+id); if(b){ b.textContent=n; b.style.display=n>0?'':'none'; } };
+    if(isMgr()){
+      const {count} = await sb.from('dtf_orders').select('id',{count:'exact',head:true}).eq('status','new'); set('orders', count||0);
+      const conv = await q(sb.from('dtf_conversations').select('unread')); set('chat', conv.reduce((s,c)=>s+(+c.unread||0),0));
+    }
+    if(S.me.role==='designer'){ const {count}=await sb.from('dtf_orders').select('id',{count:'exact',head:true}).eq('status','in_design').eq('designer_id',S.me.id); set('mywork',count||0); }
+    if(S.me.role==='printer'){ const {count}=await sb.from('dtf_orders').select('id',{count:'exact',head:true}).eq('status','ready_to_print').eq('printer_id',S.me.id); set('queue',count||0); }
+  }catch(e){}
+}
+
+// =====================================================================
+// Tableau de bord
+// =====================================================================
+async function dash(){
+  const since30 = new Date(Date.now()-30*864e5).toISOString();
+  const today0 = new Date(); today0.setHours(0,0,0,0);
+  const [ord, moves, stockS, att, conv] = await Promise.all([
+    q(sb.from('dtf_orders').select('id,code,status,print_amount,billed_meters,created_at,amount_paid').gte('created_at', since30)),
+    q(sb.from('dtf_film_moves').select('meters,kind,created_at').gte('created_at', since30)),
+    q(sb.from('dtf_stock_summary').select('*').single()),
+    q(sb.from('dtf_attendance').select('user_id,clock_in,clock_out,auto_closed,work_date').gte('work_date', fdate(new Date(Date.now()-864e5)))),
+    q(sb.from('dtf_conversations').select('unread')),
+  ]);
+  const valid = ord.filter(o=>!['rejected','cancelled'].includes(o.status));
+  const todayO = valid.filter(o=>new Date(o.created_at)>=today0);
+  const rev30 = valid.reduce((s,o)=>s+ +o.print_amount,0), revT = todayO.reduce((s,o)=>s+ +o.print_amount,0);
+  const printed30 = moves.filter(m=>m.kind==='print').reduce((s,m)=>s+ +m.meters,0);
+  const waste30 = moves.filter(m=>m.kind==='waste').reduce((s,m)=>s+ +m.meters,0);
+  const waiting = ord.filter(o=>o.status==='new'), inProg = ord.filter(o=>['in_design','ready_to_print','printing'].includes(o.status));
+  const unread = conv.reduce((s,c)=>s+(+c.unread||0),0);
+  const pres = att.filter(a=>a.work_date===fdate(new Date()) && !a.clock_out);
+  const low = stockS.active_code && +stockS.active_remaining_m <= +stockS.alert_m;
+  // 14 derniers jours
+  const days=[...Array(14)].map((_,i)=>{ const d=new Date(Date.now()-(13-i)*864e5); d.setHours(0,0,0,0); return d; });
+  const perDay = days.map(d=>{ const e=new Date(+d+864e5); return { d, v: valid.filter(o=>{const c=new Date(o.created_at);return c>=d&&c<e;}).reduce((s,o)=>s+ +o.print_amount,0), m: moves.filter(x=>x.kind==='print'&&new Date(x.created_at)>=d&&new Date(x.created_at)<e).reduce((s,x)=>s+ +x.meters,0) }; });
+  const maxV = Math.max(1,...perDay.map(x=>x.v));
+  const alerts=[];
+  if(waiting.length) alerts.push(`📥 <b>${waiting.length}</b> طلبية جديدة تنتظر القبول — أقدمها منذ ${dur(Math.max(...waiting.map(o=>mins(o.created_at))))}`);
+  if(low) alerts.push(`🧻 الرولو #${stockS.active_code} قريب يخلاص: بقي <b>${(+stockS.active_remaining_m).toFixed(1)} م</b>`);
+  if(+stockS.rolls_in_stock===0) alerts.push('⚠️ لا يوجد رولو احتياطي في المخزون');
+  if(unread) alerts.push(`💬 <b>${unread}</b> رسالة زبون غير مقروءة`);
+  const forgot = att.filter(a=>a.auto_closed); if(forgot.length) alerts.push(`⏱ ${forgot.map(a=>esc(staffName(a.user_id))).join('، ')} نسي تسجيل الخروج أمس`);
+  $('#vs').textContent = new Date().toLocaleDateString('ar-DZ',{weekday:'long',day:'numeric',month:'long'});
+  $('#view').innerHTML = `<div class="fade">
+   <div class="grid g4">
+     ${kpi('مداخيل اليوم', da(revT), `${todayO.length} طلبية`)}
+     ${kpi('مداخيل 30 يوماً', da(rev30), `${valid.length} طلبية`)}
+     ${kpi('أمتار مطبوعة (30 يوماً)', m2(printed30), `هدر ${m2(waste30)} · ${printed30? (waste30/(printed30+waste30)*100).toFixed(1):0}%`)}
+     ${kpi('مخزون الفيلم', m2(stockS.total_remaining_m), `${stockS.rolls_in_stock} رولو احتياطي`, low)}
+   </div>
+   <div class="grid g3" style="margin-top:14px;grid-template-columns:2fr 1fr">
+     <div class="card"><div class="row between"><h3 class="title-bar">المداخيل اليومية — 14 يوماً</h3><span class="muted" style="font-size:12px">دج</span></div>
+       <div class="bars">${perDay.map(x=>`<div title="${da(x.v)} · ${m2(x.m)}"><small>${x.v?Math.round(x.v/1000)+'k':''}</small><i style="height:${x.v/maxV*100}%"></i><small>${x.d.getDate()}</small></div>`).join('')}</div></div>
+     <div class="card"><h3 class="title-bar">التنبيهات الذكية</h3>${alerts.length?alerts.map(a=>`<div style="padding:9px 0;border-bottom:1px solid #ffffff0a">${a}</div>`).join(''):'<div class="empty">كل شيء على ما يرام ✨</div>'}</div>
+   </div>
+   <div class="grid g3" style="margin-top:14px">
+     <div class="card"><h3 class="title-bar">قيد التنفيذ الآن</h3>${inProg.length?inProg.slice(0,8).map(o=>`<div class="row between" style="padding:7px 0;cursor:pointer" onclick="openOrder('${o.id}')"><b>#${o.code}</b>${chip(o.status)}</div>`).join(''):'<div class="empty">لا شيء</div>'}</div>
+     <div class="card"><h3 class="title-bar">الحاضرون الآن</h3>${pres.length?pres.map(a=>{const p=S.staff.find(s=>s.id===a.user_id);return `<div class="row between" style="padding:7px 0"><span>🟢 ${esc(p?.full_name||'')} <span class="muted" style="font-size:12px">${ROLE[p?.role]||''}</span></span><span class="muted">منذ ${ftime(a.clock_in)}</span></div>`}).join(''):'<div class="empty">لا أحد سجّل دخوله</div>'}</div>
+     <div class="card"><h3 class="title-bar">الرولو الحالي</h3>${rollGauge(stockS)}</div>
+   </div></div>`;
+}
+const kpi=(l,v,s,warn)=>`<div class="card kpi ${warn?'':'hl'}" style="${warn?'border-color:#e5675f88':''}"><div class="l">${l}</div><div class="v ${warn?'bad':'gold'}">${v}</div><div class="s muted">${s}</div></div>`;
+function rollGauge(s){
+  if(!s.active_code) return `<div class="empty">لا يوجد رولو مركّب<br><br>${['admin','manager','printer'].includes(S.me.role)?'<button class="btn sm" onclick="activateRoll()">تركيب رولو</button>':''}</div>`;
+  const pct = Math.max(0,Math.min(100, s.active_remaining_m/s.active_length_m*100)); const low=+s.active_remaining_m<=+s.alert_m;
+  return `<div class="ring" style="background:conic-gradient(${low?'#e5675f':'#D4AF37'} ${pct*3.6}deg,#ffffff10 0)"><div><div class="muted" style="font-size:12px">رولو #${s.active_code}</div><div style="font-size:26px;font-weight:800" class="${low?'bad':'gold'}">${(+s.active_remaining_m).toFixed(1)}</div><div class="muted" style="font-size:12px">من ${(+s.active_length_m).toFixed(0)} م</div></div></div>
+  <div class="row between" style="margin-top:12px"><span class="muted">المجموع</span><b>${m2(s.total_remaining_m)}</b></div>`;
+}
+
+// =====================================================================
+// Commandes (kanban)
+// =====================================================================
+const COLS = [['new'],['in_design'],['ready_to_print'],['printing'],['printed','ready_pickup'],['shipped']];
+async function orders(){
+  const list = await q(sb.from('dtf_orders').select('id,code,status,billed_meters,print_amount,delivery_fee,delivery_mode,ship_name,ship_wilaya,designer_id,printer_id,created_at,updated_at,client:dtf_profiles!dtf_orders_client_id_fkey(full_name,phone)')
+     .not('status','in','(delivered,rejected,cancelled)').order('created_at'));
+  $('#vs').textContent = `${list.length} طلبية مفتوحة`;
+  $('#view').innerHTML = `<div class="fade">
+   <div class="row wrap" style="margin-bottom:14px"><input id="osearch" placeholder="🔎 ابحث برقم الطلبية أو اسم الزبون أو الهاتف" style="max-width:420px"><button class="btn ghost sm" onclick="archive()">📚 الأرشيف</button></div>
+   <div class="kanban" id="kb"></div></div>`;
+  const paint = f => { $('#kb').innerHTML = COLS.map(c=>{ const items=list.filter(o=>c.includes(o.status)&&f(o)); const [l,col,i]=ST[c[0]];
+      return `<div class="col"><h4><span style="color:${col}">${i}</span>${l}<span class="n">${items.length}</span></h4>${items.map(orderCard).join('')||'<div class="empty" style="padding:20px;font-size:13px">—</div>'}</div>`; }).join(''); };
+  paint(()=>true);
+  $('#osearch').oninput = e=>{ const s=e.target.value.trim().toLowerCase(); paint(o=>!s || String(o.code).includes(s) || (o.client?.full_name||'').toLowerCase().includes(s) || (o.client?.phone||'').includes(s)); };
+}
+function orderCard(o){
+  const age = mins(o.updated_at); const late = (o.status==='new'&&age>60)||(o.status==='in_design'&&age>240)||(o.status==='ready_to_print'&&age>240);
+  const who = o.status==='in_design'?staffName(o.designer_id):['ready_to_print','printing'].includes(o.status)?staffName(o.printer_id):'';
+  return `<div class="oc" onclick="openOrder('${o.id}')"><div class="row between"><span class="t">#${o.code}</span><span class="age ${late?'late':''}">${dur(age)}</span></div>
+   <div class="m">${esc(o.client?.full_name||o.ship_name||'')} · ${m2(o.billed_meters)}</div>
+   <div class="row between" style="margin-top:8px"><b class="gold">${da(+o.print_amount + +o.delivery_fee)}</b><span class="muted" style="font-size:12px">${o.delivery_mode==='pickup'?'🏪':'🚚 '+esc(o.ship_wilaya||'')}</span></div>
+   ${who?`<div class="m">👤 ${esc(who)}</div>`:''}</div>`;
+}
+
+async function archive(){
+  $('#vt').textContent='أرشيف الطلبيات'; $('#view').innerHTML='<div class="spinner"></div>';
+  const list = await q(sb.from('dtf_orders').select('id,code,status,billed_meters,print_amount,delivery_fee,amount_paid,created_at,client:dtf_profiles!dtf_orders_client_id_fkey(full_name,phone)').in('status',['delivered','rejected','cancelled']).order('created_at',{ascending:false}).limit(300));
+  $('#view').innerHTML = `<div class="card fade"><table><tr><th>#</th><th>الزبون</th><th>الأمتار</th><th>المبلغ</th><th>المدفوع</th><th>الحالة</th><th>التاريخ</th></tr>
+   ${list.map(o=>`<tr style="cursor:pointer" onclick="openOrder('${o.id}')"><td><b>#${o.code}</b></td><td>${esc(o.client?.full_name)}<div class="muted" style="font-size:12px" dir="ltr">${esc(o.client?.phone)}</div></td><td>${m2(o.billed_meters)}</td><td class="gold">${da(+o.print_amount + +o.delivery_fee)}</td><td>${da(o.amount_paid)}</td><td>${chip(o.status)}</td><td class="muted">${fdt(o.created_at)}</td></tr>`).join('')}</table>${list.length?'':'<div class="empty">الأرشيف فارغ</div>'}</div>`;
+}
+
+async function openOrder(id){
+  S.openOrder = id;
+  const [o, imgs, ev, iss] = await Promise.all([
+    q(sb.from('dtf_orders').select('*,client:dtf_profiles!dtf_orders_client_id_fkey(full_name,phone,wilaya,commune)').eq('id',id).single()),
+    q(sb.from('dtf_order_images').select('*').eq('order_id',id)),
+    q(sb.from('dtf_order_events').select('*').eq('order_id',id).order('created_at')),
+    q(sb.from('dtf_issues').select('*').eq('order_id',id).order('created_at')),
+  ]);
+  const urls = await Promise.all(imgs.map(i=>sb.storage.from('dtf-images').createSignedUrl(i.storage_path, 3600, {download:false}).then(r=>r.data?.signedUrl)));
+  const dl = await Promise.all(imgs.map(i=>sb.storage.from('dtf-images').createSignedUrl(i.storage_path, 3600, {download:true}).then(r=>r.data?.signedUrl)));
+  const designers = S.staff.filter(s=>s.role==='designer'&&s.active), printers = S.staff.filter(s=>s.role==='printer'&&s.active);
+  const r = S.me.role; let actions='';
+  if(o.status==='new' && isMgr()) actions = `<label>تحويل إلى مصمّم</label><div class="row"><select id="selD">${designers.map(d=>`<option value="${d.id}">${esc(d.full_name)}</option>`).join('')||'<option value="">أضف مصمّماً من صفحة الفريق</option>'}</select><button class="btn" onclick="act('assign','${id}')">قبول وتحويل</button></div>
+     <button class="btn danger sm" style="margin-top:10px" onclick="act('reject','${id}')">رفض الطلبية</button>`;
+  else if(o.status==='in_design' && (isMgr() || (r==='designer'&&o.designer_id===S.me.id))) actions = `${isMgr()?`<label>إعادة التحويل إلى مصمّم آخر</label><div class="row"><select id="selD">${designers.map(d=>`<option value="${d.id}" ${d.id===o.designer_id?'selected':''}>${esc(d.full_name)}</option>`).join('')}</select><button class="btn ghost sm" onclick="act('assign','${id}')">تغيير</button></div>`:''}
+     <label>الطول الحقيقي بعد التصميم (سم) — التقديري ${(+o.estimated_length_cm).toFixed(1)} سم</label><input id="flen" type="number" step="0.1" min="1" value="${o.final_length_cm||o.estimated_length_cm}" dir="ltr">
+     <div class="muted" id="fprice" style="font-size:13px;margin-top:6px"></div>
+     <label>تحويل إلى الطابع</label><div class="row"><select id="selP">${printers.map(p=>`<option value="${p.id}">${esc(p.full_name)}</option>`).join('')||'<option value="">لا يوجد طابع</option>'}</select><button class="btn" onclick="act('design','${id}')">التصميم جاهز ✓</button></div>`;
+  else if(o.status==='ready_to_print' && (isMgr() || (r==='printer'&&o.printer_id===S.me.id))) actions = `<button class="btn" style="width:100%;height:52px" onclick="act('start','${id}')">🖨️ بدء الطباعة — يُخصم ${m2(o.billed_meters)} من الرولو</button>`;
+  else if(o.status==='printing' && (isMgr() || (r==='printer'&&o.printer_id===S.me.id))) actions = `<button class="btn" style="width:100%;height:52px" onclick="act('finish','${id}')">✅ انتهت الطباعة</button>`;
+  else if(o.status==='printed' && isMgr()) actions = `<label>شركة التوصيل</label><input id="car" value="DHD"><label>رقم التتبّع</label><input id="trk" dir="ltr"><button class="btn" style="margin-top:10px" onclick="act('ship','${id}')">🚚 تسليم لشركة التوصيل</button>`;
+  if(['shipped','ready_pickup','printed'].includes(o.status) && isMgr()) actions += `<label>المبلغ المدفوع</label><div class="row"><input id="paid" type="number" value="${(+o.print_amount + +o.delivery_fee)}" dir="ltr"><button class="btn ghost" onclick="act('deliver','${id}')">تم التسليم والدفع</button></div>`;
+  drawer(`<div class="fade">
+   <div class="row between"><h2>طلبية #${o.code}</h2><button class="btn ghost sm" onclick="closeDrawer()">✕</button></div>
+   <div class="row" style="margin:8px 0 16px">${chip(o.status)}<span class="muted" style="font-size:13px">${fdt(o.created_at)}</span></div>
+   <div class="card hl"><div class="row between"><span class="muted">المجموع</span><span style="font-size:24px;font-weight:800" class="gold">${da(+o.print_amount + +o.delivery_fee)}</span></div>
+     <div class="row between"><span class="muted">${o.final_length_cm?'الأمتار النهائية':'الأمتار التقديرية'}</span><b>${m2(o.billed_meters)}</b></div>
+     <div class="row between"><span class="muted">الطباعة / التوصيل</span><span>${da(o.print_amount)} / ${da(o.delivery_fee)}</span></div></div>
+   ${actions?`<div class="card" style="margin-top:12px"><h3 class="title-bar">الإجراء التالي</h3>${actions}</div>`:''}
+   <div class="card" style="margin-top:12px"><h3 class="title-bar">الزبون</h3>
+     <div class="row between"><b>${esc(o.client?.full_name)}</b><a href="tel:${esc(o.client?.phone)}" dir="ltr">${esc(o.client?.phone)}</a></div>
+     <div class="muted" style="margin-top:6px">${MODE[o.delivery_mode]}${o.delivery_mode!=='pickup'?` — ${esc(o.ship_name)} · <span dir="ltr">${esc(o.ship_phone)}</span> · ${esc(o.ship_wilaya)} / ${esc(o.ship_commune)} ${esc(o.ship_address||'')}`:''}</div>
+     ${o.client_note?`<div class="banner" style="margin:10px 0 0">📝 ${esc(o.client_note)}</div>`:''}
+     ${o.tracking_number?`<div style="margin-top:6px">🚚 ${esc(o.carrier)} <b dir="ltr">${esc(o.tracking_number)}</b></div>`:''}
+     <button class="btn ghost sm" style="margin-top:10px" onclick="location.hash='chat';setTimeout(()=>openConv('${o.client_id}'),300)">💬 مراسلة الزبون</button></div>
+   <div class="card" style="margin-top:12px"><div class="row between"><h3 class="title-bar">الصور (${imgs.length})</h3><button class="btn ghost sm" onclick="dlAll()">⬇ تنزيل الكل</button></div>
+     <div class="imgs">${imgs.map((im,k)=>`<div class="im"><a href="${urls[k]}" target="_blank"><img src="${urls[k]}" loading="lazy"></a><div style="font-size:12.5px;margin-top:4px">${+im.width_cm}×${+im.height_cm} سم</div><div class="gold" style="font-size:12.5px">× ${im.quantity}</div><a class="dl" href="${dl[k]}" style="font-size:12px">تنزيل</a></div>`).join('')}</div></div>
+   <div class="card" style="margin-top:12px"><h3 class="title-bar">السجلّ</h3><div class="tl">${ev.map(e=>`<div><b>${ST[e.to_status]?.[0]||e.to_status}</b> <span class="muted" style="font-size:12.5px">— ${fdt(e.created_at)} · ${esc(staffName(e.actor_id)==='—'?(e.actor_id===o.client_id?'الزبون':'—'):staffName(e.actor_id))}</span></div>`).join('')}</div>
+     <div class="muted" style="margin-top:10px;font-size:13px">🎨 المصمّم: ${esc(staffName(o.designer_id))} · 🖨️ الطابع: ${esc(staffName(o.printer_id))}</div></div>
+   ${iss.length?`<div class="card" style="margin-top:12px;border-color:#e5675f66"><h3 class="title-bar">المشاكل المُبلَّغ عنها</h3>${iss.map(i=>`<div style="padding:6px 0">⚠️ ${esc(i.description)} <span class="muted" style="font-size:12px">${fdt(i.created_at)}</span></div>`).join('')}</div>`:''}
+  </div>`);
+  window.dlAll = ()=>dl.forEach((u,k)=>setTimeout(()=>{ const a=document.createElement('a'); a.href=u; a.download=''; document.body.appendChild(a); a.click(); a.remove(); }, k*400));
+  const fl=$('#flen'); if(fl){ const upd=()=>{ const s=S.settings, mm=(+fl.value||0)/100, st=+s.meter_rounding_step; const b=st>0?Math.ceil(mm/st-1e-9)*st:mm; $('#fprice').innerHTML=`= <b>${b.toFixed(2)} م</b> → <b class="gold">${da(Math.max(b*s.price_per_meter, s.min_order_amount))}</b> (يُشعَر الزبون إن تغيّر السعر)`; }; fl.oninput=upd; upd(); }
+}
+
+async function act(kind, id){
+  try{
+    if(kind==='assign'){ const d=$('#selD').value; if(!d) return toast('اختر مصمّماً',true); await rpc('dtf_assign_designer',{p_order:id,p_designer:d}); toast('تم التحويل إلى المصمّم ✓'); }
+    if(kind==='reject'){ const r=prompt('سبب الرفض (يظهر للزبون):'); if(r===null) return; await rpc('dtf_reject_order',{p_order:id,p_reason:r||'—'}); toast('تم رفض الطلبية'); }
+    if(kind==='design'){ const L=+$('#flen').value, p=$('#selP').value; if(!(L>0)) return toast('أدخل الطول الحقيقي',true); if(!p) return toast('اختر الطابع',true); await rpc('dtf_design_done',{p_order:id,p_final_length_cm:L,p_printer:p}); toast('أُرسل إلى الطباعة ✓'); }
+    if(kind==='start'){ await rpc('dtf_start_printing',{p_order:id}); toast('بدأت الطباعة — خُصم الفيلم من الرولو 🖨️'); }
+    if(kind==='finish'){ await rpc('dtf_finish_printing',{p_order:id}); toast('انتهت الطباعة ✓'); }
+    if(kind==='ship'){ const t=$('#trk').value.trim(); if(!t) return toast('أدخل رقم التتبّع',true); await rpc('dtf_mark_shipped',{p_order:id,p_carrier:$('#car').value.trim()||'DHD',p_tracking:t}); toast('سُلّمت لشركة التوصيل 🚚'); }
+    if(kind==='deliver'){ await rpc('dtf_mark_delivered',{p_order:id,p_amount_paid:+$('#paid').value||0}); toast('تم التسليم ✓'); }
+    await openOrder(id); refreshBadges(); if(['orders','mywork','queue','dash'].includes(S.view)) route();
+  }catch(e){ toast(errMsg(e), true); }
+}
+
+// =====================================================================
+// Designer / imprimeur
+// =====================================================================
+async function mywork(){
+  const list = await q(sb.from('dtf_orders').select('id,code,status,billed_meters,estimated_length_cm,updated_at,client_note').eq('designer_id',S.me.id).in('status',['in_design','ready_to_print','printing']).order('updated_at'));
+  const todo=list.filter(o=>o.status==='in_design');
+  const {data:done} = await sb.from('dtf_order_events').select('order_id').eq('actor_id',S.me.id).eq('to_status','ready_to_print').gte('created_at', new Date(new Date().setHours(0,0,0,0)).toISOString());
+  $('#view').innerHTML = `<div class="fade"><div class="grid g3">${kpi('بانتظار التصميم', todo.length, 'ملف')}${kpi('أنجزت اليوم', (done||[]).length, 'ملف')}${kpi('في الطباعة', list.length-todo.length, 'ملف')}</div>
+   <h3 class="title-bar" style="margin:20px 0 10px">ملفاتي</h3><div class="grid g3">${todo.map(o=>`<div class="oc card" onclick="openOrder('${o.id}')"><div class="row between"><h3>#${o.code}</h3><span class="age ${mins(o.updated_at)>240?'late':''}">${dur(mins(o.updated_at))}</span></div><div class="muted">تقديري: ${(+o.estimated_length_cm/100).toFixed(2)} م</div>${o.client_note?`<div style="margin-top:6px;font-size:13px">📝 ${esc(o.client_note)}</div>`:''}<button class="btn sm" style="margin-top:10px">فتح الملف</button></div>`).join('')||'<div class="empty card">لا توجد ملفات — أحسنت 👏</div>'}</div></div>`;
+}
+async function queue(){
+  const [list, s] = await Promise.all([
+    q(sb.from('dtf_orders').select('id,code,status,billed_meters,updated_at').eq('printer_id',S.me.id).in('status',['ready_to_print','printing']).order('updated_at')),
+    q(sb.from('dtf_stock_summary').select('*').single())]);
+  const need = list.filter(o=>o.status==='ready_to_print').reduce((a,o)=>a+ +o.billed_meters,0);
+  $('#view').innerHTML = `<div class="fade"><div class="grid g3" style="grid-template-columns:1fr 2fr">
+    <div class="card hl"><h3 class="title-bar">الرولو الحالي</h3>${rollGauge(s)}<div class="row" style="margin-top:12px"><button class="btn ghost sm" style="flex:1" onclick="activateRoll()">🔄 رولو جديد</button><button class="btn ghost sm" style="flex:1" onclick="wasteDialog()">✂ هدر</button></div>
+      ${need>+s.active_remaining_m&&s.active_code?`<div class="banner" style="margin:12px 0 0">⚠️ الطابور يحتاج ${m2(need)} والرولو فيه ${m2(s.active_remaining_m)}</div>`:''}</div>
+    <div class="card"><h3 class="title-bar">طابور الطباعة</h3>${list.map(o=>`<div class="row between" style="padding:12px 0;border-bottom:1px solid #ffffff0a"><div><b>#${o.code}</b> ${chip(o.status)}<div class="muted" style="font-size:13px">${m2(o.billed_meters)} · منذ ${dur(mins(o.updated_at))}</div></div>
+      ${o.status==='ready_to_print'?`<button class="btn" onclick="act('start','${o.id}')">🖨️ بدء الطباعة</button>`:`<button class="btn ghost" onclick="act('finish','${o.id}')">✅ انتهت</button>`}<button class="btn ghost sm" onclick="openOrder('${o.id}')">الصور</button></div>`).join('')||'<div class="empty">الطابور فارغ</div>'}</div></div></div>`;
+}
+
+// =====================================================================
+// Stock de film
+// =====================================================================
+async function stock(){
+  const [s, rolls, moves] = await Promise.all([
+    q(sb.from('dtf_stock_summary').select('*').single()),
+    q(sb.from('dtf_rolls').select('*').order('code',{ascending:false}).limit(200)),
+    q(sb.from('dtf_film_moves').select('*,roll:dtf_rolls(code),ord:dtf_orders(code)').order('created_at',{ascending:false}).limit(60))]);
+  const bought = rolls.reduce((a,r)=>a+ +r.unit_price,0), boughtM = rolls.reduce((a,r)=>a+ +r.length_m,0);
+  const cpm = boughtM? bought/boughtM : 0;
+  const ppm = +S.settings.price_per_meter;
+  $('#view').innerHTML = `<div class="fade">
+   <div class="grid g4">${kpi('المجموع المتبقي', m2(s.total_remaining_m), `${s.rolls_in_stock} رولو احتياطي`)}${kpi('الرولو الحالي', s.active_code?m2(s.active_remaining_m):'—', s.active_code?`#${s.active_code} من ${(+s.active_length_m).toFixed(0)} م`:'لا يوجد', s.active_code&&+s.active_remaining_m<=+s.alert_m)}
+     ${kpi('تكلفة المتر', da(cpm), 'متوسط الشراء')}${kpi('هامش الربح للمتر', da(ppm-cpm), ppm?`${((ppm-cpm)/ppm*100).toFixed(0)}% من سعر البيع`:'حدّد سعر المتر')}</div>
+   <div class="grid g2" style="margin-top:14px;grid-template-columns:1fr 2fr">
+     <div class="card hl"><h3 class="title-bar">الرولو المركّب</h3>${rollGauge(s)}
+       <div class="grid" style="margin-top:14px">${isMgr()?'<button class="btn" onclick="buyDialog()">➕ تسجيل شراء رولوات</button>':''}<button class="btn ghost" onclick="activateRoll()">🔄 تركيب الرولو التالي</button><button class="btn ghost" onclick="wasteDialog()">✂ تسجيل هدر / تجربة</button></div></div>
+     <div class="card"><h3 class="title-bar">الرولوات</h3><div style="max-height:380px;overflow:auto"><table><tr><th>#</th><th>الحالة</th><th>المتبقي</th><th></th><th>السعر</th><th>المورّد</th><th>تاريخ الشراء</th></tr>
+       ${rolls.map(r=>{const p=r.remaining_m/r.length_m*100;return `<tr><td><b>#${r.code}</b></td><td>${{stock:'📦 في المخزون',active:'🟢 مركّب',finished:'⚫ انتهى'}[r.status]}</td><td>${(+r.remaining_m).toFixed(1)} / ${(+r.length_m).toFixed(0)} م</td><td style="width:120px"><div class="gauge ${p<15?'low':''}"><i style="width:${p}%"></i></div></td><td>${da(r.unit_price)}</td><td>${esc(r.supplier||'')}</td><td class="muted">${fdt(r.purchased_at)}</td></tr>`}).join('')}</table>${rolls.length?'':'<div class="empty">سجّل أول شراء للرولوات</div>'}</div></div>
+   </div>
+   <div class="card" style="margin-top:14px"><h3 class="title-bar">حركات الفيلم</h3><table><tr><th>التاريخ</th><th>النوع</th><th>الأمتار</th><th>الرولو</th><th>الطلبية</th><th>بواسطة</th><th>ملاحظة</th></tr>
+     ${moves.map(m=>`<tr><td class="muted">${fdt(m.created_at)}</td><td>${{print:'🖨️ طباعة',waste:'✂ هدر',adjust:'⚙ تعديل'}[m.kind]}</td><td><b>${(+m.meters).toFixed(2)}</b></td><td>${m.roll?'#'+m.roll.code:'<span class="bad">—</span>'}</td><td>${m.ord?'#'+m.ord.code:''}</td><td>${esc(staffName(m.actor_id))}</td><td class="muted">${esc(m.note||'')}</td></tr>`).join('')}</table></div></div>`;
+}
+function buyDialog(){
+  modal(`<h2>تسجيل شراء رولوات</h2>
+   <div class="grid g2"><div><label>عدد الرولوات</label><input id="bc" type="number" value="6" min="1"></div><div><label>طول الرولو (م)</label><input id="bl" type="number" value="200" min="1"></div></div>
+   <label>سعر الرولو الواحد (دج)</label><input id="bp" type="number" value="0" min="0">
+   <label>المورّد</label><input id="bs"><label>ملاحظة</label><input id="bn">
+   <div class="banner" style="margin:12px 0" id="btot"></div>
+   <div class="row"><button class="btn" id="bok" style="flex:1">حفظ</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
+  const upd=()=>$('#btot').innerHTML=`المجموع: <b>${(+$('#bc').value*+$('#bl').value)||0} م</b> · <b class="gold">${da(+$('#bc').value*+$('#bp').value)}</b> · تكلفة المتر ${da((+$('#bp').value)/(+$('#bl').value||1))}`;
+  ['#bc','#bl','#bp'].forEach(s=>$(s).oninput=upd); upd();
+  $('#bok').onclick=async()=>{ try{ await rpc('dtf_add_rolls',{p_count:+$('#bc').value,p_length_m:+$('#bl').value,p_unit_price:+$('#bp').value,p_supplier:$('#bs').value||null,p_note:$('#bn').value||null}); closeModal(); toast('تمت إضافة الرولوات ✓'); route(); }catch(e){ toast(errMsg(e),true); } };
+}
+async function activateRoll(){ if(!confirm('تركيب الرولو التالي من المخزون؟ الرولو الحالي سيُعتبر منتهياً.')) return; try{ const r=await rpc('dtf_activate_roll',{}); toast(`تم تركيب الرولو #${r.code} ✓`); route(); }catch(e){ toast(errMsg(e),true); } }
+function wasteDialog(){
+  modal(`<h2>تسجيل هدر أو تجربة</h2><label>الأمتار</label><input id="wm" type="number" step="0.1" min="0.1" dir="ltr"><label>السبب</label><input id="wn" placeholder="تجربة ألوان، خطأ طباعة...">
+   <div class="row" style="margin-top:14px"><button class="btn" id="wok" style="flex:1">خصم من الرولو</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
+  $('#wok').onclick=async()=>{ try{ await rpc('dtf_record_waste',{p_meters:+$('#wm').value,p_note:$('#wn').value||null}); closeModal(); toast('تم تسجيل الهدر'); route(); }catch(e){ toast(errMsg(e),true); } };
+}
+
+// =====================================================================
+// Performance intelligente
+// =====================================================================
+async function perf(){
+  const days = +S.range; const to=new Date(), from=new Date(Date.now()-(days-1)*864e5);
+  const rows = await rpc('dtf_staff_stats',{p_from:fdate(from),p_to:fdate(to)});
+  // Score /100 : qualité 40, vitesse 30 (vs moyenne du rôle), volume 20, discipline 10
+  const byRole = r => rows.filter(x=>x.role===r && x.orders_done>0);
+  const scored = rows.map(x=>{
+    const peers = byRole(x.role); const avgT = peers.length? peers.reduce((a,p)=>a+ +p.avg_minutes,0)/peers.length : 0;
+    const maxN = Math.max(1,...rows.filter(p=>p.role===x.role).map(p=>p.orders_done));
+    const quality = x.orders_done? Math.max(0, 1 - (x.issues / x.orders_done) * 3) : (x.issues?0:1);
+    const speed = x.orders_done && avgT>0 ? Math.max(0, Math.min(1, avgT / Math.max(+x.avg_minutes, 1) * 0.7)) : 0.5;
+    const volume = x.orders_done / maxN;
+    const disc = x.days_worked? Math.max(0, 1 - (x.late_days*0.5 + x.forgot_out) / x.days_worked) : 0.5;
+    const score = Math.round(quality*40 + speed*30 + volume*20 + disc*10);
+    return {...x, score, quality, speed, volume, disc};
+  }).sort((a,b)=>b.score-a.score);
+  const work = scored.filter(x=>x.orders_done>0);
+  const fastest = work.filter(x=>x.role!=='manager').sort((a,b)=>a.avg_minutes-b.avg_minutes)[0];
+  const precise = work.filter(x=>x.issues===0).sort((a,b)=>b.orders_done-a.orders_done)[0];
+  const watch = scored.filter(x=>x.active && (x.score<50 || x.issues>=3 || x.forgot_out>=2));
+  $('#view').innerHTML = `<div class="fade">
+   <div class="row wrap" style="margin-bottom:16px"><div class="seg">${[['1','اليوم'],['7','7 أيام'],['30','30 يوماً'],['90','3 أشهر']].map(([v,l])=>`<button class="${S.range===v?'on':''}" onclick="S.range='${v}';route()">${l}</button>`).join('')}</div>
+     <span class="muted" style="font-size:13px">النقطة /100 = الدقّة 40 + السرعة 30 + حجم العمل 20 + الانضباط 10</span></div>
+   <div class="grid g3">
+     <div class="card hl"><div class="muted">⚡ الأسرع</div><h2 style="margin-top:6px">${esc(fastest?.full_name||'—')}</h2><div class="muted">${fastest?`${ROLE[fastest.role]} · ${dur(fastest.avg_minutes)} للملف`:'لا توجد بيانات بعد'}</div></div>
+     <div class="card hl"><div class="muted">🎯 الأدق</div><h2 style="margin-top:6px">${esc(precise?.full_name||'—')}</h2><div class="muted">${precise?`${precise.orders_done} ملف بدون أي مشكل`:'لا توجد بيانات بعد'}</div></div>
+     <div class="card" style="${watch.length?'border-color:#e5675f77':''}"><div class="muted">👀 يحتاج متابعة</div><h2 style="margin-top:6px" class="${watch.length?'bad':''}">${watch.length?watch.map(w=>esc(w.full_name)).join('، '):'لا أحد'}</h2><div class="muted">${watch.length?'نقطة منخفضة أو أخطاء أو نسيان الخروج':'الفريق في المستوى 👏'}</div></div>
+   </div>
+   <div class="grid g3" style="margin-top:14px">${scored.map((x,i)=>`<div class="card ${i===0&&x.score>0?'hl':''}">
+     <div class="row between"><div class="row"><div class="avatar">${i<3&&x.orders_done?['🥇','🥈','🥉'][i]:esc(x.full_name[0])}</div><div><h3>${esc(x.full_name)}</h3><div class="muted" style="font-size:12.5px">${ROLE[x.role]}${x.active?'':' · موقوف'}</div></div></div><div class="score">${x.score}</div></div>
+     ${bar('الدقّة', x.quality)}${bar('السرعة', x.speed)}${bar('حجم العمل', x.volume)}${bar('الانضباط', x.disc)}
+     <div class="grid g2" style="margin-top:10px;font-size:13px;gap:6px">
+       <span>📁 ${x.orders_done} ملف</span><span>📏 ${(+x.meters).toFixed(1)} م</span>
+       <span>⏱ ${x.orders_done?dur(x.avg_minutes):'—'} / ملف</span><span class="${x.issues?'bad':''}">⚠️ ${x.issues} مشكل</span>
+       <span>📅 ${x.days_worked} يوم · ${(+x.hours_worked).toFixed(0)} سا</span><span class="${x.late_days||x.forgot_out?'bad':''}">⏰ ${x.late_days} تأخير · ${x.forgot_out} نسيان</span></div></div>`).join('')||'<div class="empty card">أضف أعضاء الفريق أولاً</div>'}</div></div>`;
+}
+const bar=(l,v)=>`<div style="margin-top:9px"><div class="row between" style="font-size:12.5px"><span class="muted">${l}</span><span>${Math.round(v*100)}%</span></div><div class="gauge" style="height:7px"><i style="width:${v*100}%"></i></div></div>`;
+
+// =====================================================================
+// Pointage
+// =====================================================================
+async function attendance(){
+  const days=+(S.attDays||7); const from=fdate(new Date(Date.now()-(days-1)*864e5));
+  const rows = await q(sb.from('dtf_attendance').select('*').gte('work_date',from).order('clock_in',{ascending:false}));
+  const today=fdate(new Date()); const staff=S.staff.filter(s=>s.role!=='admin'&&s.active);
+  $('#view').innerHTML=`<div class="fade">
+   <h3 class="title-bar">اليوم</h3><div class="grid g4" style="margin-bottom:18px">${staff.map(s=>{const r=rows.find(a=>a.user_id===s.id&&a.work_date===today);
+     return `<div class="card"><div class="row between"><b>${esc(s.full_name)}</b><span>${r?(r.clock_out?'⚫':'🟢'):'🔴'}</span></div><div class="muted" style="font-size:12.5px">${ROLE[s.role]}</div>
+     <div style="margin-top:8px">${r?`دخل ${ftime(r.clock_in)}${r.clock_out?` · خرج ${ftime(r.clock_out)}`:` · منذ ${dur(mins(r.clock_in))}`}`:'<span class="bad">لم يسجّل دخوله</span>'}</div></div>`}).join('')||'<div class="empty card">لا يوجد موظفون</div>'}</div>
+   <div class="row between"><h3 class="title-bar">السجلّ</h3><div class="seg">${[['7','7 أيام'],['30','30 يوماً']].map(([v,l])=>`<button class="${String(days)===v?'on':''}" onclick="S.attDays=${v};route()">${l}</button>`).join('')}</div></div>
+   <div class="card" style="margin-top:10px"><table><tr><th>اليوم</th><th>الموظف</th><th>الدخول</th><th>الخروج</th><th>المدّة</th><th></th></tr>
+   ${rows.map(a=>{const h=a.clock_out?((new Date(a.clock_out)-new Date(a.clock_in))/36e5):null;return `<tr><td>${a.work_date}</td><td><b>${esc(staffName(a.user_id))}</b></td><td>${ftime(a.clock_in)}</td><td>${a.clock_out?ftime(a.clock_out):'<span class="ok">في العمل</span>'}</td><td>${h!=null?h.toFixed(1)+' سا':'—'}</td><td>${a.auto_closed?'<span class="chip" style="color:var(--bad);border-color:#e5675f66">نسي الخروج</span>':''}</td></tr>`}).join('')}</table>${rows.length?'':'<div class="empty">لا يوجد سجلّ</div>'}</div></div>`;
+}
+
+// =====================================================================
+// Équipe
+// =====================================================================
+async function team(){
+  await loadStaff();
+  const pins = {}; // statut PIN non lisible (sécurité) : on affiche seulement les actions
+  $('#view').innerHTML=`<div class="fade"><div class="row between" style="margin-bottom:14px"><span class="muted">${S.staff.filter(s=>s.role!=='admin').length} عضو في الفريق</span><button class="btn" onclick="addStaff()">➕ إضافة عضو</button></div>
+   <div class="grid g3">${S.staff.filter(s=>s.role!=='admin').map(s=>`<div class="card" style="${s.active?'':'opacity:.55'}">
+     <div class="row"><div class="avatar">${esc(s.full_name[0])}</div><div style="flex:1"><h3>${esc(s.full_name)}</h3><div class="muted" style="font-size:12.5px" dir="ltr">${esc(s.phone)}</div></div><span class="chip" style="color:var(--gold);border-color:#d4af3766">${ROLE[s.role]}</span></div>
+     <div class="row wrap" style="margin-top:12px;gap:6px">
+       <select onchange="setRole('${s.id}',this.value)" style="width:auto;padding:7px 10px">${['manager','designer','printer'].map(r=>`<option value="${r}" ${r===s.role?'selected':''}>${ROLE[r]}</option>`).join('')}</select>
+       <button class="btn ghost sm" onclick="resetPin('${s.id}')">🔢 إعادة الرمز</button>
+       <button class="btn ghost sm" onclick="setPass('${s.id}')">🔑 كلمة السر</button>
+       <button class="btn ${s.active?'danger':'ghost'} sm" onclick="setActive('${s.id}',${!s.active})">${s.active?'إيقاف':'تفعيل'}</button></div></div>`).join('')||'<div class="empty card">أضف المسيّرين والمصمّمين والطابعين</div>'}</div></div>`;
+}
+function addStaff(){
+  modal(`<h2>إضافة عضو للفريق</h2>
+   <label>الاسم الكامل</label><input id="sn"><label>الهاتف</label><input id="sp" dir="ltr">
+   <label>الدور</label><select id="sr"><option value="designer">مصمّم</option><option value="printer">طابع</option><option value="manager">مسيّر</option></select>
+   <label>البريد الإلكتروني (للدخول)</label><input id="se" type="email" dir="ltr"><label>كلمة السر المؤقتة</label><input id="sw" dir="ltr" value="${Math.random().toString(36).slice(2,10)}">
+   <p class="muted" style="font-size:12.5px;margin-top:8px">سيختار الموظف رمزه السري بنفسه عند أول دخول.</p>
+   <p class="bad" id="serr" style="min-height:20px"></p>
+   <div class="row"><button class="btn" id="sok" style="flex:1">إنشاء الحساب</button><button class="btn ghost" onclick="closeModal()">إلغاء</button></div>`);
+  $('#sok').onclick=async()=>{ const b=$('#sok'); b.disabled=true;
+    const {data,error}=await sb.functions.invoke('dtf-admin',{body:{action:'create_staff',full_name:$('#sn').value,phone:$('#sp').value,role:$('#sr').value,email:$('#se').value,password:$('#sw').value}});
+    let msg = error ? (await error.context?.json?.().catch(()=>null))?.error || error.message : data?.error;
+    if(msg){ $('#serr').textContent=msg; b.disabled=false; return; }
+    closeModal(); modal(`<h2>✓ تم إنشاء الحساب</h2><p class="muted" style="margin:8px 0">أعطِ هذه المعلومات للموظف:</p><div class="card" dir="ltr" style="font-size:15px">🌐 ${location.origin}<br>📧 ${esc($('#se')?.value||'')}${''}</div><button class="btn" style="margin-top:14px;width:100%" onclick="closeModal()">حسناً</button>`);
+    toast('تمت الإضافة ✓'); team(); };
+}
+async function setRole(id,role){ try{ await q(sb.from('dtf_profiles').update({role}).eq('id',id)); toast('تم تغيير الدور'); loadStaff(); }catch(e){ toast(errMsg(e),true); } }
+async function setActive(id,active){ if(!active&&!confirm('إيقاف هذا الحساب؟ لن يستطيع الدخول.')) return; try{ await q(sb.from('dtf_profiles').update({active}).eq('id',id)); toast(active?'تم التفعيل':'تم الإيقاف'); team(); }catch(e){ toast(errMsg(e),true); } }
+async function resetPin(id){ if(!confirm('إعادة تعيين الرمز السري؟ سيختار الموظف رمزاً جديداً عند الدخول.')) return; try{ await rpc('dtf_pin_reset',{p_user:id}); toast('تمت إعادة التعيين'); }catch(e){ toast(errMsg(e),true); } }
+async function setPass(id){ const p=prompt('كلمة السر الجديدة (6 أحرف على الأقل):'); if(!p) return; const {data,error}=await sb.functions.invoke('dtf-admin',{body:{action:'set_password',user_id:id,password:p}}); const msg=error?error.message:data?.error; msg?toast(msg,true):toast('تم تغيير كلمة السر ✓'); }
+
+// =====================================================================
+// Chat
+// =====================================================================
+async function chat(){
+  const conv = await q(sb.from('dtf_conversations').select('*').order('last_at',{ascending:false}));
+  $('#view').innerHTML=`<div class="chat fade"><div class="card" style="overflow-y:auto;padding:10px"><input id="cs" placeholder="🔎 بحث" style="margin-bottom:8px">
+     <div id="clist">${conv.map(c=>`<div class="conv ${S.chatWith===c.client_id?'on':''}" data-n="${esc((c.full_name||'')+' '+(c.phone||''))}" onclick="openConv('${c.client_id}')"><div class="row between"><b>${esc(c.full_name)}</b>${+c.unread?`<span class="badge" style="background:var(--gold);color:var(--night);border-radius:99px;padding:0 8px;font-size:12px;font-weight:800">${c.unread}</span>`:`<span class="muted" style="font-size:11.5px">${fdt(c.last_at)}</span>`}</div><div class="muted" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.last_body)}</div></div>`).join('')||'<div class="empty">لا توجد محادثات بعد</div>'}</div></div>
+   <div class="card" style="display:flex;flex-direction:column;padding:12px" id="cpane"><div class="empty" style="margin:auto">اختر محادثة</div></div></div>`;
+  $('#cs').oninput=e=>document.querySelectorAll('.conv').forEach(c=>c.style.display=c.dataset.n.toLowerCase().includes(e.target.value.toLowerCase())?'':'none');
+  if(S.chatWith) openConv(S.chatWith);
+}
+async function openConv(cid){
+  S.chatWith=cid;
+  if(S.view!=='chat') return;
+  document.querySelectorAll('.conv').forEach(c=>c.classList.toggle('on', c.getAttribute('onclick')?.includes(cid)));
+  const [msgs, client, ords] = await Promise.all([
+    q(sb.from('dtf_messages').select('*').eq('client_id',cid).order('created_at')),
+    q(sb.from('dtf_profiles').select('full_name,phone,wilaya').eq('id',cid).single()),
+    q(sb.from('dtf_orders').select('id,code,status').eq('client_id',cid).order('created_at',{ascending:false}).limit(20))]);
+  const oc = Object.fromEntries(ords.map(o=>[o.id,o.code]));
+  $('#cpane').innerHTML=`<div class="row between" style="padding:4px 6px 10px;border-bottom:1px solid var(--line)"><div><b>${esc(client.full_name)}</b><div class="muted" style="font-size:12.5px"><span dir="ltr">${esc(client.phone)}</span> · ${esc(client.wilaya||'')}</div></div>
+     <div class="row" style="gap:6px">${ords.slice(0,4).map(o=>`<button class="btn ghost sm" onclick="openOrder('${o.id}')">#${o.code}</button>`).join('')}</div></div>
+   <div class="thread" id="thr">${msgs.map(m=>bubble(m,oc)).join('')}</div>
+   <div class="row" style="padding-top:10px;border-top:1px solid var(--line)"><select id="cord" style="width:130px"><option value="">بدون طلبية</option>${ords.map(o=>`<option value="${o.id}">#${o.code}</option>`).join('')}</select>
+     <textarea id="cmsg" rows="1" placeholder="اكتب ردّك..." style="resize:none"></textarea><button class="btn" id="csend">إرسال</button></div>`;
+  S.chatCodes=oc; const t=$('#thr'); t.scrollTop=t.scrollHeight;
+  const send=async()=>{ const body=$('#cmsg').value.trim(); if(!body) return; $('#cmsg').value='';
+    try{ await q(sb.from('dtf_messages').insert({client_id:cid,sender_id:S.me.id,from_staff:true,body,order_id:$('#cord').value||null})); }catch(e){ toast(errMsg(e),true); } };
+  $('#csend').onclick=send; $('#cmsg').onkeydown=e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } };
+  await rpc('dtf_chat_mark_read',{p_client:cid}).catch(()=>{}); refreshBadges();
+}
+const bubble=(m,oc)=>`<div class="bub ${m.from_staff?'me':'them'}">${m.order_id?`<b style="font-size:12px">طلبية #${oc?.[m.order_id]||''}</b><br>`:''}${esc(m.body)}<small>${m.from_staff?esc(staffName(m.sender_id))+' · ':''}${fdt(m.created_at)}</small></div>`;
+function chatRefresh(m){ if(S.chatWith===m.client_id && $('#thr')){ $('#thr').insertAdjacentHTML('beforeend', bubble(m,S.chatCodes)); $('#thr').scrollTop=1e9; if(!m.from_staff) rpc('dtf_chat_mark_read',{p_client:m.client_id}).catch(()=>{}); } else chat(); }
+
+// =====================================================================
+// Réglages / compte
+// =====================================================================
+async function settings(){
+  const s = S.settings = await q(sb.from('dtf_settings').select('*').single());
+  const f=(k,l,t='number',x='')=>`<div><label>${l}</label><input id="s_${k}" type="${t}" value="${esc(s[k]??'')}" ${x}></div>`;
+  $('#view').innerHTML=`<div class="fade grid g2">
+   <div class="card hl"><h3 class="title-bar">الأسعار</h3><div class="grid g2">${f('price_per_meter','سعر المتر (دج)')}${f('min_order_amount','الحد الأدنى للطلبية (دج)')}${f('meter_rounding_step','خطوة تدوير الأمتار (م)','number','step="0.01"')}</div>
+     <div class="banner" style="margin-top:12px">مثال: 151.2 سم ← تُحسب بخطوة ${s.meter_rounding_step} م</div></div>
+   <div class="card"><h3 class="title-bar">الآلة والفيلم</h3><div class="grid g2">${f('film_width_cm','العرض المفيد (سم)','number','step="0.1"')}${f('gap_cm','المسافة بين الصور (سم)','number','step="0.1"')}${f('roll_alert_m','تنبيه انتهاء الرولو (م)')}
+     <div><label>تدوير الصور</label><select id="s_allow_rotation"><option value="true" ${s.allow_rotation?'selected':''}>مسموح</option><option value="false" ${s.allow_rotation?'':'selected'}>ممنوع</option></select></div></div></div>
+   <div class="card"><h3 class="title-bar">الورشة</h3>${f('workshop_name','الاسم','text')}${f('workshop_phone','الهاتف','text')}${f('workshop_address','العنوان','text')}</div>
+   <div class="card"><h3 class="title-bar">الحضور</h3>${f('work_end_time','وقت نهاية العمل (للتذكير بتسجيل الخروج)','time')}<p class="muted" style="font-size:13px;margin-top:8px">يظهر التذكير للموظف قبل 15 دقيقة. من نسي الخروج يُغلق يومه تلقائياً على 23:59 وتصلك رسالة.</p></div>
+   <div style="grid-column:1/-1"><button class="btn" id="ssave" style="height:52px;min-width:220px">💾 حفظ الإعدادات</button></div></div>`;
+  $('#ssave').onclick=async()=>{ const num=k=>+$('#s_'+k).value; try{
+    await q(sb.from('dtf_settings').update({price_per_meter:num('price_per_meter'),min_order_amount:num('min_order_amount'),meter_rounding_step:num('meter_rounding_step'),film_width_cm:num('film_width_cm'),gap_cm:num('gap_cm'),roll_alert_m:num('roll_alert_m'),allow_rotation:$('#s_allow_rotation').value==='true',workshop_name:$('#s_workshop_name').value,workshop_phone:$('#s_workshop_phone').value||null,workshop_address:$('#s_workshop_address').value||null,work_end_time:$('#s_work_end_time').value||'18:00',updated_at:new Date().toISOString()}).eq('id',1));
+    toast('تم حفظ الإعدادات ✓'); settings(); }catch(e){ toast(errMsg(e),true); } };
+}
+async function account(){
+  $('#view').innerHTML=`<div class="fade grid g2"><div class="card hl"><h3 class="title-bar">تغيير الرمز السري</h3>
+   <label>الرمز الحالي</label><input id="po" type="password" inputmode="numeric" maxlength="6" dir="ltr"><label>الرمز الجديد</label><input id="pn" type="password" inputmode="numeric" maxlength="6" dir="ltr">
+   <button class="btn" style="margin-top:14px" id="pok">حفظ</button></div>
+   <div class="card"><h3 class="title-bar">اليوم</h3><p>بدأت العمل على <b class="gold">${ftime(S.shift?.since)}</b> — منذ ${S.shift?dur(mins(S.shift.since)):'—'}</p><button class="btn danger" style="margin-top:14px" onclick="clockOutDialog()">⏏ تسجيل الخروج</button></div></div>`;
+  $('#pok').onclick=async()=>{ try{ await rpc('dtf_pin_set',{p_new:$('#pn').value,p_old:$('#po').value}); toast('تم تغيير الرمز ✓'); $('#po').value=$('#pn').value=''; }catch(e){ toast(errMsg(e),true); } };
+}
+
+sb.auth.onAuthStateChange((ev)=>{ if(ev==='SIGNED_IN' && !S.user) boot(); if(ev==='SIGNED_OUT') { S.user=null; } });
+boot();
+</script>
+</body>
+</html>
