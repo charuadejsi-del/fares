@@ -23,6 +23,7 @@
   import Chat from './views/Chat.svelte';
   import Settings from './views/Settings.svelte';
   import Account from './views/Account.svelte';
+  import Palette from './components/Palette.svelte';
 
   // Écrans : login | pinSetup | pinConfirm | clockIn | app | bye
   let stage = 'loading';
@@ -32,20 +33,21 @@
   let pad;
 
   const NAV = [
-    { id: 'dash', icon: 'control', t: 'مركز التحكّم', roles: ['admin', 'manager'] },
-    { id: 'orders', icon: 'orders', t: 'الطلبيات', roles: ['admin', 'manager'] },
-    { id: 'work', icon: 'design', t: 'مكتب التصميم', roles: ['designer'] },
-    { id: 'work', icon: 'machine', t: 'محطة الطباعة', roles: ['printer'] },
-    { id: 'machines', icon: 'machine', t: 'الآلات', roles: ['admin', 'manager', 'printer'] },
-    { id: 'stock', icon: 'stock', t: 'المخزون', roles: ['admin', 'manager', 'printer'] },
-    { id: 'chat', icon: 'chat', t: 'الدردشة', roles: ['admin', 'manager'] },
-    { id: 'costs', icon: 'coins', t: 'التكاليف والأرباح', roles: ['admin'] },
-    { id: 'perf', icon: 'trophy', t: 'الأداء', roles: ['admin', 'manager'] },
-    { id: 'attendance', icon: 'clock', t: 'الحضور', roles: ['admin', 'manager'] },
-    { id: 'team', icon: 'team', t: 'الفريق', roles: ['admin'] },
-    { id: 'settings', icon: 'settings', t: 'الإعدادات', roles: ['admin'] },
-    { id: 'account', icon: 'user', t: 'حسابي', roles: ['manager', 'designer', 'printer'] },
+    { id: 'dash', icon: 'control', t: 'مركز التحكّم', g: 'ws', roles: ['admin', 'manager'] },
+    { id: 'orders', icon: 'orders', t: 'الطلبيات', g: 'ws', roles: ['admin', 'manager'] },
+    { id: 'work', icon: 'design', t: 'مكتب التصميم', g: 'ws', roles: ['designer'] },
+    { id: 'work', icon: 'machine', t: 'محطة الطباعة', g: 'ws', roles: ['printer'] },
+    { id: 'machines', icon: 'machine', t: 'الآلات', g: 'ws', roles: ['admin', 'manager', 'printer'] },
+    { id: 'stock', icon: 'stock', t: 'المخزون', g: 'biz', roles: ['admin', 'manager', 'printer'] },
+    { id: 'costs', icon: 'coins', t: 'التكاليف والأرباح', g: 'biz', roles: ['admin'] },
+    { id: 'chat', icon: 'chat', t: 'الدردشة', g: 'biz', roles: ['admin', 'manager'] },
+    { id: 'perf', icon: 'trophy', t: 'الأداء', g: 'team', roles: ['admin', 'manager'] },
+    { id: 'attendance', icon: 'clock', t: 'الحضور', g: 'team', roles: ['admin', 'manager'] },
+    { id: 'team', icon: 'team', t: 'الفريق', g: 'team', roles: ['admin'] },
+    { id: 'settings', icon: 'settings', t: 'الإعدادات', g: 'tools', roles: ['admin'] },
+    { id: 'account', icon: 'user', t: 'حسابي', g: 'tools', roles: ['manager', 'designer', 'printer'] },
   ];
+  const GROUPS = [['ws', 'الورشة'], ['biz', 'التجارة'], ['team', 'الفريق'], ['tools', 'أدوات']];
   $: VIEWS = { dash: Control, orders: Orders, work: $me?.role === 'printer' ? Printer : Designer, machines: Machines, costs: Costs, stock: Stock, perf: Perf, attendance: Attendance, team: Team, chat: Chat, settings: Settings, account: Account };
 
   $: nav = $me ? NAV.filter(n => n.roles.includes($me.role)) : [];
@@ -156,9 +158,27 @@
   onMount(() => { boot(); });
   $: firstName = $me?.full_name?.split(' ')[0] || '';
   $: greeting = new Date().getHours() < 12 ? 'صباح الخير' : 'مساء الخير';
+  // Coque « Ghania » : menu groupé repliable, recherche Ctrl+K, cloche, actualisation
+  let collapsed = false; try { collapsed = localStorage.getItem('mydtf.side') === '1'; } catch (_) {}
+  function toggleSide() { collapsed = !collapsed; try { localStorage.setItem('mydtf.side', collapsed ? '1' : '0'); } catch (_) {} }
+  let palOpen = false, bellOpen = false, spin = false;
+  $: total = Object.values($badges).reduce((s, v) => s + (+v || 0), 0);
+  $: bellItems = [
+    $badges.orders && { href: '#orders', icon: 'inbox', t: `${$badges.orders} طلبية جديدة تنتظر القبول` },
+    $badges.chat && { href: '#chat', icon: 'chat', t: `${$badges.chat} رسالة من الزبائن لم تُقرأ` },
+    $badges.work && { href: '#work', icon: 'orders', t: `${$badges.work} ملف في انتظارك` },
+  ].filter(Boolean);
+  function refresh() { spin = true; liveTick.update(n => n + 1); refreshBadges(); setTimeout(() => (spin = false), 700); }
+  $: today = new Date(now).toLocaleDateString('ar-DZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  function keys(e) {
+    if (e.key === 'Escape') { if ($tv) tv.set(false); bellOpen = false; return; }
+    if (stage !== 'app') return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); palOpen = !palOpen; return; }
+    if ((e.altKey || e.ctrlKey) && /^[1-9]$/.test(e.key) && nav[+e.key - 1]) { e.preventDefault(); location.hash = nav[+e.key - 1].id; }
+  }
 </script>
 
-<svelte:window on:mydtfsessionlost={() => { if (stage === 'app') { loginErr = 'انتهت جلستك — أعد الدخول بحسابك'; channel?.unsubscribe(); stage = 'login'; } }} on:mydtfhealed={() => liveTick.update(n => n + 1)} on:hashchange={syncRoute} on:beforeunload={beforeUnload} on:keydown={e => e.key === "Escape" && $tv && tv.set(false)} />
+<svelte:window on:mydtfsessionlost={() => { if (stage === 'app') { loginErr = 'انتهت جلستك — أعد الدخول بحسابك'; channel?.unsubscribe(); stage = 'login'; } }} on:mydtfhealed={() => liveTick.update(n => n + 1)} on:hashchange={syncRoute} on:beforeunload={beforeUnload} on:keydown={keys} />
 
 {#if stage === 'loading'}
   <div class="center"><div class="spinner"></div></div>
@@ -198,32 +218,58 @@
 
 {:else}
   <div class="shell" class:tv={$tv}>
-    <aside class="side">
-      <div class="brand"><img src="/icon.svg" alt="" width="38" height="38" /><div><b>My DTF</b><div class="faint tiny">مركز تحكّم الورشة</div></div></div>
+    <aside class="side" class:mini={collapsed}>
+      <div class="brand"><span class="logo"><Icon name="roll" size={20} stroke={2.2} /></span><div class="bt"><b>My DTF</b><div class="gold tiny">تسيير الورشة</div></div></div>
       <nav>
-        {#each nav as n}
-          <a href="#{n.id}" class="nl" class:on={view === n.id}>
-            <Icon name={n.icon} size={20} />
-            <span class="grow">{n.t}</span>
-            {#if $badges[n.id]}<span class="badge">{$badges[n.id]}</span>{/if}
-          </a>
+        {#each GROUPS as [g, gt]}
+          {#if nav.some(n => n.g === g)}
+            <div class="gl">{gt}</div>
+            {#each nav.filter(n => n.g === g) as n}
+              {@const k = nav.indexOf(n) + 1}
+              <a href="#{n.id}" class="nl" class:on={view === n.id} title={n.t}>
+                <span class="ni"><Icon name={n.icon} size={19} />{#if $badges[n.id] && collapsed}<span class="badge dot">{$badges[n.id]}</span>{/if}</span>
+                <span class="grow lt">{n.t}</span>
+                {#if $badges[n.id]}<span class="badge lt">{$badges[n.id]}</span>{:else if k < 10}<kbd class="lt kb">Alt+{k}</kbd>{/if}
+              </a>
+            {/each}
+          {/if}
         {/each}
       </nav>
       <div class="side-foot">
         {#if $shift?.since}
-          <div class="card shift"><div class="faint tiny">بدأت العمل</div><div class="row between"><b class="gold">{time($shift.since)}</b><span class="faint tiny">{dur(minsSince($shift.since))}</span></div>
+          <div class="card shift lt"><div class="faint tiny">بدأت العمل</div><div class="row between"><b class="gold">{time($shift.since)}</b><span class="faint tiny">{dur(minsSince($shift.since))}</span></div>
             <button class="btn danger sm block" style="margin-top:8px" on:click={() => openModal(ClockOut, { onDone: bye })}>تسجيل الخروج</button></div>
         {/if}
-        <button class="btn quiet sm block" on:click={logout}><Icon name="logout" size={16} />الخروج من الحساب</button>
+        <div class="ucard">
+          <div class="avatar">{(firstName[0] || '?') + (($me.full_name.split(' ')[1] || '')[0] || '')}</div>
+          <div class="grow lt"><b class="un">{$me.full_name}</b><div class="faint tiny">{ROLE[$me.role]}</div></div>
+          <button class="ib lt" title="الخروج من الحساب" on:click={logout}><Icon name="logout" size={17} /></button>
+          {#if $me.role === 'admin'}<a class="ib lt" href="#settings" title="الإعدادات"><Icon name="settings" size={17} /></a>{/if}
+          <button class="ib" title={collapsed ? 'توسيع القائمة' : 'طيّ القائمة'} on:click={toggleSide}><Icon name={collapsed ? 'expand' : 'collapse'} size={17} /></button>
+        </div>
       </div>
     </aside>
 
     <main>
       <header class="top">
-        <div class="grow"><h1>{nav.find(n => n.id === view)?.t || ''}</h1></div>
+        <div class="ttl grow">
+          <span class="ti"><Icon name={nav.find(n => n.id === view)?.icon || 'control'} size={20} /></span>
+          <div><h1>{nav.find(n => n.id === view)?.t || ''}</h1><div class="faint tiny">{greeting} {firstName} · {today}</div></div>
+        </div>
+        <button class="search" on:click={() => (palOpen = true)}><Icon name="search" size={17} /><span class="grow">ابحث، افتح طلبية…</span><kbd>Ctrl K</kbd></button>
         <OpenToggle compact={false} />
+        <div class="bellw">
+          <button class="ib big" title="التنبيهات" on:click={() => (bellOpen = !bellOpen)}><Icon name="bell" size={19} />{#if total}<span class="badge dot">{total}</span>{/if}</button>
+          {#if bellOpen}
+            <div class="drop card" on:click={() => (bellOpen = false)} role="presentation">
+              <div class="section-title" style="margin-bottom:8px">التنبيهات</div>
+              {#each bellItems as b}<a class="row ml" href={b.href}><Icon name={b.icon} size={18} /><span class="grow">{b.t}</span></a>
+              {:else}<div class="empty small">لا يوجد شيء جديد</div>{/each}
+            </div>
+          {/if}
+        </div>
+        <button class="ib big" class:spin title="تحديث" on:click={refresh}><Icon name="refresh" size={18} /></button>
         {#if $shift?.since}<button class="btn danger sm mobile-only" on:click={() => openModal(ClockOut, { onDone: bye })}>خروج {time($shift.since)}</button>{/if}
-        <div class="who"><div class="text-left"><b>{$me.full_name}</b><div class="faint tiny">{ROLE[$me.role]}</div></div><div class="avatar">{firstName[0] || '?'}</div></div>
       </header>
       {#if remind}
         <div class="notice row" style="margin-bottom:14px"><span class="grow">اقترب وقت نهاية العمل. لا تنسَ تسجيل خروجك بالرمز السري قبل المغادرة.</span>
@@ -254,6 +300,7 @@
   </div>
 {/if}
 
+{#if palOpen}<Palette {nav} on:close={() => (palOpen = false)} />{/if}
 <Overlays />
 <Toast />
 
@@ -265,30 +312,58 @@
   .auth form, .auth label, .auth input { text-align: right; }
   .err { min-height: 22px; margin: 8px 0; }
   .shell { display: flex; min-height: 100vh; }
-  .side { width: 240px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column;
-    background: var(--bg2); border-left: 1px solid var(--line); padding: 18px 12px; }
-  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 20px; }
-  .nl { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; color: var(--muted); margin-bottom: 2px; font-weight: 500; }
+  .side { width: 250px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; transition: width .3s var(--ease);
+    background: linear-gradient(180deg, #0B0E15, #090B11); border-left: 1px solid var(--line); padding: 16px 12px; }
+  .side nav { flex: 1; overflow-y: auto; overflow-x: hidden; margin: 0 -4px; padding: 0 4px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 2px 6px 18px; }
+  .logo { width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px; display: grid; place-items: center; color: var(--accent-ink);
+    background: linear-gradient(145deg, #F7D45E, #D99F10); box-shadow: 0 6px 18px #D99F1040, 0 1px 0 #ffffff60 inset; }
+  .brand b { font-size: 16px; }
+  .gl { font-size: 11px; color: var(--faint); padding: 14px 12px 6px; font-weight: 600; }
+  .nl { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 12px; color: var(--muted); margin-bottom: 2px; font-weight: 500; border: 1px solid transparent; transition: background .2s, color .2s, border-color .2s; }
   .nl:hover { background: var(--card); color: var(--text); }
-  .nl.on { background: linear-gradient(90deg, transparent, var(--accent-soft)); color: var(--accent3); box-shadow: inset -3px 0 0 var(--accent); }
+  .nl.on { background: linear-gradient(270deg, #E6B32522, #E6B32508); color: var(--accent2); border-color: #E6B32566; font-weight: 700; box-shadow: 0 0 22px #E6B32512; }
+  .ni { position: relative; display: grid; place-items: center; }
+  .kb { opacity: 0; transition: opacity .2s; } .nl:hover .kb, .nl.on .kb { opacity: 1; }
   .shell.tv .side, .shell.tv .top, .shell.tv .bottom { display: none !important; }
   .shell.tv main { padding: 18px; }
   :global(.tv) { font-size: 16.5px; }
-  .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+  .side-foot { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
   .shift { padding: 12px; }
-  main { flex: 1; min-width: 0; padding: 22px 26px 40px; }
-  .top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
-  .who { display: flex; align-items: center; gap: 10px; }
-  .text-left { text-align: left; }
-  .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: var(--card2); color: var(--accent2); border: 1px solid var(--line2); }
+  .ucard { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+  .un { display: block; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ib { width: 32px; height: 32px; flex-shrink: 0; border-radius: 10px; display: grid; place-items: center; color: var(--muted); position: relative; transition: background .2s, color .2s; }
+  .ib:hover { background: var(--card2); color: var(--text); }
+  .ib.big { width: 40px; height: 40px; }
+  .ib.spin :global(svg) { animation: spin .7s var(--ease); }
+  .side.mini { width: 78px; }
+  .side.mini .lt, .side.mini .bt, .side.mini .gl { display: none; }
+  .side.mini .nl { justify-content: center; padding: 11px 0; }
+  .side.mini .gl + .nl, .side.mini nav > .nl:first-child { margin-top: 10px; }
+  .side.mini .brand { justify-content: center; padding-inline: 0; }
+  .side.mini .ucard { flex-direction: column; padding: 8px 4px; }
+  .badge.dot { position: absolute; top: -6px; left: -8px; font-size: 10px; min-width: 16px; line-height: 16px; padding: 0 4px; }
+  main { flex: 1; min-width: 0; padding: 0 26px 40px; }
+  .top { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 10px; margin: 0 -26px 18px; padding: 14px 26px; flex-wrap: wrap;
+    background: #090B11e0; backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+  .ttl { display: flex; align-items: center; gap: 12px; }
+  .ti { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--accent2); background: var(--accent-soft); border: 1px solid var(--accent-line); flex-shrink: 0; }
+  .top h1 { font-size: 21px; line-height: 1.2; }
+  .search { display: flex; align-items: center; gap: 10px; width: 300px; padding: 9px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); color: var(--faint); font-size: 13.5px; text-align: right; transition: border-color .2s; }
+  .search:hover { border-color: var(--accent-line); }
+  .bellw { position: relative; }
+  .drop { position: absolute; top: 46px; left: 0; width: 300px; z-index: 60; padding: 12px; animation: rise .25s var(--spring); }
+  .avatar { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex-shrink: 0; color: #fff; background: linear-gradient(145deg, #A99BFF, #6D5DE8); }
   .bottom, .mobile-only { display: none; }
   .more { position: fixed; z-index: 90; bottom: calc(70px + env(safe-area-inset-bottom)); left: 12px; width: 220px; padding: 6px; }
   .ml { padding: 11px 12px; border-radius: 10px; color: var(--text); width: 100%; }
   .ml:hover { background: var(--card2); }
   @media (max-width: 900px) {
     .side { display: none; }
-    main { padding: 14px 14px calc(86px + env(safe-area-inset-bottom)); }
-    .who { display: none; }
+    main { padding: 0 14px calc(86px + env(safe-area-inset-bottom)); }
+    .top { margin: 0 -14px 14px; padding: 10px 14px; }
+    .search { width: auto; flex: 0 0 auto; } .search span, .search kbd { display: none; }
+    .ttl .ti { display: none; }
     .mobile-only { display: inline-flex; }
     .bottom { display: flex; position: fixed; z-index: 80; left: 0; right: 0; bottom: 0; background: var(--bg2); border-top: 1px solid var(--line);
       padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
@@ -296,6 +371,6 @@
     .bl.on { color: var(--accent2); }
     .ic { position: relative; display: grid; place-items: center; width: 52px; height: 30px; border-radius: 15px; }
     .bl.on .ic { background: var(--accent-soft); }
-    .badge.dot { position: absolute; top: -4px; left: 6px; }
+    .bl .badge.dot { top: -4px; left: 6px; }
   }
 </style>

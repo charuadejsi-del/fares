@@ -42,13 +42,13 @@
       g.strokeStyle = c; g.lineWidth = 1.2; g.strokeRect(x + .5, y + .5, pw - 1, ph - 1);
       if (pw > 18 && ph > 14) { g.fillStyle = c; g.fillRect(x, y, 16, 14); g.fillStyle = '#fff'; g.font = '600 10px sans-serif'; g.fillText(String((meta.index || 0) + 1), x + 4, y + 11); }
     }
-    g.strokeStyle = '#A78BFA'; g.lineWidth = 1.5; g.strokeRect(0, 0, W * s, L * s);
+    g.strokeStyle = '#E6B325'; g.lineWidth = 1.5; g.strokeRect(0, 0, W * s, L * s);
     g.restore();
     g.fillStyle = '#101116'; g.fillRect(0, 0, w, ruler); g.fillRect(0, 0, ruler, h);
     g.fillStyle = '#6C6E78'; g.strokeStyle = '#6C6E78'; g.font = '9px sans-serif';
     for (let cm = 0; cm <= W; cm += 5) { const x = ruler + cm * s; g.beginPath(); g.moveTo(x, ruler); g.lineTo(x, ruler - (cm % 10 ? 5 : 10)); g.stroke(); if (cm % 10 === 0 && cm) g.fillText(cm, x + 2, 10); }
     for (let cm = 0; cm <= L; cm += 5) { const y = ruler + cm * s; g.beginPath(); g.moveTo(ruler, y); g.lineTo(ruler - (cm % 10 ? 5 : 10), y); g.stroke(); if (cm % 10 === 0 && cm) g.fillText(cm, 2, y + 10); }
-    g.fillStyle = '#8B5CF6'; g.fillRect(0, 0, ruler, ruler);
+    g.fillStyle = '#E6B325'; g.fillRect(0, 0, ruler, ruler);
   }
   onMount(() => {
     const ro = new ResizeObserver(() => { w = box.clientWidth; draw(); }); ro.observe(box);

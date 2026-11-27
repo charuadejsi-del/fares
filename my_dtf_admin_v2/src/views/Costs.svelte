@@ -54,28 +54,69 @@
     } catch (e) { err = errMsg(e); }
     busy = false;
   }
+  $: mlabel = months.find(x => x.v === ym)?.t || ym;
+  function csv() {
+    const head = ['اليوم', 'الأمتار', 'الفيلم', 'الحبر', 'البودرة', 'الأجور', 'المصاريف الثابتة', 'الهدر', 'التكاليف', 'المداخيل', 'المفوتر', 'الربح'];
+    const r2 = x => (x == null ? '' : Math.round(+x * 100) / 100);
+    const lines = [head, ...R.days.filter(d => d.on).map(d => [d.day, r2(d.meters), r2(d.film), r2(d.ink), r2(d.powder), r2(d.wages), r2(d.fixed), r2(d.wasteCost), r2(d.cost), r2(d.revenue), r2(d.revenueReal), r2(d.profit)])];
+    const blob = new Blob(['\ufeff' + lines.map(l => l.join(';')).join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `mydtf-couts-${ym}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
   const num2 = x => (x == null ? '—' : da(x));
   const dname = d => { const x = new Date(d + 'T12:00:00'); return ltr(String(x.getDate())); };
 </script>
 
-<div class="row between wrap" style="margin-bottom:14px">
-  <div class="seg"><button class:on={tab === 'board'} on:click={() => (tab = 'board')}>اللوحة</button><button class:on={tab === 'set'} on:click={() => { form = JSON.parse(JSON.stringify(cs)); tab = 'set'; }}>الإعدادات</button></div>
-  {#if tab === 'board'}<select style="width:auto" bind:value={ym}>{#each months as x}<option value={x.v}>{x.t}</option>{/each}</select>{/if}
+<div class="utabs">
+  <button class:on={tab === 'board'} on:click={() => (tab = 'board')}><Icon name="chart" size={19} />الإحصائيات</button>
+  <button class:on={tab === 'set'} on:click={() => { form = JSON.parse(JSON.stringify(cs)); tab = 'set'; }}><Icon name="settings" size={19} />الإعدادات</button>
 </div>
 {#if err}<div class="notice bad small" style="margin-bottom:12px">{err}</div>{/if}
 
 {#if !R}<div class="spinner"></div>
 {:else if tab === 'board'}
-  <div class="grid g4">
-    <div class="card accent kp"><span class="muted small">الربح الصافي — {ongoing ? 'حتى اليوم' : 'الشهر'}</span><b class:red={R.actual.profit < 0} class:green={R.actual.profit >= 0} use:countUp={{ value: R.actual.profit, format: da }}></b><span class="faint tiny">{m(R.actual.meters, 1)} في {num(R.worked)} يوم عمل</span></div>
-    <div class="card kp"><span class="muted small">التكلفة للمتر</span><b>{num2(ref.per.cost)}</b><span class="faint tiny">سعر البيع {da(price)}</span></div>
-    <div class="card kp"><span class="muted small">الربح للمتر</span><b class:red={ref.per.profit < 0}>{num2(ref.per.profit)}</b><span class="faint tiny">الهامش {ref.margin == null ? '—' : pct(ref.margin * 100)}</span></div>
-    <div class="card kp"><span class="muted small">{R.projection ? 'التوقّع لنهاية الشهر' : 'المداخيل'}</span><b class="accent">{R.projection ? da(R.projection.profit) : da(R.actual.revenue)}</b><span class="faint tiny">{R.projection ? `${m(R.projection.meters, 0)} على ${num(cs.work_days)} يوم` : `المفوتر فعلاً ${da(R.actual.revenueReal)}`}</span></div>
+  <div class="row between wrap" style="margin-bottom:6px">
+    <div class="seg">
+      <button class:on={ym === months[0].v} on:click={() => (ym = months[0].v)}>هذا الشهر</button>
+      <button class:on={ym === months[1].v} on:click={() => (ym = months[1].v)}>الشهر الماضي</button>
+      <select class="msel" class:on={ym !== months[0].v && ym !== months[1].v} bind:value={ym}>{#each months as x}<option value={x.v}>{x.t}</option>{/each}</select>
+    </div>
+    <button class="btn ghost sm" on:click={csv}><Icon name="download" size={16} />تصدير CSV</button>
+  </div>
+  <div class="faint tiny" style="margin-bottom:14px">من {R.days[0]?.day || '—'} إلى {R.days[R.days.length - 1]?.day || '—'}</div>
+
+  <div class="top2">
+    <div class="hero-g">
+      <span class="tag">{ongoing ? 'هذا الشهر — حتى اليوم' : mlabel}</span>
+      <div class="lbl" style="margin-top:10px">الربح الصافي</div>
+      <div class="big num" class:neg={R.actual.profit < 0} use:countUp={{ value: R.actual.profit, format: da }}></div>
+      <div class="mini">
+        <span><Icon name="roll" size={15} />{m(R.actual.meters, 1)}</span>
+        <span><Icon name="calendar" size={15} />{num(R.worked)} يوم عمل</span>
+        <span><Icon name="wallet" size={15} />مداخيل {da(R.actual.revenue)}</span>
+        {#if R.projection}<span><Icon name="trend" size={15} />التوقّع {da(R.projection.profit)}</span>{/if}
+      </div>
+    </div>
+    <div class="tiles">
+      <div class="tile k-green"><span class="ic"><Icon name="wallet" size={19} /></span><b class="v">{num2(ref.per.profit)}</b><span class="l">الربح للمتر</span></div>
+      <div class="tile k-amber"><span class="ic"><Icon name="coins" size={19} /></span><b class="v">{num2(ref.per.cost)}</b><span class="l">التكلفة للمتر</span><span class="s">البيع {da(price)}</span></div>
+      <div class="tile k-blue"><span class="ic"><Icon name="trend" size={19} /></span><b class="v">{ref.margin == null ? '—' : pct(ref.margin * 100)}</b><span class="l">الهامش</span></div>
+      <div class="tile k-red"><span class="ic"><Icon name="scissors" size={19} /></span><b class="v">{m(R.actual.waste || 0, 1)}</b><span class="l">الهدر</span><span class="s">{da(R.actual.wasteCost || 0)}</span></div>
+    </div>
   </div>
   {#if !R.worked}<div class="notice warn small" style="margin-top:12px">لا توجد أمتار مطبوعة في هذا الشهر بعد. الأرقام تظهر عندما تبدأ الطباعة.</div>{/if}
 
+  <div class="card" style="margin-top:14px">
+    <div class="section-title"><div>المداخيل والتكاليف<span class="sub">مجموع الشهر {ongoing ? '(حتى اليوم)' : ''}</span></div></div>
+    <div class="grid g4">
+      <div class="tint k-green"><Icon name="wallet" size={22} /><div><b class="v">{da(R.actual.revenue)}</b><div class="l">المداخيل (الأمتار × السعر)</div></div></div>
+      <div class="tint k-blue"><Icon name="file" size={22} /><div><b class="v">{da(R.actual.revenueReal)}</b><div class="l">المفوتر فعلاً للزبائن</div></div></div>
+      <div class="tint k-red"><Icon name="trend" size={22} /><div><b class="v">{da(R.actual.cost)}</b><div class="l">مجموع التكاليف</div></div></div>
+      <div class="tint k-teal"><Icon name="team" size={22} /><div><b class="v">{da((R.actual.wages || 0) + (R.actual.fixed || 0))}</b><div class="l">الأجور + المصاريف الثابتة</div></div></div>
+    </div>
+  </div>
+
   <div class="card" style="margin-top:12px">
-    <div class="section-title">الربح اليومي<span class="end faint small">اضغط على يوم لرؤية تفاصيله</span></div>
+    <div class="section-title"><div>الربح اليومي<span class="sub">اضغط على يوم لرؤية تفاصيله</span></div></div>
     <div class="chart" dir="ltr">
       {#each R.days as d, i}
         <button class="col" class:sel={i === dayIdx} class:off={!d.on} on:click={() => (dayIdx = i)} title={Math.round(d.profit)}>
@@ -152,14 +193,20 @@
 {/if}
 
 <style>
-  .kp { display: flex; flex-direction: column; gap: 4px; } .kp b { font-size: 22px; }
+  .top2 { display: grid; grid-template-columns: 1.15fr 1fr; gap: 12px; }
+  .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .hero-g { display: flex; flex-direction: column; justify-content: center; min-height: 190px; }
+  .hero-g .big.neg { color: #FFB4B4; }
+  .msel { width: auto; border-radius: 999px; padding: 6px 14px; font-size: 13.5px; background: var(--card); border-color: var(--line2); }
+  .msel.on { border-color: var(--accent); color: var(--accent2); }
+  @media (max-width: 1100px) { .top2 { grid-template-columns: 1fr; } }
   .chart { display: flex; gap: 3px; height: 220px; align-items: stretch; }
   .chart .col { flex: 1; min-width: 8px; display: flex; flex-direction: column; align-items: center; border-radius: 6px; padding: 2px 0; gap: 0; }
   .chart .col.sel { background: var(--accent-soft); }
   .up, .dn { flex: 1; width: 100%; max-width: 22px; display: flex; }
   .up { align-items: flex-end; border-bottom: 1px solid var(--line2); } .dn { align-items: flex-start; }
   .up i, .dn i { display: block; width: 100%; }
-  .pos { background: linear-gradient(180deg, #4ADE80, #10B98166); border-radius: 5px 5px 0 0; }
+  .pos { background: linear-gradient(180deg, var(--chart2), #7C6CF055); border-radius: 5px 5px 0 0; }
   .neg { background: linear-gradient(0deg, #F87171, #F8717166); border-radius: 0 0 5px 5px; }
   .col.off small { opacity: .4; }
   .chart small { font-size: 10px; color: var(--faint); margin-top: 2px; }

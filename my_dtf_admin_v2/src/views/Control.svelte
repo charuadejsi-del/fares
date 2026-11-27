@@ -78,7 +78,7 @@
 </script>
 
 {#if !d}<div class="spinner"></div>{:else}
-  <div class="hero card accent">
+  <div class="hero hero-g">
     <div class="clock"><div class="num big">{hh}</div><div class="faint small">{clockNow.toLocaleDateString('ar-DZ', { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
     <div class="hk"><span class="faint tiny">مداخيل اليوم</span><b class="accent" use:countUp={{ value: d.revToday, format: da }}></b><span class="faint tiny">{num(d.nToday)} طلبية</span></div>
     <div class="hk"><span class="faint tiny">أمتار اليوم</span><b use:countUp={{ value: metersToday, format: v => m(v, 1) }}></b><span class="faint tiny">هدر {m(wasteToday, 1)}</span></div>
@@ -153,9 +153,9 @@
 
 <style>
   .hero { display: flex; align-items: center; gap: 26px; flex-wrap: wrap; padding: 18px 22px; }
-  .clock .big { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: 1px; background: linear-gradient(180deg, #fff, var(--accent3)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .hk { display: flex; flex-direction: column; gap: 2px; padding-right: 22px; border-right: 1px solid var(--line); }
-  .hk b { font-size: 21px; }
+  .clock .big { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: 1px; color: #fff; }
+  .hk { display: flex; flex-direction: column; gap: 2px; padding-right: 22px; border-right: 1px solid #ffffff22; }
+  .hk b { font-size: 22px; color: #fff; } .hero :global(.faint) { color: #ffffffa0; } .hero :global(.accent) { color: var(--accent3); }
   .ringk { flex-direction: row; align-items: center; gap: 10px; }
   .tvb { margin-right: auto; }
   .wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
@@ -174,8 +174,8 @@
   @media (max-width: 1100px) { .two, .three { grid-template-columns: 1fr; } .hk { border: 0; padding: 0; } .tvb { margin: 0; } }
   .bars { display: flex; align-items: flex-end; gap: 6px; height: 190px; }
   .bars > div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
-  .bars i { width: 100%; max-width: 32px; min-height: 2px; border-radius: 7px 7px 2px 2px; background: linear-gradient(180deg, #8B5CF6AA, #8B5CF633); transition: height .5s; }
-  .bars i.today { background: linear-gradient(180deg, var(--accent3), var(--accent)); box-shadow: 0 0 18px #8B5CF655; }
+  .bars i { width: 100%; max-width: 32px; min-height: 2px; border-radius: 7px 7px 2px 2px; background: linear-gradient(180deg, #7C6CF0CC, #7C6CF022); transition: height .5s; }
+  .bars i.today { background: linear-gradient(180deg, var(--chart2), var(--chart)); box-shadow: 0 0 18px #7C6CF077; }
   .bars small { font-size: 11px; color: var(--faint); } .val { font-size: 10px; color: var(--muted); }
   .al { display: flex; align-items: center; gap: 10px; text-align: right; width: 100%; padding: 10px 12px; border-radius: 12px; font-size: 13.5px; color: var(--text); background: #FBBF2412; border: 1px solid #FBBF2440; }
   .al :global(svg) { color: var(--amber); flex-shrink: 0; }
