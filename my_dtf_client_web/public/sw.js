@@ -1,5 +1,5 @@
 // My DTF — service worker : coquille de l'app en cache, données toujours en direct.
-const CACHE = 'mydtf-client-v2';
+const CACHE = 'mydtf-client-v3';
 self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));

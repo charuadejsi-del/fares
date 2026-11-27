@@ -1,6 +1,7 @@
 <script>
-  import { sb, q, rpc, signedUrls, errMsg } from '../lib/sb.js';
-  import { me, staff, staffName, settings, liveTick, toast, closeSheet } from '../lib/store.js';
+  import { sb, q, rpc, signedUrls, errMsg, invokeDhd } from '../lib/sb.js';
+  import ShipForm from './ShipForm.svelte';
+  import { me, staff, staffName, settings, liveTick, toast, closeSheet, openModal } from '../lib/store.js';
   import { da, m, cm, size, num, dt, MODE, STATUS } from '../lib/fmt.js';
   import Chip from '../components/Chip.svelte';
   import FilmCanvas from '../components/FilmCanvas.svelte';
@@ -103,6 +104,26 @@
     } catch (e) { err = errMsg(e); }
     busy = false;
   }
+  let manualShip = false;
+  const SHIP = { created: ['أُنشئ الطرد', 'blue'], pending: ['جاهز للإرسال', 'blue'], picked: ['استلمته DHD', 'indigo'], transit: ['في الطريق', 'violet'],
+    hub: ['في المركز / المكتب', 'violet'], out: ['خرج للتوصيل', 'amber'], attempt: ['محاولة فاشلة', 'orange'], hold: ['معلّق', 'orange'],
+    delivered: ['سُلّم', 'green'], returned: ['مرتجع', 'red'], cancelled: ['ملغى', 'gray'], unknown: ['—', 'gray'] };
+  async function label() {
+    busy = true;
+    try {
+      const r = await invokeDhd({ action: 'label', order_id: o.id });
+      const bin = Uint8Array.from(atob(r.pdf), c => c.charCodeAt(0));
+      const u = URL.createObjectURL(new Blob([bin], { type: 'application/pdf' }));
+      const w = window.open(u, '_blank'); if (!w) { const a = document.createElement('a'); a.href = u; a.download = `DHD-${r.tracking}.pdf`; a.click(); }
+      setTimeout(() => URL.revokeObjectURL(u), 60000);
+    } catch (e) { toast(errMsg(e), true); }
+    busy = false;
+  }
+  async function trackNow() { busy = true; try { const r = await invokeDhd({ action: 'track' }); toast(`حُدّثت الحالة (${r.updated} تغيير)`); liveTick.update(n => n + 1); } catch (e) { toast(errMsg(e), true); } busy = false; }
+  async function cancelShip() {
+    if (!confirm('إلغاء الطرد عند DHD؟ تعود الطلبية إلى «مطبوعة» ويُحذف رقم التتبّع.')) return;
+    busy = true; try { await invokeDhd({ action: 'cancel', order_id: o.id }); toast('أُلغي الطرد'); liveTick.update(n => n + 1); } catch (e) { toast(errMsg(e), true); } busy = false;
+  }
   function downloadAll() {
     imgs.forEach((im, k) => setTimeout(() => { const a = document.createElement('a'); a.href = full[im.storage_path]; a.download = ''; document.body.appendChild(a); a.click(); a.remove(); }, k * 400));
   }
@@ -167,9 +188,13 @@
         <button class="btn lg block" disabled={busy} on:click={() => act('finish')}>انتهت الطباعة</button>
       {/if}
       {#if mgr && o.status === 'printed' && o.delivery_mode !== 'pickup'}
-        <div class="grid g2 stack"><div><label for="cr">شركة التوصيل</label><input id="cr" bind:value={carrier} /></div>
-          <div><label for="tk">رقم التتبّع</label><input id="tk" dir="ltr" bind:value={tracking} /></div></div>
-        <button class="btn block" style="margin-top:10px" disabled={busy} on:click={() => act('ship')}>تسليم إلى شركة التوصيل</button>
+        <button class="btn lg block" disabled={busy} on:click={() => openModal(ShipForm, { o })}><Icon name="truck" size={18} />إرسال إلى DHD</button>
+        <button class="btn quiet sm" style="margin-top:8px" on:click={() => (manualShip = !manualShip)}>شركة أخرى / إدخال رقم التتبّع يدوياً</button>
+        {#if manualShip}
+          <div class="grid g2 stack"><div><label for="cr">شركة التوصيل</label><input id="cr" bind:value={carrier} /></div>
+            <div><label for="tk">رقم التتبّع</label><input id="tk" dir="ltr" bind:value={tracking} /></div></div>
+          <button class="btn quiet block" style="margin-top:10px" disabled={busy} on:click={() => act('ship')}>تسليم إلى شركة التوصيل</button>
+        {/if}
       {/if}
       {#if mgr && ['printed', 'shipped', 'ready_pickup'].includes(o.status)}
         <label for="pd">المبلغ المدفوع</label>
@@ -184,7 +209,21 @@
     {:else}<div><b>{o.client_name}</b></div>{/if}
     <div class="muted small" style="margin-top:4px">{MODE[o.delivery_mode]}{#if mgr && o.delivery_mode !== 'pickup'} — {o.ship_name} · <span class="ltr">{o.ship_phone}</span> · {o.ship_wilaya} / {o.ship_commune} {o.ship_address || ''}{/if}</div>
     {#if o.client_note}<div class="notice small" style="margin-top:10px">ملاحظة الزبون: {o.client_note}</div>{/if}
-    {#if mgr && o.tracking_number}<div class="small" style="margin-top:6px">{o.carrier} · <b class="ltr">{o.tracking_number}</b></div>{/if}
+    {#if mgr && o.tracking_number}
+      <div class="dhd">
+        <div class="row between"><span class="row"><Icon name="truck" size={18} /><b>{o.carrier}</b> · <b class="ltr">{o.tracking_number}</b></span>
+          {#if o.ship_status}<span class="chip c-{SHIP[o.ship_status]?.[1] || 'gray'}">{SHIP[o.ship_status]?.[0] || o.ship_status}</span>{/if}</div>
+        {#if o.ship_status_raw}<div class="faint tiny" style="margin-top:4px">{o.ship_status_raw}{#if o.ship_synced_at} · آخر تحديث {dt(o.ship_synced_at)}{/if}{#if o.ship_cod != null} · يُحصَّل {da(o.ship_cod)}{/if}</div>{/if}
+        {#if o.carrier === 'DHD'}
+          <div class="row wrap" style="margin-top:10px">
+            <button class="btn ghost sm" disabled={busy} on:click={label}><Icon name="file" size={15} />طباعة الملصق</button>
+            <button class="btn quiet sm" disabled={busy} on:click={trackNow}><Icon name="refresh" size={15} />تحديث الحالة</button>
+            {#if !o.ship_status || o.ship_status === 'created'}<button class="btn danger sm" disabled={busy} on:click={cancelShip}>إلغاء الطرد</button>{/if}
+          </div>
+          {#if o.ship_events?.length}<div class="evs">{#each [...o.ship_events].reverse().slice(0, 8) as e}<div class="tiny"><span class="faint ltr">{e.d}</span> · {e.s}{e.w ? ' — ' + e.w : ''}</div>{/each}</div>{/if}
+        {/if}
+      </div>
+    {/if}
     {#if mgr}
       <label for="spc">سعر خاص لهذا الزبون (دج للمتر) — فارغ = السعر العادي/الجملة</label>
       <div class="row"><input id="spc" dir="ltr" inputmode="decimal" placeholder="—" bind:value={spEdit} /><button class="btn quiet sm" on:click={saveSpecial}>حفظ</button></div>
@@ -237,6 +276,8 @@
 {/if}
 
 <style>
+  .dhd { margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--card2); border: 1px solid var(--line2); }
+  .evs { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--line); padding-top: 8px; }
   .total { font-size: 22px; font-weight: 700; color: var(--gold); }
   .stars span { font-size: 24px; color: var(--card3); } .stars span.on { color: var(--amber); }
   .dz { display: flex; flex-direction: column; gap: 6px; }

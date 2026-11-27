@@ -44,8 +44,9 @@ export async function signedUrls(paths, download = false) {
   return Object.fromEntries((data || []).map(d => [d.path, d.signedUrl]));
 }
 
-export async function invokeAdmin(body) {
-  const { data, error } = await sb.functions.invoke('dtf-admin', { body });
+export const invokeDhd = body => invokeAdmin(body, 'dtf-dhd');
+export async function invokeAdmin(body, fn = 'dtf-admin') {
+  const { data, error } = await sb.functions.invoke(fn, { body });
   if (error) {
     let msg = error.message;
     try { msg = (await error.context.json()).error || msg; } catch (_) {}

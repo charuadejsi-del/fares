@@ -2,6 +2,7 @@
   import { sb, q, errMsg } from '../lib/sb.js';
   import { settings, toast } from '../lib/store.js';
   import { m, da } from '../lib/fmt.js';
+  import DhdPanel from '../components/DhdPanel.svelte';
   let s = { ...$settings, price_tiers: JSON.parse(JSON.stringify($settings?.price_tiers || [])) }, busy = false;
   $: example = (() => { const st = +s.meter_rounding_step; const mm = 1.512; const b = st > 0 ? Math.ceil(mm / st - 1e-9) * st : mm; return { b, p: Math.max(b * +s.price_per_meter, +s.min_order_amount) }; })();
   async function save() {
@@ -62,3 +63,4 @@
   </div>
 </div>
 <button class="btn lg" style="margin-top:14px;min-width:220px" disabled={busy} on:click={save}>حفظ الإعدادات</button>
+<DhdPanel />

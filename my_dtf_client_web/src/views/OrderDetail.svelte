@@ -37,6 +37,8 @@
     busy = false;
   }
   const FLOW = ['new', 'in_design', 'ready_to_print', 'printing', 'printed', 'delivered'];
+  const SHIPT = { created: 'سُجّل الطرد عند شركة التوصيل', pending: 'جاهز للإرسال', picked: 'استلمته شركة التوصيل', transit: 'في الطريق إليك', hub: 'وصل إلى مكتب ولايتك', out: 'خرج للتوصيل — ترقّب الاتصال', attempt: 'لم نتمكن من الوصول إليك — أجب على الهاتف', hold: 'معلّق مؤقتاً', delivered: 'سُلّم', returned: 'أُرجع إلى الورشة', cancelled: 'أُلغي' };
+  const SHIPC = { delivered: 'green', out: 'accent', attempt: 'red', returned: 'red' };
   const TXT = { new: 'استُلمت الطلبية', in_design: 'في التصميم', ready_to_print: 'تنتظر الطباعة', printing: 'تُطبع الآن', printed: 'انتهت الطباعة', delivered: 'سُلّمت' };
   $: reached = s => ev.some(e => e.to_status === s || (s === 'printed' && ['ready_pickup', 'shipped'].includes(e.to_status))) || (s === 'new');
 </script>
@@ -54,6 +56,14 @@
         {#if +o.amount_paid}<div class="kv"><span>المدفوع</span><b class="green">{da(o.amount_paid)}</b></div>{/if}
         {#if o.status === 'rejected' && o.reject_reason}<div class="notice bad small" style="margin-top:8px">سبب الرفض: {o.reject_reason}</div>{/if}
       </div>
+      {#if o.tracking_number}
+        <div class="card"><div class="section-title">التوصيل — {o.carrier || 'DHD'}</div>
+          <div class="kv"><span>رقم التتبّع</span><b class="ltr">{o.tracking_number}</b></div>
+          {#if o.ship_status}<div class="kv"><span>الحالة</span><b class={SHIPC[o.ship_status] || ''}>{SHIPT[o.ship_status] || o.ship_status_raw || '—'}</b></div>{/if}
+          {#if o.ship_cod != null}<div class="kv"><span>تدفع للموزّع</span><b>{da(o.ship_cod)}</b></div>{/if}
+          {#if o.ship_events?.length}<div class="col" style="gap:4px;margin-top:8px">{#each [...o.ship_events].reverse().slice(0, 6) as e}<div class="tiny"><span class="faint ltr">{e.d}</span> · {e.s}</div>{/each}</div>{/if}
+        </div>
+      {/if}
       {#if !['rejected', 'cancelled'].includes(o.status)}
         <div class="card"><div class="section-title">المتابعة</div>
           <div class="tl">{#each FLOW as s}{@const e = ev.find(x => x.to_status === s || (s === 'printed' && ['ready_pickup', 'shipped'].includes(x.to_status)))}

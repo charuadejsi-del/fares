@@ -20,6 +20,12 @@
   let mode = 'pickup', name = '', phone = '', wilaya = null, commune = null, address = '', note = '';
   let fileInput, dragging = false;
 
+  let rates = [];
+  q(sb.from('dtf_ship_rates').select('wilaya_code,home,desk')).then(r => (rates = r || [])).catch(() => {});
+  $: rate = wilaya ? rates.find(r => r.wilaya_code === +wilaya.c) : null;
+  $: fee = mode === 'pickup' ? 0 : rate ? +(mode === 'stopdesk' ? rate.desk : rate.home) || null : null;
+  const modeFee = k => { if (k === 'pickup') return 'مجاني'; const r = wilaya && rates.find(x => x.wilaya_code === +wilaya.c); const v = r && +(k === 'stopdesk' ? r.desk : r.home); return v ? 'التوصيل ' + da(v) : wilaya ? 'سعر التوصيل يُحدَّد لاحقاً' : 'اختر ولايتك لرؤية السعر'; };
+
   onMount(async () => {
     dz = await loadDz();
     const p = $me; name = p?.full_name || ''; phone = p?.phone || ''; address = p?.address || '';
@@ -121,7 +127,7 @@
 
 {:else if step === 2}
   <div class="grid g3 modes">
-    {#each ['pickup', 'stopdesk', 'home'] as k}<button class="mode card" class:on={mode === k} on:click={() => (mode = k)}><Icon name={k === 'pickup' ? 'stock' : 'truck'} size={24} /><b>{MODE[k]}</b><span class="faint tiny">{k === 'pickup' ? 'مجاني' : 'سعر التوصيل يُحدَّد لاحقاً'}</span></button>{/each}
+    {#each ['pickup', 'stopdesk', 'home'] as k}<button class="mode card" class:on={mode === k} on:click={() => (mode = k)}><Icon name={k === 'pickup' ? 'stock' : 'truck'} size={24} /><b>{MODE[k]}</b><span class="faint tiny">{modeFee(k, wilaya, rates)}</span></button>{/each}
   </div>
   <div class="card" style="margin-top:12px">
     <div class="grid g2"><div><label for="nm">الاسم</label><input id="nm" bind:value={name} /></div><div><label for="ph">الهاتف</label><input id="ph" dir="ltr" inputmode="tel" bind:value={phone} /></div></div>
@@ -139,7 +145,10 @@
     <div class="kv"><span>الأمتار المحسوبة</span><b>{m(Q.meters)}</b></div>
     <div class="kv"><span>سعر المتر</span><b>{da(Q.ppm)}</b></div>
     <div class="kv"><span>الاستلام</span><b>{MODE[mode]}{mode !== 'pickup' ? ` — ${wilaya?.ar} / ${commune?.ar}` : ''}</b></div>
-    <div class="kv tot"><span>سعر الطباعة</span><b class="accent">{da(Q.amount)}</b></div>
+    <div class="kv"><span>سعر الطباعة</span><b>{da(Q.amount)}</b></div>
+    {#if mode !== 'pickup'}<div class="kv"><span>التوصيل (DHD)</span><b>{fee ? da(fee) : 'يُحدَّد لاحقاً'}</b></div>{/if}
+    <div class="kv tot"><span>المجموع</span><b class="accent">{da(Q.amount + (fee || 0))}</b></div>
+    {#if mode !== 'pickup'}<div class="faint tiny" style="margin-top:4px">تدفع المبلغ للموزّع عند الاستلام.</div>{/if}
     <label for="nt">ملاحظة للورشة (اختياري)</label><textarea id="nt" rows="3" bind:value={note} placeholder="مثال: اطبع الصورة 2 بالمرآة"></textarea>
   </div>
   {#if $settings?.is_open === false}<div style="margin-top:12px"><ShopStatus detail="الورشة مغلقة الآن، ستُعالَج طلبيتك عند الفتح" /></div>{/if}
@@ -148,7 +157,7 @@
 <div class="bar-bottom card">
   <div class="grow">
     <div class="muted tiny">{Q ? `${m(Q.meters)} · ${num(copies)} نسخة` : 'أضف صورك ومقاساتها'}</div>
-    {#if Q}<div class="price" use:countUp={{ value: Q.amount, format: v => da(Math.round(v)) }}></div>{:else}<div class="price">—</div>{/if}
+    {#if Q}<div class="price" use:countUp={{ value: Q.amount + (fee || 0), format: v => da(Math.round(v)) }}></div>{#if fee}<div class="faint tiny">منها التوصيل {da(fee)}</div>{/if}{:else}<div class="price">—</div>{/if}
     {#if Q && (Q.ppm < Q.base || $me?.special_price != null)}<div class="green tiny">سعرك: {da(Q.ppm)} للمتر</div>{/if}
     {#if Q?.next}<div class="accent tiny">اطلب {m(Q.next.min, 0)} أو أكثر ويصبح المتر {da(Q.next.price)}</div>{/if}
   </div>
