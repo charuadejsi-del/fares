@@ -134,10 +134,12 @@ func is_knocked() -> bool:
 	return state == S.KNOCKED or state == S.DOWN
 
 
+## الكلام ما يبانش كتابة (باش تكون واقعية). نخليو الجملة هنا باش تولي صوت من بعد.
+var last_line := ""
+
+
 func say(txt: String) -> void:
-	bubble.text = txt
-	bubble.visible = true
-	bubble_t = 1.5
+	last_line = txt
 
 
 func knock(dir: Vector3, power: float = 1.0) -> void:
@@ -168,7 +170,6 @@ func _land() -> void:
 	pose_tw.set_parallel(true)
 	pose_tw.tween_property(rig, "rotation", Vector3(-PI / 2.0, randf_range(-0.6, 0.6), 0.0), 0.18)
 	pose_tw.tween_property(rig, "position", Vector3(0, 0.28, 0), 0.18)
-	stars.visible = true
 	if game:
 		game.sfx.play("hit", -8.0, 0.7)
 

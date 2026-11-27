@@ -54,6 +54,9 @@ var lbl_score: Label
 var lbl_time: Label
 var lbl_combo: Label
 var lbl_banner: Label
+var lbl_big: Label
+var big_tw: Tween
+var score_tw: Tween
 var banner_tw: Tween
 var energy_bar: ProgressBar
 var menu: Control
@@ -258,12 +261,18 @@ func _build_ui() -> void:
 	lbl_time.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	lbl_time.position = Vector2(26, 18)
 	hud.add_child(lbl_time)
-	lbl_banner = _label("", 44, Color.WHITE)
+	lbl_banner = _label("", 30, Color(1, 1, 1, 0.9))
 	lbl_banner.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	lbl_banner.offset_top = 190
-	lbl_banner.offset_bottom = 260
+	lbl_banner.offset_top = 150
+	lbl_banner.offset_bottom = 200
 	lbl_banner.modulate.a = 0.0
 	hud.add_child(lbl_banner)
+	lbl_big = _label("", 84, Color.WHITE)
+	lbl_big.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	lbl_big.offset_top = 210
+	lbl_big.offset_bottom = 320
+	lbl_big.modulate.a = 0.0
+	root.add_child(lbl_big)
 
 	menu = _panel_bg()
 	root.add_child(menu)
@@ -349,6 +358,33 @@ func show_banner(t: String) -> void:
 	banner_tw.tween_property(lbl_banner, "modulate:a", 0.0, 0.6)
 
 
+## كلمة وحدة كبيرة في وسط الشاشة، في اللحظات المهمة برك.
+func big_word(t: String, col: Color) -> void:
+	lbl_big.text = t
+	lbl_big.add_theme_color_override("font_color", col)
+	lbl_big.pivot_offset = lbl_big.size * 0.5
+	lbl_big.scale = Vector2.ONE * 1.5
+	lbl_big.modulate.a = 1.0
+	if big_tw:
+		big_tw.kill()
+	big_tw = create_tween()
+	big_tw.set_ignore_time_scale(true)
+	big_tw.tween_property(lbl_big, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	big_tw.tween_interval(0.55)
+	big_tw.tween_property(lbl_big, "modulate:a", 0.0, 0.3)
+
+
+## العداد الفوقاني ينفخ شوية كي تزيد النقاط (بلاصة الأرقام اللي تطير).
+func _pop_score() -> void:
+	lbl_score.pivot_offset = lbl_score.size * 0.5
+	if score_tw:
+		score_tw.kill()
+	lbl_score.scale = Vector2.ONE * 1.25
+	score_tw = create_tween()
+	score_tw.set_ignore_time_scale(true)
+	score_tw.tween_property(lbl_score, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
 func float_text(pos: Vector3, txt: String, col: Color) -> void:
 	var l := B.label3d(txt, font, 72, col)
 	add_child(l)
@@ -391,6 +427,7 @@ func _show_menu() -> void:
 	hud.visible = false
 	pad.visible = false
 	escape_box.visible = false
+	lbl_big.modulate.a = 0.0
 	grab_by = null
 	menu_best.text = "أحسن نتيجة: %d   •   دورو: %d" % [best, coins]
 
@@ -419,7 +456,6 @@ func start_game() -> void:
 	pad.visible = true
 	state = State.PLAYING
 	sfx.play("baa")
-	float_text(sheep.global_position + Vector3.UP * 2.2, "باااع!", Color.WHITE)
 	if auto_spawn:
 		show_banner("عمي السعيد راهو جاي…")
 
@@ -523,7 +559,7 @@ func _collect(g) -> void:
 	sheep.energy = minf(sheep.energy + 35.0, 100.0)
 	score += 20.0
 	sfx.play("blip")
-	float_text(p + Vector3.UP * 1.4, "+طاقة", Color("7be04f"))
+	_pop_score()
 	get_tree().create_timer(6.0).timeout.connect(_respawn_grass)
 
 
@@ -546,13 +582,9 @@ func on_knock_chaser(c, chain: bool = false) -> void:
 	var base := 100 if c.kind == "said" else 60
 	var pts := base * mult
 	score += pts
-	var txt := "+%d" % pts
-	if mult > 1:
-		txt += "  x%d" % mult
-	var cp: Vector3 = c.global_position
-	float_text(cp + Vector3.UP * 2.4, txt, Color("ffe066"))
+	_pop_score()
 	if chain:
-		float_text(cp + Vector3.UP * 3.3, "دومينو!", Color("ff9f43"))
+		big_word("دومينو!", Color("ff9f43"))
 	sfx.play("hit", 0.0, randf_range(0.9, 1.15))
 	_vibrate(45)
 
@@ -565,8 +597,7 @@ func on_prop_hit(p) -> void:
 	combo_t = 2.5
 	var pts := 15 * mini(combo, 5)
 	score += pts
-	var pp: Vector3 = p.global_position
-	float_text(pp + Vector3.UP * 1.2, "+%d" % pts, Color.WHITE)
+	_pop_score()
 	sfx.play("hit", -6.0, 1.4)
 
 
@@ -613,7 +644,6 @@ func _start_grab(c) -> void:
 	_vibrate(120)
 	var a := _angle_of(c)
 	c.pile_on(_slot(a, c.body_height(), 0.9), sheep.global_position, 0.9)
-	float_text(sheep.global_position + Vector3.UP * 2.6, "شدّوه!", Color("ff6b6b"))
 	escape_lbl.text = "انقر بزربة!  0/%d" % GRAB_TAPS
 	escape_bar.value = 100.0
 	escape_box.visible = true
@@ -644,8 +674,8 @@ func _escape() -> void:
 		g.release_knock(away.normalized() if away.length() > 0.01 else Vector3(1, 0, 0))
 		on_knock_chaser(g, false)
 	score += 150.0
-	float_text(sheep.global_position + Vector3.UP * 2.8, "تفلّت!  +150", Color("7be04f"))
-	show_banner("تفلّت! المرة الجاية ما كانش")
+	big_word("تفلّت!", Color("7be04f"))
+	_pop_score()
 	sfx.play("baa", 0.0, 1.3)
 	pad.visible = true
 	Engine.time_scale = 0.3
@@ -687,7 +717,7 @@ func _caught() -> void:
 		var layer := n / slots.size()
 		c.pile_on(_slot(a, c.body_height(), 1.2, layer * 0.35), sheep.global_position, 1.2)
 		n += 1
-	float_text(sheep.global_position + Vector3.UP * 2.6, "حكموووه!", Color("ff6b6b"))
+	big_word("حكموه!", Color("ff6b6b"))
 	get_tree().create_timer(2.6, true, false, true).timeout.connect(_show_result)
 
 
