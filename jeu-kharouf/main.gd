@@ -368,7 +368,7 @@ func big_word(t: String, col: Color) -> void:
 	if big_tw:
 		big_tw.kill()
 	big_tw = create_tween()
-	big_tw.set_ignore_time_scale(true)
+	big_tw.set_speed_scale(1.0 / maxf(Engine.time_scale, 0.05))
 	big_tw.tween_property(lbl_big, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	big_tw.tween_interval(0.55)
 	big_tw.tween_property(lbl_big, "modulate:a", 0.0, 0.3)
@@ -381,7 +381,7 @@ func _pop_score() -> void:
 		score_tw.kill()
 	lbl_score.scale = Vector2.ONE * 1.25
 	score_tw = create_tween()
-	score_tw.set_ignore_time_scale(true)
+	score_tw.set_speed_scale(1.0 / maxf(Engine.time_scale, 0.05))
 	score_tw.tween_property(lbl_score, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
