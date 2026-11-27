@@ -39,6 +39,7 @@ object Supa {
             install(Postgrest)
             install(Storage)
             install(Realtime)
+            install(io.github.jan.supabase.functions.Functions)
         }
     }
 }

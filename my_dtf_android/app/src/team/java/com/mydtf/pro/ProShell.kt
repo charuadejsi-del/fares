@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Brush
 import androidx.compose.material.icons.rounded.Chat
 import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.ReceiptLong
@@ -62,7 +63,11 @@ data class Tab(val id: String, val label: String, val icon: ImageVector)
 
 @Composable
 fun ProShell(vm: ProViewModel) {
-    val tabs = when (vm.role) {
+    val tabs = if (com.mydtf.client.BuildConfig.ADMIN) listOf(
+        Tab("control", "التحكّم", Icons.Rounded.Dashboard), Tab("orders", "الطلبيات", Icons.Rounded.ReceiptLong),
+        Tab("machines", "الآلات", Icons.Rounded.Inventory2), Tab("chat", "الدردشة", Icons.Rounded.Chat),
+        Tab("more", "المزيد", Icons.Rounded.GridView),
+    ) else when (vm.role) {
         "printer" -> listOf(Tab("station", "المحطة", Icons.Rounded.Print), Tab("machines", "الآلات", Icons.Rounded.Inventory2))
         "designer" -> listOf(Tab("desk", "مكتب التصميم", Icons.Rounded.Brush))
         else -> listOf(Tab("control", "التحكّم", Icons.Rounded.Dashboard), Tab("orders", "الطلبيات", Icons.Rounded.ReceiptLong),
@@ -81,6 +86,7 @@ fun ProShell(vm: ProViewModel) {
                     "orders" -> OrdersMgr(vm)
                     "machines" -> MachinesScreen(vm)
                     "chat" -> ChatMgr(vm)
+                    "more" -> AdminMore(vm)
                     else -> {}
                 }
             }

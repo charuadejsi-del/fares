@@ -66,7 +66,7 @@ private fun ProRoot() {
     val vm: ProViewModel = viewModel()
     var intro by remember { mutableStateOf(!introShown) }
     LaunchedEffect(Unit) { if (vm.stage == Stage.Loading) vm.boot() }
-    if (intro) { Intro(subtitle = "فريق الورشة") { introShown = true; intro = false }; return }
+    if (intro) { Intro(subtitle = if (com.mydtf.client.BuildConfig.ADMIN) "لوحة المدير" else "فريق الورشة") { introShown = true; intro = false }; return }
     AnimatedContent(
         targetState = vm.stage,
         transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.96f)) togetherWith fadeOut() },
@@ -93,8 +93,8 @@ private fun ProLogin(vm: ProViewModel) {
     var pass by remember { mutableStateOf("") }
     Box(Modifier.fillMaxSize().background(Lux.nightBrush).imePadding(), contentAlignment = Alignment.Center) {
         LuxCard(Modifier.padding(20.dp).widthIn(max = 460.dp).fillMaxWidth().staggerIn(0), highlight = true) {
-            Text("My DTF Pro", style = MaterialTheme.typography.headlineMedium)
-            Text("تطبيق فريق الورشة", color = Lux.Muted, style = MaterialTheme.typography.bodyMedium)
+            Text(if (com.mydtf.client.BuildConfig.ADMIN) "My DTF Admin" else "My DTF Pro", style = MaterialTheme.typography.headlineMedium)
+            Text(if (com.mydtf.client.BuildConfig.ADMIN) "تطبيق المدير — كل الورشة بين يديك" else "تطبيق فريق الورشة", color = Lux.Muted, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(18.dp))
             LuxField(email, { email = it }, "البريد الإلكتروني", leading = Icons.Rounded.Mail, keyboard = KeyboardType.Email)
             Spacer(Modifier.height(10.dp))

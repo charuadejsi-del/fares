@@ -267,7 +267,7 @@ fun MachineCard(m: Machine, big: Boolean = false, onClick: () -> Unit) {
 /** Fiche machine : état, rouleau, gâche. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MachineSheet(vm: ProViewModel, id: String, onClose: () -> Unit) {
+fun MachineSheet(vm: ProViewModel, id: String, onEdit: ((Machine) -> Unit)? = null, onClose: () -> Unit) {
     val m = vm.board.firstOrNull { it.id == id } ?: return
     var mode by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
@@ -276,6 +276,7 @@ fun MachineSheet(vm: ProViewModel, id: String, onClose: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onClose, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Lux.Night2) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             MachineCard(m, big = true) {}
+            if (com.mydtf.client.BuildConfig.ADMIN && onEdit != null) GhostButton("تعديل الآلة (الاسم، العرض، الموديل)", { onEdit(m) }, Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (m.status == "down" || m.status == "maintenance")
                     GoldButton("عادت للعمل", modifier = Modifier.weight(1f), onClick = { vm.act(onDone = { err = it }) { Pro.machineStatus(id, "idle", null) } })
@@ -316,11 +317,15 @@ fun MachineSheet(vm: ProViewModel, id: String, onClose: () -> Unit) {
 @Composable
 fun MachinesScreen(vm: ProViewModel) {
     var sheet by remember { mutableStateOf<String?>(null) }
+    var form by remember { mutableStateOf<Machine?>(null) }
+    var adding by remember { mutableStateOf(false) }
     LazyColumn(contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (vm.board.isEmpty()) item { EmptyState(Icons.Rounded.Build, "لا توجد آلات", "تُضاف الآلات من الموقع الإداري") }
+        if (com.mydtf.client.BuildConfig.ADMIN) item { GoldButton("إضافة آلة", onClick = { adding = true }, modifier = Modifier.fillMaxWidth()) }
+        if (vm.board.isEmpty()) item { EmptyState(Icons.Rounded.Build, "لا توجد آلات", if (com.mydtf.client.BuildConfig.ADMIN) "أضف أول آلة بالزر أعلاه" else "تُضاف الآلات من الموقع الإداري") }
         itemsIndexed(vm.board, key = { _, m -> m.id }) { i, m -> Box(Modifier.staggerIn(i)) { MachineCard(m) { sheet = m.id } } }
     }
-    sheet?.let { MachineSheet(vm, it) { sheet = null } }
+    sheet?.let { MachineSheet(vm, it, onEdit = { m -> sheet = null; form = m }) { sheet = null } }
+    if (adding || form != null) MachineFormDialog(vm, form) { adding = false; form = null }
 }
 
 // =========================== Bureau du designer ===========================

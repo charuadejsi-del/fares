@@ -148,14 +148,17 @@ fun Cockpit(vm: ProViewModel) {
 fun OrdersMgr(vm: ProViewModel) {
     var tab by remember { mutableStateOf(0) }
     var open by remember { mutableStateOf<MgrOrder?>(null) }
-    val groups = listOf("جديدة" to listOf("new"), "قيد العمل" to listOf("in_design", "ready_to_print", "printing"), "جاهزة" to listOf("printed", "ready_pickup"), "التوصيل" to listOf("shipped"))
-    val list = vm.orders.filter { it.status in groups[tab].second }
+    val groups = listOf("جديدة" to listOf("new"), "قيد العمل" to listOf("in_design", "ready_to_print", "printing"), "جاهزة" to listOf("printed", "ready_pickup"), "التوصيل" to listOf("shipped")) +
+        (if (com.mydtf.client.BuildConfig.ADMIN) listOf("الأرشيف" to listOf("delivered", "rejected", "cancelled")) else emptyList())
+    var archive by remember { mutableStateOf<List<MgrOrder>>(emptyList()) }
+    LaunchedEffect(tab, vm.tick) { if (tab == 4) archive = runCatching { Admin.archive() }.getOrDefault(emptyList()) }
+    val list = if (tab == 4) archive else vm.orders.filter { it.status in groups[tab].second }
     LaunchedEffect(vm.tick, tab) { Thumbs.load(list.map { it.id }) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             groups.forEachIndexed { i, (t, st) ->
                 val on = i == tab
-                val n = vm.orders.count { it.status in st }
+                val n = if (i == 4) 0 else vm.orders.count { it.status in st }
                 Row(Modifier.clip(CircleShape).background(if (on) Lux.Gold.copy(alpha = 0.18f) else Lux.Surface).border(1.dp, if (on) Lux.Gold else Lux.Surface2, CircleShape)
                     .bouncyClick { tab = i }.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(t, color = if (on) Lux.GoldLight else Lux.Ivory, fontWeight = FontWeight.Bold); Spacer(Modifier.width(6.dp)); CountPill(n, if (i == 0) Lux.Danger else Lux.GoldDeep)
@@ -205,6 +208,7 @@ private fun OrderMgrSheet(vm: ProViewModel, o: MgrOrder, onClose: () -> Unit) {
             Text(listOfNotNull(o.shipName, o.shipPhone, o.shipWilaya, o.shipCommune).joinToString(" · "), color = Lux.Muted)
             o.clientNote?.let { Text("ملاحظة: $it", color = Lux.GoldLight) }
             ThumbStrip(o.id, 70, 5)
+            if (com.mydtf.client.BuildConfig.ADMIN) AdminOrderExtras(vm, o)
             when (o.status) {
                 "new" -> {
                     SectionTitle("تحويل إلى مصمّم")

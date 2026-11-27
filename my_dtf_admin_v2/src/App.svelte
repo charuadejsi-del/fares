@@ -1,7 +1,8 @@
 <script>
+  import { askNotify, notify } from './lib/notify.js';
   import { onMount } from 'svelte';
   import { sb, rpc, q, errMsg } from './lib/sb.js';
-  import { me, settings, staff, shift, badges, liveTick, tv, toast, openModal, closeSheet } from './lib/store.js';
+  import { me, settings, staff, shift, badges, liveTick, tv, toast, openModal, closeSheet, isMgr } from './lib/store.js';
   import { ROLE, time, dur, minsSince } from './lib/fmt.js';
   import Toast from './components/Toast.svelte';
   import Overlays from './components/Overlays.svelte';
@@ -102,14 +103,15 @@
     stage = 'app';
     syncRoute();
     refreshBadges();
+    askNotify();
     channel = sb.channel('admin-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_orders' }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_orders' }, e => { if (e.eventType === 'INSERT' && isMgr($me)) notify('طلبية جديدة رقم ' + e.new.code, (+e.new.billed_meters).toFixed(2) + ' م', 'o' + e.new.id); bump(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_rolls' }, bump)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_machines' }, bump)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dtf_settings' }, async () => { try { settings.set(await q(sb.from('dtf_settings').select('*').single())); } catch (_) {} bump(); })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_machine_events' }, bump)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_messages' }, bump)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_notifications' }, bump)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_messages' }, e => { if (!e.new.from_staff && isMgr($me)) notify('رسالة جديدة من زبون', e.new.body?.slice(0, 120), 'm' + e.new.client_id); bump(); })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_notifications' }, e => { if (e.new.user_id === $me.id) notify(e.new.title, e.new.body, 'n' + e.new.id); bump(); })
       .subscribe();
     beat = setInterval(() => { now = Date.now(); refreshBadges(); }, 60000);
   }

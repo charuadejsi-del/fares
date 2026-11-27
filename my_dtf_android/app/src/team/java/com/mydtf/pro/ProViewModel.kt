@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+const val ADMIN_ONLY = "هذا التطبيق خاص بالمدير — الفريق يستعمل تطبيق My DTF Pro"
+
 enum class Stage { Loading, Login, PinSetup, PinConfirm, ClockIn, App, Bye }
 
 /** État de la session « équipe » : connexion, pointage, données de travail en direct. */
@@ -48,6 +50,7 @@ class ProViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val p = Pro.me()
             if (p == null || p.role == "client" || !p.active) { Pro.signOut(); error = Pro.NOT_STAFF; stage = Stage.Login; return@launch }
+            if (com.mydtf.client.BuildConfig.ADMIN && p.role != "admin") { Pro.signOut(); error = ADMIN_ONLY; stage = Stage.Login; return@launch }
             me = p
             staff = runCatching { Pro.staff() }.getOrDefault(emptyList())
             if (p.role == "admin") { enter(); return@launch }
@@ -59,7 +62,10 @@ class ProViewModel(app: Application) : AndroidViewModel(app) {
 
     fun login(email: String, password: String) = viewModelScope.launch {
         busy = true; error = null
-        try { Pro.signIn(email.trim(), password); stage = Stage.Loading; boot() } catch (e: Exception) { error = if (e.message == Pro.NOT_STAFF) Pro.NOT_STAFF else friendlyError(e) }
+        try {
+            val p = Pro.signIn(email.trim(), password)
+            if (com.mydtf.client.BuildConfig.ADMIN && p.role != "admin") { Pro.signOut(); error = ADMIN_ONLY } else { stage = Stage.Loading; boot() }
+        } catch (e: Exception) { error = if (e.message == Pro.NOT_STAFF) Pro.NOT_STAFF else friendlyError(e) }
         busy = false
     }
 

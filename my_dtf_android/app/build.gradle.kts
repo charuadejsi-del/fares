@@ -37,12 +37,25 @@ android {
             dimension = "app"
             applicationId = "com.mydtf.client"
             resValue("string", "app_name", "My DTF")
+            buildConfigField("boolean", "ADMIN", "false")
         }
         create("pro") {
             dimension = "app"
             applicationId = "com.mydtf.pro"
             resValue("string", "app_name", "My DTF Pro")
+            buildConfigField("boolean", "ADMIN", "false")
         }
+        create("admin") {
+            dimension = "app"
+            applicationId = "com.mydtf.admin"
+            resValue("string", "app_name", "My DTF Admin")
+            buildConfigField("boolean", "ADMIN", "true")
+        }
+    }
+    // Code commun aux applications de l'équipe et de l'administrateur.
+    sourceSets {
+        getByName("pro").java.srcDir("src/team/java")
+        getByName("admin").java.srcDir("src/team/java")
     }
 
     buildTypes {
@@ -57,7 +70,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1,INDEX.LIST,DEPENDENCIES}" }
 }
 
@@ -83,6 +96,7 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:auth-kt")
     implementation("io.github.jan-tennert.supabase:storage-kt")
     implementation("io.github.jan-tennert.supabase:realtime-kt")
+    implementation("io.github.jan-tennert.supabase:functions-kt")
     implementation("io.ktor:ktor-client-okhttp:3.0.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")

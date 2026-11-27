@@ -142,7 +142,7 @@ data class Msg(
 data class Supply(val kind: String, val stock: Double, val alert: Double)
 
 @Serializable
-data class ShopState(@SerialName("is_open") val isOpen: Boolean = true, @SerialName("open_note") val openNote: String? = null)
+data class ShopState(@SerialName("is_open") val isOpen: Boolean = true, @SerialName("open_note") val openNote: String? = null, @SerialName("price_per_meter") val pricePerMeter: Double = 1400.0)
 
 // ---------------- Accès aux données ----------------
 
