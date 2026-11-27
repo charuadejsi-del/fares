@@ -28,28 +28,10 @@ SHOT 00i_butt
 SHOT 01_menu
 SHOT 02_run
 SHOT 03_butt
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: _pop_score (res://main.gd:384)
-ERROR: Tween (bound to /root/Main): started with no Tweeners.
-   at: step (scene/animation/tween.cpp:313)
 SHOT 04_down
 SHOT 05_chase
 SHOT 06_grab
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: _pop_score (res://main.gd:384)
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: big_word (res://main.gd:371)
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: _pop_score (res://main.gd:384)
-ERROR: Tween (bound to /root/Main): started with no Tweeners.
-   at: step (scene/animation/tween.cpp:313)
-ERROR: Tween (bound to /root/Main): started with no Tweeners.
-   at: step (scene/animation/tween.cpp:313)
 SHOT 06b_escape
 SHOT 06c_caught
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: big_word (res://main.gd:371)
-ERROR: Tween (bound to /root/Main): started with no Tweeners.
-   at: step (scene/animation/tween.cpp:313)
 SHOT 07_pile
 SHOT 08_result

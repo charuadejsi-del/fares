@@ -40,10 +40,6 @@ SMOKE world ok
 SMOKE move ok
 SMOKE jump ok
 SMOKE path ok
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: _pop_score (res://main.gd:384)
-ERROR: Tween (bound to /root/Main): started with no Tweeners.
-   at: step (scene/animation/tween.cpp:313)
 SMOKE headbutt ok
 SMOKE score ok
 ERROR: Parameter "m" is null.
@@ -54,13 +50,7 @@ ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
 ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: _pop_score (res://main.gd:384)
-ERROR: Tween (bound to /root/Main): started with no Tweeners.
-   at: step (scene/animation/tween.cpp:313)
 SMOKE crate ok
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: _pop_score (res://main.gd:384)
 ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
 ERROR: Parameter "m" is null.
@@ -69,21 +59,9 @@ ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
 ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
-ERROR: Tween (bound to /root/Main): started with no Tweeners.
-   at: step (scene/animation/tween.cpp:313)
 SMOKE grass ok
 SMOKE grab ok
 SMOKE grab_no_overlap ok
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: _pop_score (res://main.gd:384)
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: big_word (res://main.gd:371)
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: _pop_score (res://main.gd:384)
-ERROR: Tween (bound to /root/Main): started with no Tweeners.
-   at: step (scene/animation/tween.cpp:313)
-ERROR: Tween (bound to /root/Main): started with no Tweeners.
-   at: step (scene/animation/tween.cpp:313)
 SMOKE escape ok
 ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
@@ -93,10 +71,6 @@ ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
 ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: big_word (res://main.gd:371)
-ERROR: Tween (bound to /root/Main): started with no Tweeners.
-   at: step (scene/animation/tween.cpp:313)
 SMOKE caught ok
 SMOKE pile_no_overlap ok
 SMOKE result ok
@@ -227,10 +201,6 @@ ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
 SMOKE restart ok
 SMOKE grab2 ok
-SCRIPT ERROR: Invalid call. Nonexistent function 'set_ignore_time_scale' in base 'Tween'.
-          at: big_word (res://main.gd:371)
-ERROR: Tween (bound to /root/Main): started with no Tweeners.
-   at: step (scene/animation/tween.cpp:313)
 SMOKE grab_timeout ok
 SMOKE all ok
 ERROR: Parameter "m" is null.
