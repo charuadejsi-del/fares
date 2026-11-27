@@ -27,10 +27,10 @@ import kotlinx.serialization.json.put
 import kotlin.time.Duration.Companion.hours
 
 object Supa {
-    private const val URL = "https://pxifieuohgthtqkwasug.supabase.co"
+    // Valeurs de l'installation, injectées au build (voir app/build.gradle.kts, cfg()).
+    private const val URL = com.mydtf.client.BuildConfig.SUPABASE_URL
     // Clé publique « anon » : sans danger côté client, la sécurité est assurée par RLS.
-    private const val ANON_KEY =
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4aWZpZXVvaGd0aHRxa3dhc3VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxMzI3NDUsImV4cCI6MjEwODcwODc0NX0.pXYktWDzEcjzcwEFspJnul1zzdSkmiWlMra2ukQkG8k"
+    private const val ANON_KEY = com.mydtf.client.BuildConfig.SUPABASE_ANON_KEY
     const val BUCKET = "dtf-images"
 
     val client by lazy {
@@ -100,7 +100,7 @@ object Repo {
         }
     }
 
-    const val STAFF_ONLY = "هذا الحساب خاص بفريق الورشة، ادخل من موقع الإدارة mydtf-admin.pages.dev"
+    const val STAFF_ONLY = "هذا الحساب خاص بفريق الورشة، ادخل من موقع الإدارة " + com.mydtf.client.BuildConfig.ADMIN_URL
 
     suspend fun signOut() = sb.auth.signOut()
 

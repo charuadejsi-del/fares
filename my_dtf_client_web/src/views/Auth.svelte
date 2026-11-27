@@ -1,4 +1,5 @@
 <script>
+  import { CONFIG } from '../config.js';
   import { createEventDispatcher, onMount } from 'svelte';
   import { sb, errMsg } from '../lib/sb.js';
   import { myProfile, STAFF_ONLY } from '../lib/api.js';
@@ -31,7 +32,7 @@
 <div class="center">
   <div class="card auth fade-in">
     <img src="/icon.svg" alt="" width="58" height="58" class="logo" />
-    <h1>My DTF</h1>
+    <h1>{CONFIG.appName}</h1>
     <p class="muted small">ارفع صورك، احصل على السعر فوراً، وتابع طلبيتك مباشرة</p>
     <div class="seg" style="margin:18px auto 4px;display:flex;width:max-content"><button class:on={tab === 'login'} on:click={() => (tab = 'login')}>دخول</button><button class:on={tab === 'signup'} on:click={() => (tab = 'signup')}>حساب جديد</button></div>
     <form on:submit|preventDefault={tab === 'login' ? login : signup}>

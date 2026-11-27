@@ -130,7 +130,7 @@ fun AuthScreen(notice: String? = null) {
                 }
             }
             Spacer(Modifier.height(14.dp))
-            Text("My DTF", style = MaterialTheme.typography.displaySmall, color = Lux.Gold)
+            Text(com.mydtf.client.BuildConfig.APP_NAME, style = MaterialTheme.typography.displaySmall, color = Lux.Gold)
             Text("طباعة DTF احترافية — احسب سعرك في ثوانٍ", style = MaterialTheme.typography.bodyMedium, color = Lux.Muted, textAlign = TextAlign.Center)
             Spacer(Modifier.height(26.dp))
 

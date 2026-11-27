@@ -83,7 +83,7 @@ fun Intro(subtitle: String = "طباعة DTF", onDone: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(18.dp))
-            Text("My DTF", fontFamily = Tajawal, fontWeight = FontWeight.ExtraBold, fontSize = 34.sp, color = Lux.Ivory,
+            Text(com.mydtf.client.BuildConfig.APP_NAME, fontFamily = Tajawal, fontWeight = FontWeight.ExtraBold, fontSize = 34.sp, color = Lux.Ivory,
                 modifier = Modifier.graphicsLayer { alpha = title.value; translationY = (1 - title.value) * 30f })
             Text(subtitle, fontFamily = Tajawal, fontSize = 15.sp, color = Lux.GoldLight,
                 modifier = Modifier.graphicsLayer { alpha = title.value; translationY = (1 - title.value) * 40f })

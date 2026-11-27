@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import { CONFIG } from '../config.js';
 export const sb = createClient(
-  'https://pxifieuohgthtqkwasug.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4aWZpZXVvaGd0aHRxa3dhc3VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxMzI3NDUsImV4cCI6MjEwODcwODc0NX0.pXYktWDzEcjzcwEFspJnul1zzdSkmiWlMra2ukQkG8k',
+  CONFIG.supabaseUrl,
+  CONFIG.supabaseAnonKey,
   { realtime: { params: { eventsPerSecond: 5 } } },
 );
 export const BUCKET = 'dtf-images';

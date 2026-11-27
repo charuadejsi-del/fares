@@ -1,4 +1,5 @@
 <script>
+  import { CONFIG } from './config.js';
   import { askNotify, notify } from './lib/notify.js';
   import { onMount } from 'svelte';
   import { sb, rpc, q, errMsg } from './lib/sb.js';
@@ -187,7 +188,7 @@
   <div class="center">
     <form class="card auth" on:submit|preventDefault={login}>
       <img src="/icon.svg" alt="" width="56" height="56" />
-      <h1>My DTF</h1>
+      <h1>{CONFIG.appName}</h1>
       <p class="muted small">لوحة إدارة الورشة</p>
       <label for="em">البريد الإلكتروني</label>
       <input id="em" type="email" dir="ltr" autocomplete="username" required bind:value={email} />
@@ -219,7 +220,7 @@
 {:else}
   <div class="shell" class:tv={$tv}>
     <aside class="side" class:mini={collapsed}>
-      <div class="brand"><span class="logo"><Icon name="roll" size={20} stroke={2.2} /></span><div class="bt"><b>My DTF</b><div class="gold tiny">تسيير الورشة</div></div></div>
+      <div class="brand"><span class="logo"><Icon name="roll" size={20} stroke={2.2} /></span><div class="bt"><b>{CONFIG.appName}</b><div class="gold tiny">تسيير الورشة</div></div></div>
       <nav>
         {#each GROUPS as [g, gt]}
           {#if nav.some(n => n.g === g)}

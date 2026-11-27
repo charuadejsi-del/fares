@@ -100,7 +100,7 @@ fun HomeScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text("مرحباً ${firstName} 👋", style = MaterialTheme.typography.headlineSmall)
-                                    Text("My DTF · طباعة على الفيلم", style = MaterialTheme.typography.bodySmall, color = Lux.Muted)
+                                    Text("${com.mydtf.client.BuildConfig.APP_NAME} · طباعة على الفيلم", style = MaterialTheme.typography.bodySmall, color = Lux.Muted)
                                 }
                                 IconButton(onClick = onNotifications) {
                                     BadgedBox(badge = { if (vm.unread > 0) Badge(containerColor = Lux.Gold, contentColor = Lux.OnAccent) { Text("${vm.unread}") } }) {

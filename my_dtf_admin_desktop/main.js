@@ -4,7 +4,8 @@ const { app, BrowserWindow, Menu, Tray, shell, nativeImage, session } = require(
 const path = require('path');
 const fs = require('fs');
 
-const URL = 'https://mydtf-admin.pages.dev/';
+// Adresse du site d'administration de l'installation : package.json → "mydtf"."adminUrl".
+const URL = (require('./package.json').mydtf || {}).adminUrl || 'https://mydtf-admin.pages.dev/';
 const ICON = path.join(__dirname, 'build', 'icon.png');
 const STATE = () => path.join(app.getPath('userData'), 'window.json');
 let win, tray, quitting = false;

@@ -1,10 +1,11 @@
+import { CONFIG } from '../config.js';
 // Accès aux données du client connecté.
 import { sb, q, rpc, BUCKET } from './sb.js';
 import { me, settings, orders, messages, notifs, liveTick } from './store.js';
 import { get } from 'svelte/store';
 
 export const uid = () => get(me)?.id;
-export const STAFF_ONLY = 'هذا الحساب خاص بفريق الورشة، ادخل من موقع الإدارة mydtf-admin.pages.dev';
+export const STAFF_ONLY = 'هذا الحساب خاص بفريق الورشة، ادخل من موقع الإدارة ' + CONFIG.adminUrl;
 
 export async function myProfile() {
   const { data: { user } } = await sb.auth.getUser();

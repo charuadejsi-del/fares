@@ -5,6 +5,16 @@ plugins {
     kotlin("plugin.compose")
 }
 
+// Configuration d'une installation (atelier) : -Pmydtf.xxx=... ou variables d'environnement MYDTF_XXX,
+// sinon valeurs de l'atelier d'origine. Aucune modification du code n'est nécessaire.
+fun cfg(key: String, def: String): String =
+    (project.findProperty("mydtf.$key") as String?) ?: System.getenv("MYDTF_" + key.uppercase()) ?: def
+val cfgSupabaseUrl = cfg("supabaseUrl", "https://pxifieuohgthtqkwasug.supabase.co")
+val cfgAnonKey = cfg("anonKey", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4aWZpZXVvaGd0aHRxa3dhc3VnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxMzI3NDUsImV4cCI6MjEwODcwODc0NX0.pXYktWDzEcjzcwEFspJnul1zzdSkmiWlMra2ukQkG8k")
+val cfgAppName = cfg("appName", "My DTF")
+val cfgAppId = cfg("appId", "com.mydtf")
+val cfgAdminUrl = cfg("adminUrl", "mydtf-admin.pages.dev")
+
 android {
     namespace = "com.mydtf.client"
     compileSdk = 35
@@ -15,6 +25,10 @@ android {
         targetSdk = 35
         versionCode = (System.getenv("BUILD_NUMBER") ?: "1").toInt()
         versionName = "1.2." + (System.getenv("BUILD_NUMBER") ?: "0")
+        buildConfigField("String", "SUPABASE_URL", "\"$cfgSupabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$cfgAnonKey\"")
+        buildConfigField("String", "ADMIN_URL", "\"$cfgAdminUrl\"")
+        buildConfigField("String", "APP_NAME", "\"$cfgAppName\"")
     }
 
     signingConfigs {
@@ -35,20 +49,20 @@ android {
     productFlavors {
         create("client") {
             dimension = "app"
-            applicationId = "com.mydtf.client"
-            resValue("string", "app_name", "My DTF")
+            applicationId = "$cfgAppId.client"
+            resValue("string", "app_name", cfgAppName)
             buildConfigField("boolean", "ADMIN", "false")
         }
         create("pro") {
             dimension = "app"
-            applicationId = "com.mydtf.pro"
-            resValue("string", "app_name", "My DTF Pro")
+            applicationId = "$cfgAppId.pro"
+            resValue("string", "app_name", "$cfgAppName Pro")
             buildConfigField("boolean", "ADMIN", "false")
         }
         create("admin") {
             dimension = "app"
-            applicationId = "com.mydtf.admin"
-            resValue("string", "app_name", "My DTF Admin")
+            applicationId = "$cfgAppId.admin"
+            resValue("string", "app_name", "$cfgAppName Admin")
             buildConfigField("boolean", "ADMIN", "true")
         }
     }

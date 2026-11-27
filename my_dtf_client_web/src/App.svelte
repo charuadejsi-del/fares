@@ -1,4 +1,5 @@
 <script>
+  import { CONFIG } from './config.js';
   import { onMount } from 'svelte';
   import { sb, errMsg } from './lib/sb.js';
   import { me, notifs, messages, liveTick, toast } from './lib/store.js';
@@ -45,7 +46,7 @@
 {:else}
   <div class="shell">
     <header class="top">
-      <a href="#/" class="brand"><img src="/icon.svg" alt="" width="34" height="34" /><b>My DTF</b></a>
+      <a href="#/" class="brand"><img src="/icon.svg" alt="" width="34" height="34" /><b>{CONFIG.appName}</b></a>
       <nav class="desk">{#each NAV as [id, ic, t]}<a href="#/{id === 'home' ? '' : id}" class:on={route === id}><Icon name={ic} size={18} />{t}{#if id === 'chat' && unreadChat}<span class="badge">{unreadChat}</span>{/if}</a>{/each}</nav>
       <a class="bell" href="#/notifications" aria-label="الإشعارات"><Icon name="inbox" size={22} />{#if unread}<span class="badge">{unread}</span>{/if}</a>
     </header>

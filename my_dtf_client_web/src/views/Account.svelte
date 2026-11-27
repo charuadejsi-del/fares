@@ -1,4 +1,5 @@
 <script>
+  import { CONFIG } from '../config.js';
   import { onMount, createEventDispatcher } from 'svelte';
   import { sb, q, errMsg } from '../lib/sb.js';
   import { me, settings, toast } from '../lib/store.js';
@@ -32,7 +33,7 @@
   </div>
   <div class="card">
     <div class="section-title">الورشة</div>
-    <b>{$settings?.workshop_name || 'My DTF'}</b>
+    <b>{$settings?.workshop_name || CONFIG.appName}</b>
     {#if $settings?.workshop_phone}<div><a class="ltr" href="tel:{$settings.workshop_phone}">{$settings.workshop_phone}</a></div>{/if}
     {#if $settings?.workshop_address}<div class="muted small">{$settings.workshop_address}</div>{/if}
     <div class="faint tiny" style="margin-top:10px">نفس الحساب يعمل في تطبيق الهاتف وفي هذا الموقع.</div>

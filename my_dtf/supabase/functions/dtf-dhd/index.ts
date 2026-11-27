@@ -153,7 +153,7 @@ async function create(db: any, b: any) {
 
 async function track(db: any) {
   const { data: list, error } = await db.from("dtf_orders").select("id,code,carrier,tracking_number,ship_status,status")
-    .in("carrier", Object.values(CARRIERS).map(c => c.name)).not("tracking_number", "is", null).or("ship_status.is.null,ship_status.not.in.(delivered,returned,cancelled)").limit(300);
+    .in("carrier", Object.values(CARRIERS).map(c => c.name)).not("tracking_number", "is", null).not("shipped_at", "is", null).neq("status", "delivered").or("ship_status.is.null,ship_status.not.in.(delivered,returned,cancelled)").limit(300);
   if (error) throw error;
   let updated = 0; const errors: string[] = [];
   for (const c of Object.values(CARRIERS)) {
