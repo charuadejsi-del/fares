@@ -877,9 +877,11 @@ func _run_smoke() -> void:
 	var cm: float = c0.distance_to(crate.global_position)
 	_check("crate", cm > 0.4, "moved=%.2f" % cm)
 	sheep.energy = 10.0
-	spawn_grass_at(sheep.global_position)
-	await _wait(0.2)
-	_check("grass", sheep.energy > 30.0, "energy=%.0f" % sheep.energy)
+	var gr := spawn_grass_at(sheep.global_position)
+	var gpos: Vector3 = gr.global_position
+	await _wait(0.3)
+	var sp_now: Vector3 = sheep.global_position
+	_check("grass", sheep.energy > 30.0, "energy=%.0f state=%d sheep=%s grass=%s n=%d ts=%.2f" % [sheep.energy, state, sp_now, gpos, grasses.size(), Engine.time_scale])
 	# الـ Dive: يتحضر ويطير، والخروف يتنحى لجنب → تفاداه
 	var fw: Vector3 = sheep.facing
 	var dk = spawn_chaser("kid", sheep.global_position + fw * 4.5)
