@@ -3,11 +3,16 @@
   import { me, staff, staffName, settings, liveTick, toast, closeSheet } from '../lib/store.js';
   import { da, m, cm, size, num, dt, MODE, STATUS } from '../lib/fmt.js';
   import Chip from '../components/Chip.svelte';
+  import FilmCanvas from '../components/FilmCanvas.svelte';
+  import Icon from '../components/Icon.svelte';
+  import { nest } from '../lib/nest.js';
+  import { board, loadBoard, myMachine } from '../lib/store.js';
 
   export let id;
   export let work = false; // vue designer/imprimeur : pas de prix
   let o = null, imgs = [], thumbs = {}, full = {}, ev = [], issues = [], busy = false, err = '';
-  let designerSel = '', finalLen = '', carrier = 'DHD', tracking = '', paid = '', reason = '';
+  let designerSel = '', finalLen = '', carrier = 'DHD', tracking = '', paid = '', reason = '', machineSel = '', load2 = {};
+  const REJECT = ['الصور غير واضحة أو بدقّة ضعيفة', 'المقاسات غير مناسبة للطباعة', 'الصورة تحتاج خلفية شفافة', 'محتوى غير مسموح بطباعته'];
 
   $: role = $me?.role;
   $: mgr = role === 'admin' || role === 'manager';
@@ -29,12 +34,27 @@
       thumbs = await signedUrls(imgs.map(i => i.thumb_path || i.storage_path));
       full = await signedUrls(imgs.map(i => i.storage_path), true);
       if (!finalLen) finalLen = String(+(o.final_length_cm || o.estimated_length_cm));
+      if (mgr && o.status === 'new') {
+        const [busyD, att] = await Promise.all([
+          q(sb.from('dtf_orders').select('designer_id').eq('status', 'in_design')),
+          q(sb.from('dtf_attendance').select('user_id').is('clock_out', null)),
+        ]);
+        load2 = Object.fromEntries(designers.map(d => [d.id, { n: busyD.filter(x => x.designer_id === d.id).length, here: att.some(a => a.user_id === d.id) }]));
+        const best = [...designers].sort((a, b) => (load2[b.id].here - load2[a.id].here) || (load2[a.id].n - load2[b.id].n))[0];
+        if (!designerSel) designerSel = best?.id || '';
+      }
+      if (['ready_to_print', 'printing'].includes(o.status) && !$board) loadBoard();
       if (!designerSel) designerSel = o.designer_id || designers[0]?.id || '';
       if (!paid && o.print_amount != null) paid = String(+o.print_amount + +o.delivery_fee);
     } catch (e) { err = errMsg(e); }
   }
   $: id, $liveTick, load();
 
+  $: machines = ($board || []).filter(x => x.active && !['down', 'maintenance'].includes(x.status));
+  $: if (machines.length && !machines.find(x => x.id === machineSel)) machineSel = machines.find(x => x.id === $myMachine)?.id || machines[0].id;
+  $: imgMeta = Object.fromEntries(imgs.map((im, k) => [im.id, { url: thumbs[im.thumb_path || im.storage_path], index: k }]));
+  $: film = imgs.length && $settings ? nest(imgs, +$settings.film_width_cm || 58, +$settings.gap_cm || 0.3, $settings.allow_rotation !== false) : null;
+  $: suggested = designers.length ? [...designers].sort((a, b) => ((load2[b.id]?.here || 0) - (load2[a.id]?.here || 0)) || ((load2[a.id]?.n || 0) - (load2[b.id]?.n || 0)))[0]?.id : null;
   $: preview = (() => {
     const s = $settings; const L = +String(finalLen).replace(',', '.');
     if (!s || !(L > 0)) return null;
@@ -58,7 +78,7 @@
         await rpc('dtf_design_done', { p_order: id, p_final_length_cm: L }); toast('التصميم جاهز، أُرسل إلى طابور الطباعة');
         if (!mgr) { closeSheet(); liveTick.update(n => n + 1); return; }
       } else if (kind === 'start') {
-        await rpc('dtf_start_printing', { p_order: id }); toast('بدأت الطباعة وخُصم الفيلم من الرولو');
+        await rpc('dtf_start_printing', { p_order: id, p_machine: machineSel || null }); toast('بدأت الطباعة وخُصم الفيلم من رولو الآلة'); loadBoard();
       } else if (kind === 'finish') {
         await rpc('dtf_finish_printing', { p_order: id }); toast('انتهت الطباعة');
       } else if (kind === 'ship') {
@@ -104,11 +124,17 @@
       <div class="section-title">الخطوة التالية</div>
       {#if o.status === 'new' && mgr}
         {#if designers.length}
-          <label for="ds">اختر المصمّم</label>
-          <div class="row"><select id="ds" bind:value={designerSel}>{#each designers as d}<option value={d.id}>{d.full_name}</option>{/each}</select>
-            <button class="btn" disabled={busy} on:click={() => act('assign')}>قبول وتحويل</button></div>
+          <label>اختر المصمّم</label>
+          <div class="dz">{#each designers as d}{@const l = load2[d.id] || {}}
+            <button class="dsel" class:on={designerSel === d.id} on:click={() => (designerSel = d.id)}>
+              <span class="dot {l.here ? 'run' : ''}"></span><b class="grow">{d.full_name}</b>
+              <span class="faint tiny">{l.here ? 'حاضر' : 'غائب'} · {num(l.n || 0)} ملف</span>
+              {#if d.id === suggested}<span class="chip c-violet">مقترح</span>{/if}
+            </button>{/each}</div>
+          <button class="btn lg block" style="margin-top:10px" disabled={busy || !designerSel} on:click={() => act('assign')}><Icon name="check" size={18} />قبول وتحويل إلى التصميم</button>
         {:else}<div class="notice small">لا يوجد أي مصمّم بعد. أضف مصمّماً من صفحة «الفريق» ثم عُد إلى هذه الطلبية.</div>{/if}
         <label for="rs">أو رفض الطلبية (السبب يظهر للزبون)</label>
+        <div class="row wrap" style="margin-bottom:8px">{#each REJECT as r}<button class="btn quiet sm" on:click={() => (reason = r)}>{r}</button>{/each}</div>
         <div class="row"><input id="rs" bind:value={reason} placeholder="مثال: الصور غير واضحة" /><button class="btn danger" disabled={busy} on:click={() => act('reject')}>رفض</button></div>
       {:else if canDesign}
         {#if mgr && designers.length > 1}
@@ -122,7 +148,9 @@
         <button class="btn lg block" style="margin-top:12px" disabled={busy} on:click={() => act('design')}>التصميم جاهز — إرسال إلى الطباعة</button>
         <p class="faint tiny" style="margin-top:6px">يدخل الملف طابور الطباعة، ويأخذه أي طابع حاضر.</p>
       {:else if canStart}
-        <button class="btn lg block" disabled={busy} on:click={() => act('start')}>بدء الطباعة — يُخصم {m(o.billed_meters)} من الرولو</button>
+        {#if machines.length > 1}<label for="msel">الآلة</label>
+          <select id="msel" bind:value={machineSel}>{#each machines as x}<option value={x.id}>{x.name} — {x.roll_code ? `رولو ${x.roll_code}: ${(+x.roll_remaining).toFixed(1)} م` : 'بدون رولو'}</option>{/each}</select>{/if}
+        <button class="btn lg block" style="margin-top:10px" disabled={busy} on:click={() => act('start')}><Icon name="play" size={18} />بدء الطباعة — يُخصم {m(o.billed_meters)}</button>
       {:else if canFinish}
         <button class="btn lg block" disabled={busy} on:click={() => act('finish')}>انتهت الطباعة</button>
       {/if}
@@ -147,6 +175,14 @@
     {#if mgr && o.tracking_number}<div class="small" style="margin-top:6px">{o.carrier} · <b class="ltr">{o.tracking_number}</b></div>{/if}
     {#if mgr}<a class="btn quiet sm" style="margin-top:10px" href="#chat" on:click={() => { sessionStorage.setItem('chatWith', o.client_id); closeSheet(); }}>مراسلة الزبون</a>{/if}
   </div>
+
+  {#if film && !film.error && ['new', 'in_design', 'ready_to_print'].includes(o.status)}
+    <div class="card" style="margin-top:12px">
+      <div class="section-title">ترتيب مقترح على الفيلم<span class="end small muted">{cm(film.length)} · امتلاء <span class="num">{Math.round(film.fill * 100)}%</span></span></div>
+      <FilmCanvas result={film} images={imgMeta} height={340} />
+      <p class="faint tiny" style="margin-top:6px">عرض {cm(film.width)} · فراغ {cm(+$settings.gap_cm)} · الترتيب النهائي يُضبط في فوتوشوب ويُدخل الطول الحقيقي أعلاه.</p>
+    </div>
+  {/if}
 
   <div class="card" style="margin-top:12px">
     <div class="row between"><div class="section-title" style="margin:0">الصور ({num(imgs.length)})</div>{#if imgs.length}<button class="btn ghost sm" on:click={downloadAll}>تنزيل الكل</button>{/if}</div>
@@ -178,6 +214,9 @@
 
 <style>
   .total { font-size: 22px; font-weight: 700; color: var(--gold); }
+  .dz { display: flex; flex-direction: column; gap: 6px; }
+  .dsel { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--line); text-align: right; }
+  .dsel.on { border-color: var(--accent); background: var(--accent-soft); }
   .imgs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
   .im { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 6px; text-align: center; }
   .im img { width: 100%; height: 100px; object-fit: contain; border-radius: 8px; background: repeating-conic-gradient(var(--card2) 0 25%, var(--bg2) 0 50%) 50% / 14px 14px; }

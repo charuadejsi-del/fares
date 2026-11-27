@@ -23,3 +23,10 @@ export const STATUS = {
   shipped: ['عند شركة التوصيل', 'indigo'], delivered: ['مُسلَّمة', 'green'], rejected: ['مرفوضة', 'red'], cancelled: ['ملغاة', 'red'],
 };
 export const MODE = { pickup: 'استلام من الورشة', home: 'توصيل إلى المنزل', stopdesk: 'مكتب شركة التوصيل' };
+export const clock = mn => { const t = Math.max(0, Math.floor(mn * 60)); const h = Math.floor(t / 3600), x = Math.floor((t % 3600) / 60), s = t % 60;
+  return ltr(h ? `${h}:${pad(x)}:${pad(s)}` : `${pad(x)}:${pad(s)}`); };
+export const ACT = {
+  new: 'أرسل طلبية جديدة', in_design: 'حوّل إلى التصميم', ready_to_print: 'أنهى التصميم', printing: 'بدأ الطباعة',
+  printed: 'أنهى الطباعة', ready_pickup: 'أنهى الطباعة — جاهزة للاستلام', shipped: 'سلّم لشركة التوصيل', delivered: 'سلّم للزبون',
+  rejected: 'رفض', cancelled: 'ألغى', idle: 'الآلة جاهزة', running: 'الآلة تطبع', maintenance: 'صيانة', down: 'عطل',
+};
