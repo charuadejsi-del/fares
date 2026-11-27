@@ -94,7 +94,7 @@ object Admin {
     suspend fun filmMoves(): List<FilmMove> = sb.from("dtf_film_moves").select { order("created_at", SortOrder.DESCENDING); limit(60) }.decodeList()
     suspend fun addRolls(count: Int, length: Double, price: Double, supplier: String?) =
         exec("dtf_add_rolls", buildJsonObject { put("p_count", count); put("p_length_m", length); put("p_unit_price", price); put("p_supplier", supplier); put("p_note", null as String?) })
-    suspend fun supplies(): List<SupplyFull> = sb.from("dtf_supplies").select { order("kind") }.decodeList()
+    suspend fun supplies(): List<SupplyFull> = sb.from("dtf_supplies").select { order("kind", SortOrder.ASCENDING) }.decodeList()
     suspend fun buySupply(kind: String, qty: Double, total: Double, supplier: String?) =
         exec("dtf_add_supply", buildJsonObject { put("p_kind", kind); put("p_qty", qty); put("p_total", total); put("p_supplier", supplier); put("p_note", null as String?) })
     suspend fun adjustSupply(kind: String, real: Double) = exec("dtf_adjust_supply", buildJsonObject { put("p_kind", kind); put("p_real", real); put("p_note", null as String?) })
@@ -118,7 +118,7 @@ object Admin {
     suspend fun attendance(from: String): List<AttendanceRow> = sb.from("dtf_attendance").select { filter { gte("work_date", from) }; order("clock_in", SortOrder.DESCENDING) }.decodeList()
 
     // Équipe
-    suspend fun team(): List<TeamMember> = sb.from("dtf_profiles").select { filter { neq("role", "client") }; order("full_name") }.decodeList()
+    suspend fun team(): List<TeamMember> = sb.from("dtf_profiles").select { filter { neq("role", "client") }; order("full_name", SortOrder.ASCENDING) }.decodeList()
     suspend fun setActive(id: String, active: Boolean) { sb.from("dtf_profiles").update(buildJsonObject { put("active", active) }) { filter { eq("id", id) } } }
     suspend fun resetPin(id: String) = exec("dtf_pin_reset", buildJsonObject { put("p_user", id) })
     suspend fun edge(body: JsonObject) {
