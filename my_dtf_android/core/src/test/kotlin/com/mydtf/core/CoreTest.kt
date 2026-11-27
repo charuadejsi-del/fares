@@ -66,12 +66,12 @@ class CoreTest {
         assertTrue(Algeria.communesOf(6).size > 40)
     }
 
-    @org.junit.Test fun wholesaleTiers() {
+    @Test fun wholesaleTiers() {
         val s = PricingSettings(1400.0, 0.0, 0.1, listOf(20.0 to 1300.0, 50.0 to 1200.0))
-        org.junit.Assert.assertEquals(21000.0, computeQuote(1500.0, s).printAmount, 0.01)
-        org.junit.Assert.assertEquals(32500.0, computeQuote(2500.0, s).printAmount, 0.01)
-        org.junit.Assert.assertEquals(72000.0, computeQuote(6000.0, s).printAmount, 0.01)
-        org.junit.Assert.assertEquals(15000.0, computeQuote(1500.0, s.copy(special = 1000.0)).printAmount, 0.01)
-        org.junit.Assert.assertEquals(20.0 to 1300.0, s.nextTier(15.0))
+        assertEquals(21000.0, computeQuote(1500.0, s).printAmount, 0.01)
+        assertEquals(32500.0, computeQuote(2500.0, s).printAmount, 0.01)
+        assertEquals(72000.0, computeQuote(6000.0, s).printAmount, 0.01)
+        assertEquals(15000.0, computeQuote(1500.0, s.copy(special = 1000.0)).printAmount, 0.01)
+        assertEquals(20.0 to 1300.0, s.nextTier(15.0))
     }
 }
