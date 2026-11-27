@@ -16,6 +16,10 @@ ERROR: Condition "status < 0" is true. Returning: ERR_CANT_OPEN
 WARNING: All audio drivers failed, falling back to the dummy driver.
      at: initialize (servers/audio_server.cpp:247)
 
+SHOT 00a_front
+SHOT 00b_side
+SHOT 00c_back
+SHOT 00d_top
 SHOT 01_menu
 SHOT 02_run
 SHOT 03_butt

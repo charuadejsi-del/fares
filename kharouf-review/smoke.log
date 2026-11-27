@@ -1,13 +1,42 @@
 Godot Engine v4.3.stable.official.77dcf97d8 - https://godotengine.org
 
 SMOKE start
+MODEL aabb pos=(-0.375877, 0, -0.958384) size=(0.751753, 1.35, 1.916769) meshes=1
+MODEL bones=33
+MODEL bone 0 Hips parent=-1 at=(0.00, 0.84, -0.42)
+MODEL bone 1 Spine parent=0 at=(0.00, 0.83, -0.24)
+MODEL bone 2 Spine1 parent=1 at=(0.00, 0.81, -0.05)
+MODEL bone 3 Spine2 parent=2 at=(0.00, 0.81, 0.14)
+MODEL bone 4 Spine3 parent=3 at=(0.00, 0.81, 0.32)
+MODEL bone 5 Neck parent=4 at=(0.00, 0.93, 0.43)
+MODEL bone 6 Neck1 parent=5 at=(0.00, 1.00, 0.51)
+MODEL bone 7 Head parent=6 at=(0.00, 1.12, 0.61)
+MODEL bone 8 Jaw parent=7 at=(0.00, 1.08, 0.76)
+MODEL bone 9 LeftShoulder parent=4 at=(0.11, 0.73, 0.34)
+MODEL bone 10 LeftArm parent=9 at=(0.13, 0.54, 0.31)
+MODEL bone 11 LeftForeArm parent=10 at=(0.12, 0.31, 0.27)
+MODEL bone 12 LeftFrontFoot parent=11 at=(0.12, 0.12, 0.26)
+MODEL bone 13 LeftFrontToeBase parent=12 at=(0.12, 0.03, 0.31)
+MODEL bone 14 RightShoulder parent=4 at=(-0.11, 0.73, 0.34)
+MODEL bone 15 RightArm parent=14 at=(-0.13, 0.54, 0.31)
+MODEL bone 16 RightForeArm parent=15 at=(-0.12, 0.31, 0.27)
+MODEL bone 17 RightFrontFoot parent=16 at=(-0.12, 0.12, 0.26)
+MODEL bone 18 RightFrontToeBase parent=17 at=(-0.12, 0.03, 0.31)
+MODEL bone 19 Tail1 parent=0 at=(0.00, 0.86, -0.57)
+MODEL bone 20 Tail2 parent=19 at=(0.00, 0.79, -0.63)
+MODEL bone 21 Tail3 parent=20 at=(0.00, 0.70, -0.68)
+MODEL bone 22 Tail4 parent=21 at=(0.00, 0.61, -0.73)
+MODEL bone 23 Tail5 parent=22 at=(0.00, 0.55, -0.79)
+MODEL bone 24 Tail6 parent=23 at=(0.00, 0.52, -0.87)
+MODEL bone 25 LeftUpLeg parent=0 at=(0.12, 0.77, -0.42)
+MODEL bone 26 LeftLeg parent=25 at=(0.13, 0.52, -0.45)
+MODEL bone 27 LeftHindFoot parent=26 at=(0.12, 0.32, -0.57)
+MODEL bone 28 LeftHindToeBase parent=27 at=(0.14, 0.06, -0.52)
+MODEL bone 29 RightUpLeg parent=0 at=(-0.12, 0.77, -0.42)
+MODEL bone 30 RightLeg parent=29 at=(-0.13, 0.52, -0.45)
+MODEL bone 31 RightHindFoot parent=30 at=(-0.12, 0.32, -0.57)
+MODEL bone 32 RightHindToeBase parent=31 at=(-0.14, 0.06, -0.52)
 SMOKE world ok
-ERROR: Parameter "m" is null.
-   at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
-ERROR: Parameter "m" is null.
-   at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
-ERROR: Parameter "m" is null.
-   at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
 ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
 SMOKE move ok
@@ -36,6 +65,14 @@ SMOKE grass ok
 SMOKE caught ok
 SMOKE result ok
 SMOKE save ok
+ERROR: Parameter "m" is null.
+   at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
+ERROR: Parameter "m" is null.
+   at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
+ERROR: Parameter "m" is null.
+   at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
+ERROR: Parameter "m" is null.
+   at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
 ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
 ERROR: Parameter "m" is null.
@@ -260,13 +297,3 @@ ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
 ERROR: Parameter "m" is null.
    at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
-ERROR: Parameter "m" is null.
-   at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
-ERROR: Parameter "m" is null.
-   at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
-ERROR: Parameter "m" is null.
-   at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
-ERROR: Parameter "m" is null.
-   at: mesh_get_surface_count (servers/rendering/dummy/storage/mesh_storage.h:120)
-WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
-     at: cleanup (core/object/object.cpp:2284)
