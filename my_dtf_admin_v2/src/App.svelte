@@ -12,6 +12,7 @@
   import Designer from './views/Designer.svelte';
   import Printer from './views/Printer.svelte';
   import Icon from './components/Icon.svelte';
+  import Costs from './views/Costs.svelte';
   import Orders from './views/Orders.svelte';
   import Stock from './views/Stock.svelte';
   import Perf from './views/Perf.svelte';
@@ -36,13 +37,14 @@
     { id: 'machines', icon: 'machine', t: 'الآلات', roles: ['admin', 'manager', 'printer'] },
     { id: 'stock', icon: 'stock', t: 'المخزون', roles: ['admin', 'manager', 'printer'] },
     { id: 'chat', icon: 'chat', t: 'الدردشة', roles: ['admin', 'manager'] },
+    { id: 'costs', icon: 'coins', t: 'التكاليف والأرباح', roles: ['admin'] },
     { id: 'perf', icon: 'trophy', t: 'الأداء', roles: ['admin', 'manager'] },
     { id: 'attendance', icon: 'clock', t: 'الحضور', roles: ['admin', 'manager'] },
     { id: 'team', icon: 'team', t: 'الفريق', roles: ['admin'] },
     { id: 'settings', icon: 'settings', t: 'الإعدادات', roles: ['admin'] },
     { id: 'account', icon: 'user', t: 'حسابي', roles: ['manager', 'designer', 'printer'] },
   ];
-  $: VIEWS = { dash: Control, orders: Orders, work: $me?.role === 'printer' ? Printer : Designer, machines: Machines, stock: Stock, perf: Perf, attendance: Attendance, team: Team, chat: Chat, settings: Settings, account: Account };
+  $: VIEWS = { dash: Control, orders: Orders, work: $me?.role === 'printer' ? Printer : Designer, machines: Machines, costs: Costs, stock: Stock, perf: Perf, attendance: Attendance, team: Team, chat: Chat, settings: Settings, account: Account };
 
   $: nav = $me ? NAV.filter(n => n.roles.includes($me.role)) : [];
   $: mobileNav = nav.slice(0, 5);
