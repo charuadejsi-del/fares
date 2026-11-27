@@ -24,13 +24,15 @@ Deno.serve(async (req) => {
 
   // 1) Qui appelle ?
   const authHeader = req.headers.get("Authorization") ?? "";
-  const asUser = createClient(url, anon, { global: { headers: { Authorization: authHeader } } });
-  const { data: u, error: ue } = await asUser.auth.getUser();
-  if (ue || !u?.user) return json({ error: "غير مسجّل" }, 401);
+  if (!authHeader.startsWith("Bearer ")) return json({ error: "غير مسجّل" }, 401);
+  // La signature du jeton est vérifiée par la base (PostgREST) : on ne dépend pas de la session
+  // côté Auth, qui peut avoir été renouvelée/révoquée alors que le jeton reste valide.
+  const asUser = createClient(url, anon, { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } });
+  const { data: role, error: re } = await asUser.rpc("dtf_my_role");
+  if (re) return json({ error: "انتهت جلستك — أعد الدخول بحسابك" }, 401);
+  if (role !== "admin") return json({ error: "هذه العملية خاصة بالمدير" }, 403);
 
   const admin = createClient(url, service, { auth: { persistSession: false } });
-  const { data: me } = await admin.from("dtf_profiles").select("role, active").eq("id", u.user.id).maybeSingle();
-  if (!me || me.role !== "admin" || !me.active) return json({ error: "هذه العملية خاصة بالمدير" }, 403);
 
   let body: Record<string, string>;
   try { body = await req.json(); } catch { return json({ error: "JSON invalide" }, 400); }
