@@ -130,6 +130,40 @@ class NewOrderViewModel : ViewModel() {
 
     fun remove(img: PickedImage) { images.remove(img) }
 
+    private var reordered = false
+
+    /** « Refaire la même commande » : recharge les images et mesures d'une ancienne commande. */
+    fun loadFrom(context: Context, orderId: String) {
+        if (reordered) return
+        reordered = true
+        importing = true
+        viewModelScope.launch {
+            try {
+                val rows = Repo.orderImages(orderId)
+                val picked = withContext(Dispatchers.IO) {
+                    rows.mapIndexed { i, r ->
+                        val bytes = Repo.downloadImage(r.storagePath)
+                        val name = r.storagePath.substringAfterLast('/').substringAfter('_')
+                        val f = java.io.File(context.cacheDir, "reorder_${i}_$name").apply { writeBytes(bytes) }
+                        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                        val mime = if (name.lowercase().endsWith(".png")) "image/png" else "image/jpeg"
+                        PickedImage("img${++seq}", Uri.fromFile(f), name, mime, bytes, opts.outWidth, opts.outHeight).apply {
+                            lockRatio = false
+                            width = fmtNum(r.widthCm); height = fmtNum(r.heightCm); qty = r.quantity.toString()
+                            lockRatio = pxW > 0
+                        }
+                    }
+                }
+                images.addAll(picked)
+            } catch (e: Exception) {
+                error = friendlyError(e)
+            } finally { importing = false }
+        }
+    }
+
+    private fun fmtNum(d: Double) = if (d % 1.0 == 0.0) d.toInt().toString() else d.toString()
+
     val nestState by derivedStateOf {
         val s = settings ?: return@derivedStateOf NestOutcome(null, null)
         val items = images.filter { it.valid }.map { NestItem(it.id, it.w!!, it.h!!, it.q!!) }

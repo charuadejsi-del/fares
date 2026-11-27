@@ -93,7 +93,7 @@ import com.mydtf.core.formatDa
 private val stepTitles = listOf("الصور", "المعاينة", "الاستلام", "التأكيد")
 
 @Composable
-fun NewOrderScreen(main: MainViewModel, onClose: () -> Unit, onCreated: (String) -> Unit) {
+fun NewOrderScreen(main: MainViewModel, onClose: () -> Unit, onCreated: (String) -> Unit, fromOrder: String? = null) {
     val vm: NewOrderViewModel = viewModel()
     val context = LocalContext.current
     LaunchedEffect(main.settings, main.profile) {
@@ -102,6 +102,7 @@ fun NewOrderScreen(main: MainViewModel, onClose: () -> Unit, onCreated: (String)
         if (main.settings == null) main.reloadSettings()
     }
     LaunchedEffect(vm.created) { vm.created?.let { onCreated(it.id) } }
+    LaunchedEffect(fromOrder) { fromOrder?.let { vm.loadFrom(context, it) } }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) { uris ->
         vm.addImages(context, uris)

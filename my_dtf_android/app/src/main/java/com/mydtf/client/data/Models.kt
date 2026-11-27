@@ -97,3 +97,23 @@ data class NewOrderImage(
     @SerialName("height_cm") val heightCm: Double,
     val quantity: Int,
 )
+
+@Serializable
+data class ChatMessage(
+    val id: Long,
+    @SerialName("client_id") val clientId: String,
+    @SerialName("from_staff") val fromStaff: Boolean,
+    @SerialName("order_id") val orderId: String? = null,
+    val body: String,
+    @SerialName("read_by_client") val readByClient: Boolean = true,
+    @SerialName("created_at") val createdAt: String,
+)
+
+@Serializable
+data class NewChatMessage(
+    @SerialName("client_id") val clientId: String,
+    @SerialName("sender_id") val senderId: String,
+    @SerialName("from_staff") val fromStaff: Boolean = false,
+    @SerialName("order_id") val orderId: String? = null,
+    val body: String,
+)

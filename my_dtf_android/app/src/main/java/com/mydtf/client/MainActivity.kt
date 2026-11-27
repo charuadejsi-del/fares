@@ -22,13 +22,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
+import androidx.navigation.navArgument
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.mydtf.client.data.Supa
 import com.mydtf.client.ui.MainViewModel
 import com.mydtf.client.ui.auth.AuthScreen
 import com.mydtf.client.ui.home.HomeScreen
+import com.mydtf.client.ui.more.ArchiveScreen
+import com.mydtf.client.ui.more.ChatScreen
+import com.mydtf.client.ui.more.CompleteProfileScreen
 import com.mydtf.client.ui.more.NotificationsScreen
 import com.mydtf.client.ui.more.ProfileScreen
 import com.mydtf.client.ui.order.NewOrderScreen
@@ -65,6 +70,7 @@ private fun Root() {
 private fun ClientNav() {
     val main: MainViewModel = viewModel()
     LaunchedEffect(Unit) { main.start() }
+    if (main.needsProfile) { CompleteProfileScreen(main); return }
     val nav = rememberNavController()
     NavHost(
         nav, startDestination = "home",
@@ -81,16 +87,25 @@ private fun ClientNav() {
                 onOrder = { nav.navigate("order/$it") },
                 onNotifications = { nav.navigate("notifs") },
                 onProfile = { nav.navigate("profile") },
+                onChat = { nav.navigate("chat") },
+                onArchive = { nav.navigate("archive") },
             )
         }
-        composable("new") {
+        composable("new?from={from}", arguments = listOf(navArgument("from") { type = NavType.StringType; nullable = true; defaultValue = null })) { entry ->
             NewOrderScreen(main, onClose = { nav.popBackStack() }, onCreated = { id ->
                 main.refresh()
                 nav.navigate("order/$id") { popUpTo("home") }
-            })
+            }, fromOrder = entry.arguments?.getString("from"))
         }
         composable("order/{id}") { entry ->
-            OrderDetailScreen(entry.arguments?.getString("id")!!, main, onBack = { nav.popBackStack() })
+            OrderDetailScreen(entry.arguments?.getString("id")!!, main, onBack = { nav.popBackStack() },
+                onReorder = { nav.navigate("new?from=$it") }, onChat = { nav.navigate("chat?order=$it") })
+        }
+        composable("chat?order={order}", arguments = listOf(navArgument("order") { type = NavType.StringType; nullable = true; defaultValue = null })) { entry ->
+            ChatScreen(main, onBack = { nav.popBackStack() }, presetOrder = entry.arguments?.getString("order"))
+        }
+        composable("archive") {
+            ArchiveScreen(main, onBack = { nav.popBackStack() }, onOrder = { nav.navigate("order/$it") })
         }
         composable("notifs") {
             NotificationsScreen(main, onBack = { nav.popBackStack() }, onOrder = { nav.navigate("order/$it") })

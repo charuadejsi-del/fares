@@ -194,6 +194,35 @@ object Repo {
         })
     }
 
+    /** Compte existant sans profil DTF (ex. ancien compte) : on le complète. */
+    suspend fun createProfile(p: NewProfileInput) {
+        val id = uid ?: return
+        sb.from("dtf_profiles").insert(NewProfile(id, "client", p.fullName, p.phone, p.wilaya, p.commune, p.address))
+    }
+
+    /** Octets d'une image déjà envoyée (pour « refaire la commande »). */
+    suspend fun downloadImage(path: String): ByteArray =
+        sb.storage.from(Supa.BUCKET).downloadAuthenticated(path)
+
+    // ---------------- Chat ----------------
+    suspend fun messages(): List<ChatMessage> {
+        val id = uid ?: return emptyList()
+        return sb.from("dtf_messages").select {
+            filter { eq("client_id", id) }
+            order("created_at", SortOrder.ASCENDING)
+            limit(500)
+        }.decodeList()
+    }
+
+    suspend fun sendMessage(body: String, orderId: String?) {
+        val id = uid ?: return
+        sb.from("dtf_messages").insert(NewChatMessage(id, id, false, orderId, body))
+    }
+
+    suspend fun markChatRead() {
+        sb.postgrest.rpc("dtf_chat_mark_read", buildJsonObject { })
+    }
+
     // ---------------- Notifications ----------------
     suspend fun notifications(): List<AppNotification> {
         val id = uid ?: return emptyList()
@@ -221,8 +250,9 @@ object Repo {
         val ch = sb.channel("dtf-live-${uid ?: "anon"}-${System.currentTimeMillis()}")
         val orders = ch.postgresChangeFlow<PostgresAction>(schema = "public") { table = "dtf_orders" }
         val notifs = ch.postgresChangeFlow<PostgresAction>(schema = "public") { table = "dtf_notifications" }
+        val msgs = ch.postgresChangeFlow<PostgresAction>(schema = "public") { table = "dtf_messages" }
         ch.subscribe()
-        return merge(orders, notifs)
+        return merge(orders, notifs, msgs)
     }
 
     suspend fun stopLive() {

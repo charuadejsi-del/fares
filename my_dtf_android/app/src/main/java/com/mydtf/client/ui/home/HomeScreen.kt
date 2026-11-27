@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.NotificationsNone
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Print
@@ -67,6 +68,8 @@ fun HomeScreen(
     onOrder: (String) -> Unit,
     onNotifications: () -> Unit,
     onProfile: () -> Unit,
+    onChat: () -> Unit = {},
+    onArchive: () -> Unit = {},
 ) {
     val orders = vm.orders
     val active = orders.filter { it.status !in finished }
@@ -98,6 +101,11 @@ fun HomeScreen(
                                 IconButton(onClick = onNotifications) {
                                     BadgedBox(badge = { if (vm.unread > 0) Badge(containerColor = Lux.Gold, contentColor = Lux.Night) { Text("${vm.unread}") } }) {
                                         Icon(Icons.Rounded.NotificationsNone, "الإشعارات", tint = Lux.Ivory)
+                                    }
+                                }
+                                IconButton(onClick = onChat) {
+                                    BadgedBox(badge = { if (vm.unreadChat > 0) Badge(containerColor = Lux.Gold, contentColor = Lux.Night) { Text("${vm.unreadChat}") } }) {
+                                        Icon(Icons.Rounded.ChatBubbleOutline, "الدردشة", tint = Lux.Ivory)
                                     }
                                 }
                                 IconButton(onClick = onProfile) { Icon(Icons.Rounded.Person, "حسابي", tint = Lux.Ivory) }
@@ -151,9 +159,16 @@ fun HomeScreen(
                     }
                     val past = orders.filter { it.status in finished }
                     if (past.isNotEmpty()) {
-                        item { SectionTitle("السجلّ", Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
-                        items(past, key = { "p" + it.id }) { o -> PastOrderRow(o) { onOrder(o.id) } }
+                        item {
+                            SectionTitle("آخر الطلبيات", Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                androidx.compose.material3.TextButton(onClick = onArchive) { Text("الأرشيف كاملاً", color = Lux.Gold) }
+                            }
+                        }
+                        items(past.take(5), key = { "p" + it.id }) { o -> PastOrderRow(o) { onOrder(o.id) } }
                     }
+                }
+                if (vm.offline && orders.isNotEmpty()) item {
+                    Text("📴 بدون إنترنت — تعرض آخر نسخة محفوظة", color = Lux.GoldLight, modifier = Modifier.padding(16.dp))
                 }
                 vm.error?.let { e ->
                     item { Text(e, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }

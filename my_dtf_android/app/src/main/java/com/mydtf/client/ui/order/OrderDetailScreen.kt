@@ -28,6 +28,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ReportProblem
+import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -72,7 +74,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun OrderDetailScreen(orderId: String, main: MainViewModel, onBack: () -> Unit) {
+fun OrderDetailScreen(orderId: String, main: MainViewModel, onBack: () -> Unit, onReorder: (String) -> Unit = {}, onChat: (String) -> Unit = {}) {
     var order by remember { mutableStateOf<Order?>(main.orders.firstOrNull { it.id == orderId }) }
     var events by remember { mutableStateOf<List<OrderEvent>>(emptyList()) }
     var images by remember { mutableStateOf<List<Pair<OrderImage, String>>>(emptyList()) }
@@ -170,6 +172,9 @@ fun OrderDetailScreen(orderId: String, main: MainViewModel, onBack: () -> Unit) 
                 }
             }
 
+            com.mydtf.client.ui.components.GoldButton("أعِد نفس الطلبية", onClick = { onReorder(o.id) },
+                icon = Icons.Rounded.Replay, modifier = Modifier.fillMaxWidth())
+            GhostButton("مراسلة الورشة بخصوص هذه الطلبية", onClick = { onChat(o.id) }, icon = Icons.Rounded.ChatBubbleOutline, modifier = Modifier.fillMaxWidth())
             if (o.status !in setOf("new", "rejected", "cancelled")) {
                 GhostButton("التبليغ عن مشكل في الطباعة", onClick = { showReport = true }, icon = Icons.Rounded.ReportProblem, modifier = Modifier.fillMaxWidth())
             }
