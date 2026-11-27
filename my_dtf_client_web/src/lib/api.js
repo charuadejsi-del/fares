@@ -69,7 +69,7 @@ export function makeThumb(file, max = 400) {
 export async function createOrder({ lengthCm, mode, ship, note, images }, onProgress) {
   const o = await rpc('dtf_create_order', {
     p_estimated_length_cm: lengthCm, p_delivery_mode: mode, p_delivery_fee: 0,
-    p_ship_name: ship.name, p_ship_phone: ship.phone, p_ship_wilaya: ship.wilaya, p_ship_commune: ship.commune, p_ship_address: ship.address, p_note: note || null,
+    p_ship_name: ship.name ?? null, p_ship_phone: ship.phone ?? null, p_ship_wilaya: ship.wilaya ?? null, p_ship_commune: ship.commune ?? null, p_ship_address: ship.address ?? null, p_note: note || null,
   });
   const id = uid();
   for (let i = 0; i < images.length; i++) {
