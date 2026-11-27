@@ -63,8 +63,7 @@ begin
   perform dtf_supply_apply('powder', new.kind::text, -round(new.meters * c.powder_g_per_m, 2), new.order_id, null);
   return new;
 end $$;
-drop trigger if exists dtf_film_supplies on dtf_film_moves;
-create trigger dtf_film_supplies after insert on dtf_film_moves for each row execute function dtf_film_to_supplies();
+create or replace trigger dtf_film_supplies after insert on dtf_film_moves for each row execute function dtf_film_to_supplies();
 
 -- Achat : quantité en ml / g, prix total. Le prix moyen alimente automatiquement le calcul des coûts.
 create or replace function dtf_add_supply(p_kind text, p_qty numeric, p_total numeric, p_supplier text, p_note text)
