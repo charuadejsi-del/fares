@@ -42,6 +42,12 @@ jobs:
           curl -fsSL -o fonts/Tajawal-Bold.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/tajawal/Tajawal-Bold.ttf
           ls -la fonts
 
+      - name: الموديلات 3D (الخروف)
+        run: |
+          mkdir -p models
+          curl -fsSL -o models/sheep.glb "https://cdn.creativeclaw.co/u/c7a6a2e3/3d-models/01af8795-e81c-47c2-aa74-94cc9a188a8a.glb"
+          ls -la models
+
       - name: استيراد الملفّات
         run: |
           godot --headless --path . --import 2>&1 | tail -20 || true

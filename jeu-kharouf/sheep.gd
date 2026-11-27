@@ -25,6 +25,13 @@ var rig: Node3D
 var head: Node3D
 var legs: Array = []
 var anim_t := 0.0
+var model: Node3D
+var model_pivot: Node3D
+var skel: Skeleton3D
+
+const MODEL_PATH := "res://models/sheep.glb"
+const MODEL_HEIGHT := 1.35
+const MODEL_YAW := 0.0
 
 
 func _ready() -> void:
@@ -44,6 +51,82 @@ func _ready() -> void:
 func _build_rig() -> void:
 	rig = Node3D.new()
 	add_child(rig)
+	if ResourceLoader.exists(MODEL_PATH):
+		var ps := load(MODEL_PATH) as PackedScene
+		if ps:
+			model = ps.instantiate() as Node3D
+			if model:
+				model_pivot = Node3D.new()
+				rig.add_child(model_pivot)
+				model_pivot.add_child(model)
+				_fit_model()
+				return
+	_build_procedural()
+
+
+## يحسب حجم الموديل ويضبطو: علوه ~1.35م، في الوسط، والرجلين فوق الأرض.
+func _fit_model() -> void:
+	model_pivot.rotation.y = MODEL_YAW
+	var box := _model_aabb()
+	if box.size.y > 0.001:
+		var k := MODEL_HEIGHT / box.size.y
+		model.scale = Vector3.ONE * k
+	box = _model_aabb()
+	model_pivot.position = Vector3(-box.get_center().x, -box.position.y, -box.get_center().z)
+	skel = _find_skeleton(model)
+
+
+func _model_aabb() -> AABB:
+	var inv := rig.global_transform.affine_inverse()
+	var out := AABB()
+	var first := true
+	for mi in _meshes(model):
+		var a: AABB = (inv * mi.global_transform) * mi.get_aabb()
+		if first:
+			out = a
+			first = false
+		else:
+			out = out.merge(a)
+	return out
+
+
+func _meshes(n: Node) -> Array:
+	var res: Array = []
+	if n is MeshInstance3D:
+		res.append(n)
+	for c in n.get_children():
+		res.append_array(_meshes(c))
+	return res
+
+
+func _find_skeleton(n: Node) -> Skeleton3D:
+	if n is Skeleton3D:
+		return n
+	for c in n.get_children():
+		var s := _find_skeleton(c)
+		if s:
+			return s
+	return null
+
+
+## وصف الموديل في السجل (للمراجعة): الحجم والعظام ومواقعها.
+func describe_model() -> void:
+	if model == null:
+		print("MODEL none (procedural sheep)")
+		return
+	var box := _model_aabb()
+	print("MODEL aabb pos=%s size=%s meshes=%d" % [box.position, box.size, _meshes(model).size()])
+	if skel == null:
+		print("MODEL no skeleton")
+		return
+	var inv := rig.global_transform.affine_inverse() * skel.global_transform
+	print("MODEL bones=%d" % skel.get_bone_count())
+	for i in skel.get_bone_count():
+		var o: Vector3 = inv * skel.get_bone_global_rest(i).origin
+		print("MODEL bone %d %s parent=%d at=(%.2f, %.2f, %.2f)" % [i, skel.get_bone_name(i), skel.get_bone_parent(i), o.x, o.y, o.z])
+
+
+func _build_procedural() -> void:
 	var wool := Color("f6f3ec")
 	var face := Color("3a3330")
 	var horn := Color("a8834f")
@@ -206,10 +289,16 @@ func _animate(delta: float) -> void:
 		var ph := 0.0 if (i == 0 or i == 3) else PI
 		legs[i].rotation.x = sin(anim_t + ph) * amp
 	rig.position.y = absf(sin(anim_t)) * 0.08 * amp
-	if dash_t > 0.0:
-		head.rotation.x = lerpf(head.rotation.x, -0.6, 0.5)
-	else:
-		head.rotation.x = lerpf(head.rotation.x, sin(anim_t * 0.5) * 0.05, 0.2)
+	if head:
+		if dash_t > 0.0:
+			head.rotation.x = lerpf(head.rotation.x, -0.6, 0.5)
+		else:
+			head.rotation.x = lerpf(head.rotation.x, sin(anim_t * 0.5) * 0.05, 0.2)
+	elif model_pivot:
+		# بلا عظام بعد: الجسم كامل يميل لقدام في النطحة ويتمايل في الجري
+		var pitch := -0.18 if dash_t > 0.0 else -0.05 * amp
+		model_pivot.rotation.x = lerpf(model_pivot.rotation.x, pitch, 0.3)
+		model_pivot.rotation.z = sin(anim_t * 0.5) * 0.05 * amp
 	if not is_on_floor():
 		rig.rotation.x = lerpf(rig.rotation.x, 0.25 if velocity.y > 0.0 else -0.15, 0.2)
 	else:

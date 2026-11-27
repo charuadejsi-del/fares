@@ -32,11 +32,13 @@ var best := 0
 var coins := 0
 var auto_spawn := true
 var cam_angle := 0.0
+var cam_locked := false
 var smoke := false
 var shot := false
 var smoke_ok := true
 
 var pad
+var ui_layer: CanvasLayer
 var hud: Control
 var lbl_score: Label
 var lbl_time: Label
@@ -183,6 +185,7 @@ func _center_box(parent: Control) -> VBoxContainer:
 
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
+	ui_layer = layer
 	add_child(layer)
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -522,7 +525,8 @@ func _vibrate(ms: int) -> void:
 # ---------- الكاميرا والواجهة كل فريم ----------
 
 func _process(delta: float) -> void:
-	_update_cam(delta)
+	if not cam_locked:
+		_update_cam(delta)
 	for g in grasses:
 		if is_instance_valid(g):
 			g.rotate_y(delta * 2.0)
@@ -583,6 +587,7 @@ func _check(what: String, cond: bool, info: String = "") -> void:
 
 func _run_smoke() -> void:
 	print("SMOKE start")
+	sheep.describe_model()
 	_check("world", world.free_cells.size() > 2000 and world.props.size() > 20, "cells=%d props=%d" % [world.free_cells.size(), world.props.size()])
 	start_game()
 	await _wait(0.5)
@@ -649,12 +654,33 @@ func _snap(dir: String, shot_name: String) -> void:
 		print("SHOT ", shot_name)
 
 
+## لقطات قريبة للخروف من 4 جهات (بلا واجهة) باش نتأكدو من الموديل.
+func _model_shots(dir: String) -> void:
+	ui_layer.visible = false
+	cam_locked = true
+	state = State.RESULT
+	sheep.reset_to(world.start_pos)
+	await _wait(1.0)
+	var c: Vector3 = sheep.global_position + Vector3.UP * 0.7
+	var views := {"00a_front": Vector3(0, 0.3, -3.2), "00b_side": Vector3(3.2, 0.3, 0), "00c_back": Vector3(0, 0.3, 3.2), "00d_top": Vector3(2.0, 3.0, 2.0)}
+	for k in views:
+		var off: Vector3 = views[k]
+		cam.global_position = c + off
+		cam.look_at(c, Vector3.UP)
+		await _wait(0.3)
+		await _snap(dir, k)
+	state = State.MENU
+	cam_locked = false
+	ui_layer.visible = true
+
+
 func _run_shots() -> void:
 	var dir := OS.get_environment("KHAROUF_SHOT_DIR")
 	if dir == "":
 		dir = OS.get_user_data_dir().path_join("shots")
 	DirAccess.make_dir_recursive_absolute(dir)
-	await _wait(2.5)
+	await _model_shots(dir)
+	await _wait(1.0)
 	await _snap(dir, "01_menu")
 	start_game()
 	sheep.use_override = true
