@@ -1,7 +1,7 @@
 // Toutes les valeurs numériques sont isolées (gauche→droite) : elles ne s'inversent jamais dans le texte arabe.
 const L = '⁦', R = '⁩';
 export const ltr = s => L + s + R;
-const group = n => String(Math.round(Math.abs(+n || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+const group = n => String(Math.round(Math.abs(+n || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202F');
 export const da = v => ltr((v < 0 ? '-' : '') + group(v)) + ' دج';
 export const m = (v, d = 2) => ltr((+v || 0).toFixed(d)) + ' م';
 export const cm = v => ltr(String(+(+v || 0).toFixed(1))) + ' سم';

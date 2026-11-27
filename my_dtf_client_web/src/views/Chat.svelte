@@ -36,7 +36,7 @@
   .msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px; }
   .m { display: flex; justify-content: flex-end; } .m.mine { justify-content: flex-start; }
   .b { max-width: 78%; padding: 10px 13px; border-radius: 16px 16px 16px 4px; background: var(--card2); white-space: pre-wrap; }
-  .mine .b { border-radius: 16px 16px 4px 16px; background: linear-gradient(180deg, #8B5CF6, #7C4DEB); color: #fff; }
+  .mine .b { border-radius: 16px 16px 4px 16px; background: linear-gradient(180deg, #F5CD52, #DCA414); color: var(--accent-ink); }
   .mine .faint { color: #ffffffaa; } .t { margin-top: 4px; }
   @media (max-width: 800px) { .chat { height: calc(100vh - 190px); } .compose select { display: none; } }
 </style>

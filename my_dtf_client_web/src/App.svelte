@@ -58,7 +58,7 @@
 <style>
   :global(.center) { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
   .shell { max-width: 1080px; margin: 0 auto; }
-  .top { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 16px; padding: 12px 18px; background: #0B0C0FE6; backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .top { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 16px; padding: 12px 18px; background: #090B11E6; backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
   .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 17px; }
   .desk { display: flex; gap: 4px; margin-right: auto; }
   .desk a { display: flex; align-items: center; gap: 7px; padding: 8px 12px; border-radius: 10px; color: var(--muted); font-weight: 500; font-size: 14px; }
@@ -75,7 +75,7 @@
     .bl.on { color: var(--accent2); }
     .ic { position: relative; display: grid; place-items: center; width: 48px; height: 30px; border-radius: 15px; }
     .bl.on .ic { background: var(--accent-soft); }
-    .bl.fab .ic { width: 52px; height: 52px; margin-top: -24px; border-radius: 50%; color: #fff; background: linear-gradient(180deg, #9B6DFF, #7C4DEB); box-shadow: 0 8px 22px #7C4DEB66; }
+    .bl.fab .ic { width: 52px; height: 52px; margin-top: -24px; border-radius: 50%; color: var(--accent-ink); background: linear-gradient(180deg, #F5CD52, #DCA414); box-shadow: 0 8px 22px #DCA41466; }
     .badge.dot { position: absolute; top: -4px; left: 4px; }
   }
 </style>

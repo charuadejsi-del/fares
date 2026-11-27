@@ -2,14 +2,14 @@
   import { onMount, createEventDispatcher } from 'svelte';
   import { sb, q, errMsg } from '../lib/sb.js';
   import { me, settings, toast } from '../lib/store.js';
-  import { loadDz } from '../lib/algeria.js';
+  import { loadShip, findPlace } from '../lib/ship.js';
   import Picker from '../components/Picker.svelte';
   export let param = '';
   const dispatch = createEventDispatcher();
   let p = { ...$me }, dz = null, wilaya = null, commune = null, busy = false;
-  onMount(async () => { dz = await loadDz(); wilaya = dz.wilayas.find(w => w.fr === p.wilaya || w.ar === p.wilaya) || null;
-    commune = wilaya ? dz.communes.find(c => c.w === wilaya.c && (c.fr === p.commune || c.ar === p.commune)) || null : null; });
+  onMount(async () => { dz = await loadShip(); ({ wilaya, commune } = findPlace(dz, p.wilaya, p.commune)); });
   $: communes = dz && wilaya ? dz.communes.filter(c => c.w === wilaya.c) : [];
+  $: if (wilaya && commune && commune.w !== wilaya.c) commune = null;
   async function save() {
     busy = true;
     try {
@@ -24,7 +24,9 @@
     <div class="section-title">معلوماتي</div>
     <label for="n">الاسم</label><input id="n" bind:value={p.full_name} />
     <label for="ph">الهاتف</label><input id="ph" dir="ltr" bind:value={p.phone} />
-    {#if dz}<div class="grid g2"><Picker label="الولاية" items={dz.wilayas} bind:value={wilaya} /><Picker label="البلدية" items={communes} bind:value={commune} disabled={!wilaya} /></div>{/if}
+    {#if dz}<div class="grid g2"><Picker label="الولاية" items={dz.wilayas} bind:value={wilaya} /><Picker label="البلدية" items={communes} bind:value={commune} disabled={!wilaya} /></div>
+      {#if wilaya?.sub}<div class="faint tiny" style="margin-top:6px">التوصيل إلى {wilaya.ar}: {wilaya.sub}</div>{/if}
+      {#if p.wilaya && dz.live && !wilaya}<div class="notice warn small" style="margin-top:8px">ولايتك المسجّلة ({p.wilaya}) غير موجودة عند شركة التوصيل — اختر من القائمة.</div>{/if}{/if}
     <label for="a">العنوان</label><input id="a" bind:value={p.address} />
     <button class="btn block" style="margin-top:14px" disabled={busy} on:click={save}>حفظ</button>
   </div>

@@ -11,7 +11,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; }
+html, body { height: 100%; overflow-x: hidden; }
 body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
 body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: -1;
   background: radial-gradient(900px 500px at 100% -10%, #E6B32510, transparent 60%), radial-gradient(800px 500px at -10% 110%, #3B5BDB0D, transparent 60%); }
@@ -23,6 +23,7 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 input[type=checkbox] { accent-color: var(--accent); }
+input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus { -webkit-box-shadow: 0 0 0 60px var(--bg2) inset; -webkit-text-fill-color: var(--text); caret-color: var(--text); transition: background-color 9999s; }
 label { display: block; font-size: 13px; color: var(--muted); margin: 12px 2px 6px; font-weight: 500; }
 h1 { font-size: 22px; font-weight: 700; letter-spacing: -.2px; } h2 { font-size: 18px; font-weight: 700; } h3 { font-size: 15.5px; font-weight: 600; }
 .muted { color: var(--muted); } .faint { color: var(--faint); } .gold, .accent { color: var(--accent2); } .red { color: var(--red); } .teal { color: var(--teal); } .green { color: var(--green); } .amber { color: var(--amber); } .blue { color: var(--blue); }

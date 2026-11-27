@@ -7,7 +7,7 @@
   import { createOrder, loadAll } from '../lib/api.js';
   import { nest } from '../lib/nest.js';
   import { quote } from '../lib/pricing.js';
-  import { loadDz } from '../lib/algeria.js';
+  import { loadShip, findPlace } from '../lib/ship.js';
   import { da, m, cm, num, MODE } from '../lib/fmt.js';
   import FilmCanvas from '../components/FilmCanvas.svelte';
   import Picker from '../components/Picker.svelte';
@@ -20,20 +20,19 @@
   let mode = 'pickup', name = '', phone = '', wilaya = null, commune = null, address = '', note = '';
   let fileInput, dragging = false;
 
-  let rates = [];
-  q(sb.from('dtf_ship_rates').select('wilaya_code,home,desk')).then(r => (rates = r || [])).catch(() => {});
-  $: rate = wilaya ? rates.find(r => r.wilaya_code === +wilaya.c) : null;
-  $: fee = mode === 'pickup' ? 0 : rate ? +(mode === 'stopdesk' ? rate.desk : rate.home) || null : null;
-  const modeFee = k => { if (k === 'pickup') return 'مجاني'; const r = wilaya && rates.find(x => x.wilaya_code === +wilaya.c); const v = r && +(k === 'stopdesk' ? r.desk : r.home); return v ? 'التوصيل ' + da(v) : wilaya ? 'سعر التوصيل يُحدَّد لاحقاً' : 'اختر ولايتك لرؤية السعر'; };
+  // Frais : tarifs de la société de livraison (wilaya.home / wilaya.desk), recalculés aussi côté serveur.
+  $: fee = mode === 'pickup' ? 0 : wilaya ? (mode === 'stopdesk' ? wilaya.desk : wilaya.home) || null : null;
+  const modeFee = k => { if (k === 'pickup') return 'مجاني'; if (!wilaya) return 'اختر ولايتك لرؤية السعر';
+    if (k === 'stopdesk' && dz?.live && !wilaya.hasDesk) return 'لا يوجد مكتب في ولايتك'; const v = k === 'stopdesk' ? wilaya.desk : wilaya.home; return v ? 'التوصيل ' + da(v) : 'سعر التوصيل يُحدَّد لاحقاً'; };
 
   onMount(async () => {
-    dz = await loadDz();
+    dz = await loadShip();
     const p = $me; name = p?.full_name || ''; phone = p?.phone || ''; address = p?.address || '';
-    wilaya = dz.wilayas.find(w => w.fr === p?.wilaya || w.ar === p?.wilaya) || null;
-    commune = wilaya ? dz.communes.find(c => c.w === wilaya.c && (c.fr === p?.commune || c.ar === p?.commune)) || null : null;
+    ({ wilaya, commune } = findPlace(dz, p?.wilaya, p?.commune));
     if (param) reorder(param);
   });
-  $: communes = dz && wilaya ? dz.communes.filter(c => c.w === wilaya.c) : [];
+  $: communes = dz && wilaya ? dz.communes.filter(c => c.w === wilaya.c && (mode !== 'stopdesk' || !dz.live || c.desk)) : [];
+  $: if (commune && wilaya && !communes.includes(commune)) commune = null;
   $: if (wilaya && commune && commune.w !== wilaya.c) commune = null;
 
   function add(file, w = '', h = '', qty = 1) {
@@ -127,12 +126,13 @@
 
 {:else if step === 2}
   <div class="grid g3 modes">
-    {#each ['pickup', 'stopdesk', 'home'] as k}<button class="mode card" class:on={mode === k} on:click={() => (mode = k)}><Icon name={k === 'pickup' ? 'stock' : 'truck'} size={24} /><b>{MODE[k]}</b><span class="faint tiny">{modeFee(k, wilaya, rates)}</span></button>{/each}
+    {#each ['pickup', 'stopdesk', 'home'] as k}<button class="mode card" class:on={mode === k} disabled={k === 'stopdesk' && dz?.live && wilaya && !wilaya.hasDesk} on:click={() => (mode = k)}><Icon name={k === 'pickup' ? 'stock' : 'truck'} size={24} /><b>{MODE[k]}</b><span class="faint tiny">{modeFee(k, wilaya, dz)}</span></button>{/each}
   </div>
   <div class="card" style="margin-top:12px">
     <div class="grid g2"><div><label for="nm">الاسم</label><input id="nm" bind:value={name} /></div><div><label for="ph">الهاتف</label><input id="ph" dir="ltr" inputmode="tel" bind:value={phone} /></div></div>
     {#if mode !== 'pickup' && dz}
-      <div class="grid g2"><Picker label="الولاية" items={dz.wilayas} bind:value={wilaya} /><Picker label="البلدية" items={communes} bind:value={commune} disabled={!wilaya} /></div>
+      <div class="grid g2"><Picker label="الولاية" items={dz.wilayas} bind:value={wilaya} /><Picker label={mode === 'stopdesk' ? 'مكتب الاستلام (البلدية)' : 'البلدية'} items={communes} bind:value={commune} disabled={!wilaya} hint={mode === 'stopdesk' ? 'تظهر فقط البلديات التي فيها مكتب لشركة التوصيل' : ''} /></div>
+      {#if mode === 'stopdesk' && wilaya && dz.live && !wilaya.hasDesk}<div class="notice warn small" style="margin-top:8px">لا يوجد مكتب لشركة التوصيل في {wilaya.ar} — اختر التوصيل إلى المنزل.</div>{/if}
       {#if mode === 'home'}<label for="ad">العنوان</label><input id="ad" bind:value={address} />{/if}
     {/if}
   </div>
@@ -173,7 +173,7 @@
   .steps button span { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--card3); font-size: 12px; }
   .steps .on { border-color: var(--accent); color: var(--accent3); } .steps .on span, .steps .done span { background: var(--accent); color: #fff; }
   .drop { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 34px; border: 2px dashed var(--accent-line); border-radius: 18px; background: var(--accent-soft); color: var(--accent3); cursor: pointer; text-align: center; }
-  .drop.dragging { border-color: var(--accent2); background: #8B5CF633; }
+  .drop.dragging { border-color: var(--accent2); background: #E6B32526; }
   .img { display: flex; gap: 12px; padding: 12px; }
   .pv { position: relative; width: 96px; height: 96px; flex-shrink: 0; }
   .pv img { width: 100%; height: 100%; }
@@ -187,7 +187,8 @@
   .qty button { width: 34px; background: var(--card2); color: var(--accent2); font-size: 18px; }
   @media (max-width: 640px) { .sz { grid-template-columns: 1fr auto 1fr; } .sz > div:last-child { grid-column: 1 / -1; } .pv { width: 70px; height: 70px; } }
   .mode { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; color: var(--muted); }
-  .mode.on { border-color: var(--accent); color: var(--accent3); background: linear-gradient(180deg, #1A1726, #141519); }
+  .mode.on { border-color: var(--accent); color: var(--accent2); background: linear-gradient(180deg, #1A1810, #10131B); }
+  .mode:disabled { opacity: .45; cursor: not-allowed; }
   .kv { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; } .kv span { color: var(--muted); }
   .kv.tot b { font-size: 20px; }
   .bar-bottom { position: sticky; bottom: 10px; margin-top: 16px; display: flex; align-items: center; gap: 10px; z-index: 30; border-color: var(--accent-line); }
