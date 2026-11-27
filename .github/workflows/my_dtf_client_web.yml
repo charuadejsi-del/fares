@@ -1,0 +1,38 @@
+# My DTF — site client (Svelte + Vite). Compile puis publie dist/ sur la branche dtf-client-dist.
+name: My DTF — site client
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dtf-atelier]
+    paths: ['my_dtf_client_web/**', '.github/workflows/my_dtf_client_web.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: my_dtf_client_web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - name: Taille du site
+        run: |
+          ls -la dist dist/assets
+          echo "gzip :" && for f in dist/assets/*; do printf '%s %s\n' "$(gzip -c "$f" | wc -c)" "$f"; done
+      - name: Publier sur la branche dtf-client-dist
+        working-directory: my_dtf_client_web/dist
+        run: |
+          git init -q -b dtf-client-dist
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit -q -m "build ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:dtf-client-dist

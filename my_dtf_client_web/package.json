@@ -1,0 +1,13 @@
+{
+  "name": "my-dtf-client",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "dev": "vite", "build": "vite build" },
+  "dependencies": { "@supabase/supabase-js": "2.45.4" },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "3.1.2",
+    "svelte": "4.2.19",
+    "vite": "5.4.11"
+  }
+}
