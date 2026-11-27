@@ -215,7 +215,7 @@ Deno.serve(async (req) => {
   if (cronKey) {
     const { data } = await db.from("dtf_ship_config").select("cron_key").eq("id", 1).maybeSingle();
     if (!data || data.cron_key !== cronKey) return json({ error: "clé invalide" }, 401);
-    if (!["track", "sync"].includes(action)) return json({ error: "action interdite" }, 403);
+    if (!["track", "sync", "cleanup"].includes(action)) return json({ error: "action interdite" }, 403);
     byCron = true;
   } else {
     const auth = req.headers.get("Authorization") || "";
@@ -248,6 +248,14 @@ Deno.serve(async (req) => {
     }
     if (action === "sync") { if (byCron && !(await defaultCarrier(db)).token) return json({ skipped: true }); return json(await sync(db)); }
     if (action === "track") { if (byCron && !anyToken) return json({ skipped: true }); return json(await track(db)); }
+    if (action === "cleanup") {
+      // Images dont la commande a été supprimée (stockage libéré).
+      const { data: names, error } = await db.rpc("dtf_orphan_images");
+      if (error) throw error;
+      const list = (names || []).map((x: any) => typeof x === "string" ? x : x.dtf_orphan_images);
+      for (let i = 0; i < list.length; i += 100) { const { error: e } = await db.storage.from("dtf-images").remove(list.slice(i, i + 100)); if (e) throw e; }
+      return json({ removed: list.length });
+    }
     if (action === "create") return json(await create(db, body));
     if (action === "cancel") return json(await cancel(db, body));
     if (action === "label") {
