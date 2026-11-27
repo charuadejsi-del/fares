@@ -20,6 +20,11 @@ SHOT 00a_front
 SHOT 00b_side
 SHOT 00c_back
 SHOT 00d_top
+SHOT 00e_run1
+SHOT 00f_run2
+SHOT 00g_run3
+SHOT 00h_jump
+SHOT 00i_butt
 SHOT 01_menu
 SHOT 02_run
 SHOT 03_butt
