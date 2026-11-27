@@ -4,7 +4,7 @@
   import { sb, q, rpc, errMsg } from '../lib/sb.js';
   import { settings, liveTick, toast } from '../lib/store.js';
   import { da, m, num, pct, ltr, ymd } from '../lib/fmt.js';
-  import { month, unit } from '../lib/costs.js';
+  import { month, unit, simulate } from '../lib/costs.js';
   import Icon from '../components/Icon.svelte';
 
   let tab = 'board', cs = null, rows = null, err = '', busy = false, form = null;
@@ -32,7 +32,7 @@
   $: D = R && dayIdx !== null ? R.days[dayIdx] : null;
   $: maxAbs = R ? Math.max(1, ...R.days.map(d => Math.abs(d.profit))) : 1;
   $: U = form ? unit(form) : null;
-  $: preview = form && price ? month([...Array(form.work_days)].map((_, i) => ({ day: i, meters: 50, waste_m: 0, revenue: 0, orders: 0 })), form, price, false).actual : null;
+  $: preview = form && price ? simulate(form, price, 50) : null;
 
   const LINES = [['film', 'الفيلم'], ['ink', 'الحبر'], ['powder', 'البودرة'], ['wages', 'الأجور'], ['fixed', 'المصاريف الثابتة'], ['wasteCost', 'الهدر']];
   const v = (x, k) => x?.per?.[k === 'wasteCost' ? 'waste' : k];
@@ -44,8 +44,10 @@
     try {
       const f = { ...form }; delete f.id; f.updated_at = new Date().toISOString();
       ['roll_price', 'roll_length_m', 'ink_price_l', 'ink_ml_per_m', 'powder_price_kg', 'powder_g_per_m', 'work_days'].forEach(k => (f[k] = +String(f[k]).replace(',', '.')));
-      f.wages = f.wages.filter(w => w.name?.trim()).map(w => ({ name: w.name.trim(), amount: +w.amount || 0 }));
-      f.fixed_costs = f.fixed_costs.filter(w => w.name?.trim()).map(w => ({ name: w.name.trim(), amount: +w.amount || 0 }));
+      const clean = w => ({ name: w.name.trim(), amount: +w.amount || 0, ...(w.from ? { from: w.from } : {}) });
+      f.wages = f.wages.filter(w => w.name?.trim()).map(clean);
+      f.fixed_costs = f.fixed_costs.filter(w => w.name?.trim()).map(clean);
+      f.start_date = f.start_date || null;
       if (!(f.roll_length_m > 0) || !(f.work_days >= 1 && f.work_days <= 31)) throw new Error('طول الرولو وأيام العمل يجب أن تكون أكبر من صفر');
       await q(sb.from('dtf_cost_settings').update(f).eq('id', 1));
       toast('حُفظت الإعدادات'); form = null; liveTick.update(n => n + 1); tab = 'board';
@@ -99,13 +101,16 @@
       <tr class="tot"><td>الربح الصافي</td><td class:red={ref.per.profit < 0}>{num2(ref.per.profit)}</td><td class:red={D?.profit < 0}>{D?.on ? da(D.profit) : '—'}</td><td class:red={R.actual.profit < 0}>{da(R.actual.profit)}</td></tr>
       <tr><td>الهامش</td><td>{ref.margin == null ? '—' : pct(ref.margin * 100)}</td><td>{D?.on && D.margin != null ? pct(D.margin * 100) : '—'}</td><td>{R.actual.margin == null ? '—' : pct(R.actual.margin * 100)}</td></tr>
     </table>
-    <p class="faint tiny" style="margin-top:10px">المصاريف الثابتة: الشهر كاملاً في عمود الشهر، و1/{num(cs.work_days)} منها في كل يوم عمل. الأجور تُحسب في الأيام التي فيها طباعة. يوم بلا طباعة لا يُحسب يوم عمل.</p>
+    <p class="faint tiny" style="margin-top:10px">المصاريف الثابتة: في عمود الشهر بقدر الأيام التي كانت فيها سارية{cs.start_date ? ` (منذ ${cs.start_date})` : ''}، و1/{num(cs.work_days)} منها في كل يوم عمل. الأجور تُحسب في الأيام التي فيها طباعة، ابتداءً من تاريخ كل عامل.</p>
   </div>
 
 {:else if form}
   <div class="grid g2 stack">
     <div class="card">
-      <div class="section-title">المواد</div>
+      <div class="section-title">بداية الحساب</div>
+      <label for="sd">تاريخ بداية عمل الورشة — لا يُحسب شيء قبله</label><input id="sd" type="date" bind:value={form.start_date} />
+      <p class="faint tiny" style="margin-top:6px">بجانب كل أجرة وكل مصروف تاريخ «يبدأ من» خاص به: يُحسب المصروف الشهري بقدر أيامه في الشهر الأول، والأجرة من يوم بدايتها.</p>
+      <div class="section-title" style="margin-top:16px">المواد</div>
       <div class="grid g2">
         <div><label>ثمن رول الفيلم (دج)</label><input dir="ltr" inputmode="decimal" bind:value={form.roll_price} /></div>
         <div><label>طول الرول (م)</label><input dir="ltr" inputmode="decimal" bind:value={form.roll_length_m} /></div>
@@ -123,7 +128,8 @@
         <div class="card">
           <div class="section-title">{t}<span class="end num small muted">{da(form[k].reduce((s, x) => s + (+x.amount || 0), 0))}</span></div>
           {#each form[k] as w, i}
-            <div class="row" style="margin-bottom:8px"><input class="grow" bind:value={w.name} /><input style="width:120px" dir="ltr" inputmode="numeric" bind:value={w.amount} />
+            <div class="row" style="margin-bottom:8px"><input class="grow" bind:value={w.name} /><input style="width:110px" dir="ltr" inputmode="numeric" bind:value={w.amount} />
+              <input type="date" style="width:150px" title="يبدأ من (فارغ = منذ البداية)" bind:value={w.from} />
               <button class="btn quiet sm" aria-label="حذف" on:click={() => { form[k].splice(i, 1); form = form; }}><Icon name="x" size={16} /></button></div>
           {/each}
           <button class="btn ghost sm" on:click={() => { form[k] = [...form[k], { name: '', amount: 0 }]; }}><Icon name="plus" size={16} />إضافة</button>

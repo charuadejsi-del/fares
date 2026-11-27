@@ -327,12 +327,17 @@ data class Period(val meters: Double, val days: Int, val film: Double, val ink: 
     fun pm(v: Double) = if (meters > 0) v / meters else null
 }
 
-/** Mêmes formules que le site (costs.js) : vérifiées avec l'exemple 50 m/jour → 575,27 / 824,73 dج. */
-fun costPeriod(c: CostSettings, meters: Double, waste: Double, days: Int, fixedShare: Double, value: Double): Period {
+/** Mêmes formules que le site (costs.js) : vérifiées avec l'exemple 50 m/jour → 575,27 / 824,73 دج. */
+private fun activeFrom(from: String?, start: String?) = listOfNotNull(from, start).maxOrNull()
+fun wagesOn(c: CostSettings, day: String) = c.wages.filter { val f = activeFrom(it.from, c.startDate); f == null || day >= f }.sumOf { it.amount }
+fun fixedOn(c: CostSettings, day: String) = c.fixedCosts.filter { val f = activeFrom(it.from, c.startDate); f == null || day >= f }.sumOf { it.amount }
+fun fixedForMonth(c: CostSettings, ym: YearMonth): Double {
+    val dim = ym.lengthOfMonth()
+    return c.fixedCosts.sumOf { f -> val from = activeFrom(f.from, c.startDate); val n = (1..dim).count { d -> from == null || ym.atDay(d).toString() >= from }; f.amount * n / dim }
+}
+fun costPeriod(c: CostSettings, meters: Double, waste: Double, days: Int, wages: Double, fixed: Double, value: Double): Period {
     val film = c.rollPrice / c.rollLengthM; val ink = c.inkPriceL / 1000 * c.inkMlPerM; val powder = c.powderPriceKg / 1000 * c.powderGPerM
-    val mat = film + ink + powder
-    return Period(meters, days, film * meters, ink * meters, powder * meters, c.wages.sumOf { it.amount } * days,
-        c.fixedCosts.sumOf { it.amount } * fixedShare, if (c.wasteInProfit) mat * waste else 0.0, value)
+    return Period(meters, days, film * meters, ink * meters, powder * meters, wages, fixed, if (c.wasteInProfit) (film + ink + powder) * waste else 0.0, value)
 }
 
 @Composable
@@ -354,12 +359,18 @@ private fun CostsScreen(vm: ProViewModel) {
         if (c == null || ds == null) { Box(Modifier.padding(16.dp)) { Shimmer(Modifier.fillMaxWidth().height(160.dp)) }; return@Column }
         if (tab == 1) { CostSettingsForm(vm, c); return@Column }
         val ongoing = ym == YearMonth.now()
-        val worked = ds.count { it.meters > 0 || it.wasteM > 0 }
+        val isOn = { x: CostDay -> (c.startDate == null || x.day >= c.startDate) && (x.meters > 0 || x.wasteM > 0) }
+        val workedDays = ds.filter(isOn); val worked = workedDays.size
         val M = ds.sumOf { it.meters }; val W = ds.sumOf { it.wasteM }; val V = ds.sumOf { it.value }
-        val actual = costPeriod(c, M, W, worked, 1.0, V)
-        val proj = if (ongoing && worked > 0) { val k = c.workDays.toDouble() / worked; costPeriod(c, M * k, W * k, c.workDays, 1.0, V * k) } else null
+        val fixedM = fixedForMonth(c, ym)
+        val actual = costPeriod(c, M, W, worked, workedDays.sumOf { wagesOn(c, it.day) }, fixedM, V)
+        val proj = if (ongoing && worked > 0) {
+            val dim = ym.lengthOfMonth(); val n = (1..dim).count { d -> c.startDate == null || ym.atDay(d).toString() >= c.startDate }
+            val eff = maxOf(worked.toDouble(), c.workDays * n.toDouble() / dim); val k = eff / worked
+            costPeriod(c, M * k, W * k, eff.toInt(), wagesOn(c, ym.atEndOfMonth().toString()) * eff, fixedM, V * k)
+        } else null
         val ref = proj ?: actual
-        val perDay = ds.map { x -> val on = x.meters > 0 || x.wasteM > 0; costPeriod(c, x.meters, x.wasteM, if (on) 1 else 0, if (on) 1.0 / c.workDays else 0.0, x.value) }
+        val perDay = ds.map { x -> val on = isOn(x); costPeriod(c, x.meters, x.wasteM, if (on) 1 else 0, if (on) wagesOn(c, x.day) else 0.0, if (on) fixedOn(c, x.day) / c.workDays else 0.0, x.value) }
         val maxAbs = (perDay.maxOfOrNull { kotlin.math.abs(it.profit) } ?: 1.0).coerceAtLeast(1.0)
         Page {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -420,41 +431,53 @@ private fun CostsScreen(vm: ProViewModel) {
                 row("المداخيل", ref.pm(ref.revenue), if (on) D!!.revenue else null, actual.revenue)()
                 row("الربح الصافي", ref.pm(ref.profit), if (on) D!!.profit else null, actual.profit, true)()
             }
-            Text("بالدينار. المصاريف الثابتة كاملة في عمود الشهر، و1/${c.workDays} منها في كل يوم عمل.", style = MaterialTheme.typography.labelSmall, color = Lux.Muted)
+            Text("بالدينار. المصاريف الثابتة في عمود الشهر بقدر أيامها السارية" + (c.startDate?.let { " (منذ ${ltr(it)})" } ?: "") + "، و1/${c.workDays} منها في كل يوم عمل. الأجور من تاريخ كل عامل.", style = MaterialTheme.typography.labelSmall, color = Lux.Muted)
         }
     }
 }
 
+private val DATE = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+
 @Composable
-private fun AmountList(title: String, list: SnapshotStateList<Pair<String, String>>) {
+private fun AmountList(title: String, list: SnapshotStateList<Triple<String, String, String>>) {
     LuxCard(Modifier.fillMaxWidth()) {
         Row { Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f)); Text(formatDa(list.sumOf { d(it.second) ?: 0.0 }), color = Lux.GoldLight) }
-        list.forEachIndexed { i, (n, a) ->
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
-                Box(Modifier.weight(1.4f)) { LuxField(n, { list[i] = it to list[i].second }, "البند") }
-                Spacer(Modifier.width(6.dp))
-                Box(Modifier.weight(1f)) { LuxField(a, { list[i] = list[i].first to it }, "دج", keyboard = KeyboardType.Decimal) }
-                Box(Modifier.size(40.dp).clip(CircleShape).bouncyClick { list.removeAt(i) }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Delete, "حذف", tint = Lux.Muted) }
+        list.forEachIndexed { i, (n, a, from) ->
+            Column(Modifier.padding(top = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1.4f)) { LuxField(n, { list[i] = list[i].copy(first = it) }, "البند") }
+                    Spacer(Modifier.width(6.dp))
+                    Box(Modifier.weight(1f)) { LuxField(a, { list[i] = list[i].copy(second = it) }, "دج", keyboard = KeyboardType.Decimal) }
+                    Box(Modifier.size(40.dp).clip(CircleShape).bouncyClick { list.removeAt(i) }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Delete, "حذف", tint = Lux.Muted) }
+                }
+                LuxField(from, { list[i] = list[i].copy(third = it) }, "يبدأ من (2026-12-10) — فارغ = منذ البداية", isError = from.isNotBlank() && !DATE.matches(from.trim()))
             }
         }
-        GhostButton("إضافة", { list.add("" to "") }, Modifier.padding(top = 8.dp), Icons.Rounded.Add)
+        GhostButton("إضافة", { list.add(Triple("", "", "")) }, Modifier.padding(top = 8.dp), Icons.Rounded.Add)
     }
 }
 
 @Composable
 private fun CostSettingsForm(vm: ProViewModel, c: CostSettings) {
     val f = remember(c) { mutableStateListOf(f0(c.rollPrice), f0(c.rollLengthM), f0(c.inkPriceL), f0(c.inkMlPerM), f0(c.powderPriceKg), f0(c.powderGPerM), "${c.workDays}") }
-    val wages = remember(c) { mutableStateListOf<Pair<String, String>>().apply { addAll(c.wages.map { it.name to f0(it.amount) }) } }
-    val fixed = remember(c) { mutableStateListOf<Pair<String, String>>().apply { addAll(c.fixedCosts.map { it.name to f0(it.amount) }) } }
+    val wages = remember(c) { mutableStateListOf<Triple<String, String, String>>().apply { addAll(c.wages.map { Triple(it.name, f0(it.amount), it.from ?: "") }) } }
+    val fixed = remember(c) { mutableStateListOf<Triple<String, String, String>>().apply { addAll(c.fixedCosts.map { Triple(it.name, f0(it.amount), it.from ?: "") }) } }
+    var start by remember(c) { mutableStateOf(c.startDate ?: "") }
     var waste by remember(c) { mutableStateOf(c.wasteInProfit) }
     var msg by remember { mutableStateOf<String?>(null) }
     val labels = listOf("ثمن رول الفيلم (دج)", "طول الرول (م)", "ثمن لتر الحبر (دج)", "استهلاك الحبر للمتر (مل)", "ثمن كيلو البودرة (دج)", "استهلاك البودرة للمتر (غ)", "أيام العمل في الشهر")
     val draft = runCatching {
         CostSettings(d(f[0])!!, d(f[1])!!, d(f[2])!!, d(f[3])!!, d(f[4])!!, d(f[5])!!, f[6].toInt(),
-            wages.filter { it.first.isNotBlank() }.map { NameAmount(it.first.trim(), d(it.second) ?: 0.0) },
-            fixed.filter { it.first.isNotBlank() }.map { NameAmount(it.first.trim(), d(it.second) ?: 0.0) }, waste)
+            wages.filter { it.first.isNotBlank() }.map { NameAmount(it.first.trim(), d(it.second) ?: 0.0, it.third.trim().takeIf { x -> DATE.matches(x) }) },
+            fixed.filter { it.first.isNotBlank() }.map { NameAmount(it.first.trim(), d(it.second) ?: 0.0, it.third.trim().takeIf { x -> DATE.matches(x) }) }, waste,
+            start.trim().takeIf { x -> DATE.matches(x) })
     }.getOrNull()
     Page {
+        LuxCard(Modifier.fillMaxWidth()) {
+            Text("بداية الحساب", style = MaterialTheme.typography.titleMedium)
+            LuxField(start, { start = it }, "تاريخ بداية عمل الورشة (2026-11-27)", isError = start.isNotBlank() && !DATE.matches(start.trim()))
+            Text("لا يُحسب شيء قبله. لكل أجرة ومصروف تاريخ «يبدأ من» خاص به.", style = MaterialTheme.typography.labelSmall, color = Lux.Muted)
+        }
         LuxCard(Modifier.fillMaxWidth()) {
             Text("المواد", style = MaterialTheme.typography.titleMedium)
             labels.forEachIndexed { i, l -> Box(Modifier.padding(top = 6.dp)) { LuxField(f[i], { f[i] = it }, l, keyboard = KeyboardType.Decimal) } }
@@ -465,7 +488,7 @@ private fun CostSettingsForm(vm: ProViewModel, c: CostSettings) {
         AmountList("الأجور اليومية", wages)
         AmountList("المصاريف الشهرية", fixed)
         if (draft != null && draft.rollLengthM > 0 && draft.workDays > 0) {
-            val p = costPeriod(draft, 50.0 * draft.workDays, 0.0, draft.workDays, 1.0, 50.0 * draft.workDays * vm.shop.pricePerMeter)
+            val p = costPeriod(draft, 50.0 * draft.workDays, 0.0, draft.workDays, draft.wages.sumOf { it.amount } * draft.workDays, draft.fixedCosts.sumOf { it.amount }, 50.0 * draft.workDays * vm.shop.pricePerMeter)
             LuxCard(Modifier.fillMaxWidth(), highlight = true) {
                 Text("النتيجة بهذه الأرقام (50 م في اليوم)", color = Lux.Muted, style = MaterialTheme.typography.labelMedium)
                 Text("التكلفة ${formatDa(Math.round(p.pm(p.cost) ?: 0.0).toDouble())} للمتر · الربح ${formatDa(Math.round(p.pm(p.profit) ?: 0.0).toDouble())}", fontWeight = FontWeight.Bold)

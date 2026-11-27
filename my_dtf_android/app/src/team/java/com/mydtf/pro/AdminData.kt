@@ -34,7 +34,7 @@ data class FilmMove(val id: Long, val meters: Double, val kind: String, val note
 data class SupplyFull(val kind: String, val stock: Double, val alert: Double, @SerialName("avg_price") val avgPrice: Double = 0.0)
 
 @Serializable
-data class NameAmount(val name: String, val amount: Double)
+data class NameAmount(val name: String, val amount: Double, val from: String? = null)
 
 @Serializable
 data class CostSettings(
@@ -43,6 +43,7 @@ data class CostSettings(
     @SerialName("powder_price_kg") val powderPriceKg: Double, @SerialName("powder_g_per_m") val powderGPerM: Double,
     @SerialName("work_days") val workDays: Int, val wages: List<NameAmount>, @SerialName("fixed_costs") val fixedCosts: List<NameAmount>,
     @SerialName("waste_in_profit") val wasteInProfit: Boolean = true,
+    @SerialName("start_date") val startDate: String? = null,
 )
 
 @Serializable
@@ -107,7 +108,7 @@ object Admin {
     // Coûts
     suspend fun costSettings(): CostSettings = sb.from("dtf_cost_settings").select { filter { eq("id", 1) } }.decodeSingle()
     suspend fun saveCosts(c: CostSettings) {
-        val j = Json.encodeToJsonElement(CostSettings.serializer(), c).jsonObject
+        val j = Json { encodeDefaults = true; explicitNulls = true }.encodeToJsonElement(CostSettings.serializer(), c).jsonObject
         sb.from("dtf_cost_settings").update(j) { filter { eq("id", 1) } }
     }
     suspend fun costDays(from: String, to: String): List<CostDay> = call("dtf_cost_days2", buildJsonObject { put("p_from", from); put("p_to", to) })
