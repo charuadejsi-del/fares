@@ -1,0 +1,140 @@
+# «خروف العيد هارب» (Godot 4.3): يُبنى عند تحديث مجلّد jeu-kharouf في فرع jeu-kharouf.
+name: Kharouf (Godot)
+
+on:
+  push:
+    branches: [jeu-kharouf]
+    paths:
+      - 'jeu-kharouf/**'
+      - '.github/workflows/kharouf-godot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kharouf-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: barichello/godot-ci:4.3
+    defaults:
+      run:
+        working-directory: jeu-kharouf
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: الإعداد (قوالب التصدير ومفتاح التوقيع)
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates ~/.config /tmp/logs /tmp/shots
+          [ -d ~/.config/godot ] || cp -r /root/.config/godot ~/.config/godot || true
+          [ -d ~/.local/share/godot/export_templates/4.3.stable ] || cp -r /root/.local/share/godot/export_templates/4.3.stable ~/.local/share/godot/export_templates/ || true
+          ls ~/.local/share/godot/export_templates/
+          keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore /tmp/debug.keystore \
+            -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999 -deststoretype pkcs12
+          (command -v curl >/dev/null && command -v unzip >/dev/null && command -v zip >/dev/null) || (apt-get update -qq && apt-get install -y -qq curl unzip zip >/dev/null)
+
+      - name: الخط العربي
+        run: |
+          mkdir -p fonts
+          curl -fsSL -o fonts/Tajawal-Bold.ttf https://raw.githubusercontent.com/google/fonts/main/ofl/tajawal/Tajawal-Bold.ttf
+          ls -la fonts
+
+      - name: استيراد الملفّات
+        run: |
+          godot --headless --path . --import 2>&1 | tail -20 || true
+          [ -d .godot/imported ] || godot --headless --path . --editor --quit 2>&1 | tail -20 || true
+          ls .godot/imported | head
+
+      - name: اختبار تشغيل تلقائي
+        run: |
+          KHAROUF_SMOKE=1 timeout 120 godot --headless --path . > /tmp/logs/smoke.log 2>&1 || true
+          grep -E "SMOKE|SCRIPT ERROR|Parse Error|ERROR|WARNING" /tmp/logs/smoke.log | head -80
+
+      - name: لقطات شاشة حقيقية من اللعبة
+        continue-on-error: true
+        run: |
+          (command -v xvfb-run >/dev/null) || (apt-get update -qq && apt-get install -y -qq xvfb libgl1 libgl1-mesa-dri libglu1-mesa >/dev/null)
+          KHAROUF_SHOT=1 KHAROUF_SHOT_DIR=/tmp/shots timeout 120 xvfb-run -a -s "-screen 0 1600x720x24" godot --rendering-method gl_compatibility --rendering-driver opengl3 --resolution 1600x720 --path . > /tmp/logs/shots.log 2>&1 || true
+          grep -E "SHOT|SCRIPT ERROR|ERROR" /tmp/logs/shots.log | head -40
+          ls -la /tmp/shots
+
+      - name: نشر اللقطات والسجلّات للمراجعة (kharouf-review)
+        if: always()
+        continue-on-error: true
+        working-directory: .
+        run: |
+          git config --global --add safe.directory "$PWD"
+          git config user.name "kharouf-ci"
+          git config user.email "ci@users.noreply.github.com"
+          git fetch -q origin jeu-kharouf
+          git checkout -q -B review-tmp origin/jeu-kharouf
+          rm -rf kharouf-review && mkdir -p kharouf-review
+          cp /tmp/shots/*.jpg kharouf-review/ 2>/dev/null || true
+          cp /tmp/logs/*.log kharouf-review/ 2>/dev/null || true
+          echo "${{ github.sha }} run ${{ github.run_number }}" > kharouf-review/build.txt
+          git add -A kharouf-review
+          git commit -qm "مراجعة — بناء ${{ github.run_number }} [skip ci]" && git push -q origin HEAD:jeu-kharouf || true
+          git checkout -q ${{ github.sha }}
+
+      - name: التحقق من الاختبار (أخطاء السكربت توقف البناء)
+        run: |
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script|Invalid (call|get|set|access)" /tmp/logs/smoke.log; then echo "خطأ في السكربت"; exit 1; fi
+          grep "SMOKE" /tmp/logs/smoke.log
+          grep -q "SMOKE all ok" /tmp/logs/smoke.log || { echo "الاختبار التلقائي فشل"; exit 1; }
+
+      - name: بناء أندرويد
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /tmp/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+        run: |
+          mkdir -p build
+          godot --headless --path . --export-debug "Android" build/kharouf.apk 2>&1 | tail -30
+          test -f build/kharouf.apk
+          SDK=${ANDROID_HOME:-/usr/lib/android-sdk}
+          BT=$(ls -d $SDK/build-tools/* | sort -V | tail -1)
+          if ! $BT/apksigner verify build/kharouf.apk >/dev/null 2>&1; then
+            echo "::warning::الـ APK غير موقَّع — توقيعه الآن"
+            $BT/zipalign -f -p 4 build/kharouf.apk build/aligned.apk
+            $BT/apksigner sign --ks /tmp/debug.keystore --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey --out build/kharouf.apk build/aligned.apk
+            rm -f build/aligned.apk build/kharouf.apk.idsig
+          fi
+          $BT/apksigner verify build/kharouf.apk || { echo "التوقيع غير صالح"; exit 1; }
+          $BT/aapt dump badging build/kharouf.apk | grep -E "^package|sdkVersion" || { echo "أندرويد لا يستطيع قراءة الـ APK"; exit 1; }
+          ls -la build/kharouf.apk | awk '{printf "APK SIZE: %.1f MB\n", $5/1048576}'
+
+      - name: بناء ويندوز
+        continue-on-error: true
+        run: |
+          mkdir -p build/win
+          godot --headless --path . --export-release "Windows Desktop" build/win/kharouf.exe 2>&1 | tail -15
+          ls -la build/win
+          (cd build/win && zip -q -r ../kharouf-windows.zip .)
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kharouf-build-${{ github.run_number }}
+          name: خروف العيد هارب — نسخة ${{ github.run_number }}
+          prerelease: true
+          target_commitish: ${{ github.sha }}
+          body: "خروف العيد هارب (المرحلة 1). kharouf.apk للهاتف، kharouf-windows.zip للحاسوب (فكّه وشغّل kharouf.exe)."
+          files: |
+            jeu-kharouf/build/kharouf.apk
+            jeu-kharouf/build/kharouf-windows.zip
+          fail_on_unmatched_files: false
+
+      - name: آخر نسخة (رابط ثابت)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kharouf-latest
+          name: خروف العيد هارب — آخر نسخة
+          prerelease: true
+          make_latest: false
+          body: "رابط ثابت لآخر نسخة من خروف العيد هارب (يُحدَّث مع كل بناء)."
+          files: |
+            jeu-kharouf/build/kharouf.apk
+            jeu-kharouf/build/kharouf-windows.zip
+          fail_on_unmatched_files: false
