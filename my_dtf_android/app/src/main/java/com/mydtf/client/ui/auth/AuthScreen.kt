@@ -89,11 +89,20 @@ fun AuthScreen(notice: String? = null) {
     val emailOk = email.contains('@') && email.contains('.')
     val passOk = password.length >= 6
     val phoneOk = phoneRegex.matches(phone.replace(" ", ""))
-    val formOk = emailOk && passOk && (!signup || (name.isNotBlank() && phoneOk && wilaya != null && commune != null))
 
+    // La validation est refaite au moment du clic (jamais une valeur figée d'une composition précédente)
+    // et chaque manque est annoncé : un clic ne doit jamais rester sans réponse.
     fun submit() {
         tried = true
-        if (!formOk) return
+        val missing = buildList {
+            if (signup && name.isBlank()) add("الاسم")
+            if (signup && !phoneRegex.matches(phone.replace(" ", ""))) add("رقم هاتف صحيح")
+            if (signup && wilaya == null) add("الولاية")
+            if (signup && commune == null) add("البلدية")
+            if (!(email.contains('@') && email.contains('.'))) add("بريد إلكتروني صحيح")
+            if (password.length < 6) add("كلمة سر من 6 أحرف على الأقل")
+        }
+        if (missing.isNotEmpty()) { info = null; error = "أكمل: " + missing.joinToString("، "); return }
         busy = true; error = null; info = null
         scope.launch {
             try {
@@ -107,8 +116,8 @@ fun AuthScreen(notice: String? = null) {
                         info = "تم إنشاء حسابك ✓ أكّد بريدك الإلكتروني ثم سجّل الدخول."
                     }
                 } else Repo.signIn(email.trim(), password)
-            } catch (e: Exception) {
-                error = friendlyError(e)
+            } catch (e: Throwable) {
+                error = (e as? Exception)?.let { friendlyError(it) } ?: (e.message ?: "حدث خطأ، أعد المحاولة")
             } finally { busy = false }
         }
     }
@@ -188,7 +197,7 @@ fun AuthScreen(notice: String? = null) {
                 Spacer(Modifier.height(16.dp))
                 GoldButton(
                     if (signup) "إنشاء الحساب" else "دخول",
-                    onClick = ::submit, loading = busy, modifier = Modifier.fillMaxWidth(),
+                    onClick = { submit() }, loading = busy, modifier = Modifier.fillMaxWidth(),
                 )
             }
             Spacer(Modifier.height(30.dp))

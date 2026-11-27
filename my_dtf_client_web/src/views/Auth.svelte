@@ -3,12 +3,12 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { sb, errMsg } from '../lib/sb.js';
   import { myProfile, STAFF_ONLY } from '../lib/api.js';
-  import { loadDz } from '../lib/algeria.js';
+  import { loadShip } from '../lib/ship.js';
   import Picker from '../components/Picker.svelte';
   export let err = '';
   const dispatch = createEventDispatcher();
   let tab = 'login', email = '', password = '', name = '', phone = '', wilaya = null, commune = null, address = '', busy = false, info = '';
-  let dz = null; onMount(async () => (dz = await loadDz()));
+  let dz = null; onMount(async () => (dz = await loadShip()));
   $: communes = dz && wilaya ? dz.communes.filter(c => c.w === wilaya.c) : [];
   $: if (wilaya && commune && commune.w !== wilaya.c) commune = null;
   async function login() {
@@ -20,7 +20,8 @@
   }
   async function signup() {
     busy = true; err = ''; info = '';
-    if (!name.trim() || phone.replace(/\D/g, '').length < 9) { err = 'اكتب اسمك ورقم هاتف صحيح'; busy = false; return; }
+    const miss = [!name.trim() && 'الاسم', phone.replace(/\D/g, '').length < 9 && 'رقم هاتف صحيح', !wilaya && 'الولاية', !commune && 'البلدية', !email.includes('@') && 'بريد إلكتروني صحيح', password.length < 6 && 'كلمة سر من 6 أحرف على الأقل'].filter(Boolean);
+    if (miss.length) { err = 'أكمل: ' + miss.join('، '); busy = false; return; }
     const { data, error } = await sb.auth.signUp({ email: email.trim(), password,
       options: { data: { dtf: { full_name: name.trim(), phone: phone.trim(), wilaya: wilaya?.fr || null, commune: commune?.fr || null, address: address.trim() || null } } } });
     busy = false;
@@ -39,7 +40,7 @@
       {#if tab === 'signup'}
         <label for="nm">الاسم الكامل</label><input id="nm" bind:value={name} autocomplete="name" required />
         <label for="ph">رقم الهاتف</label><input id="ph" dir="ltr" inputmode="tel" bind:value={phone} autocomplete="tel" required />
-        {#if dz}<div class="grid g2"><Picker label="الولاية" items={dz.wilayas} bind:value={wilaya} placeholder="اختر" /><Picker label="البلدية" items={communes} bind:value={commune} placeholder="اختر" disabled={!wilaya} /></div>{/if}
+        {#if dz}<div class="grid g2"><Picker label="الولاية" items={dz.wilayas} bind:value={wilaya} placeholder="اختر" hint={dz.live ? 'الولايات التي تصلها شركة التوصيل، مع سعر المكتب والمنزل' : ''} /><Picker label="البلدية" items={communes} bind:value={commune} placeholder="اختر" disabled={!wilaya} hint={dz.live ? '«فيها مكتب»: استلام من مكتب الشركة · «منزل فقط»: توصيل إلى البيت' : ''} /></div>{/if}
         <label for="ad">العنوان (اختياري)</label><input id="ad" bind:value={address} />
       {/if}
       <label for="em">البريد الإلكتروني</label><input id="em" type="email" dir="ltr" autocomplete="username" required bind:value={email} />

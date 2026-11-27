@@ -122,11 +122,10 @@ fun MyDtfTheme(dark: Boolean = true, content: @Composable () -> Unit) {
         LocalLayoutDirection provides LayoutDirection.Rtl,
         LocalIsDark provides dark,
     ) {
-        MaterialTheme(
-            colorScheme = if (dark) DarkLux else LightLux,
-            typography = LuxTypography,
-            shapes = LuxShapes,
-            content = content,
-        )
+        val scheme = if (dark) DarkLux else LightLux
+        MaterialTheme(colorScheme = scheme, typography = LuxTypography, shapes = LuxShapes) {
+            // Couleur de texte par défaut claire partout (sinon noir sur fond nuit hors d'une Surface).
+            CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides scheme.onBackground, content = content)
+        }
     }
 }
