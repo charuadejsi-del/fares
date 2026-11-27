@@ -263,12 +263,12 @@ private fun ImageCard(index: Int, img: PickedImage, onRemove: () -> Unit) {
         }
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.Bottom) {
-            NumberBox("العرض (سم)", img.width, img::setWidth, Modifier.weight(1f))
+            NumberBox("العرض (سم)", img.width, img::updateWidth, Modifier.weight(1f))
             IconButton(onClick = { img.lockRatio = !img.lockRatio }, enabled = img.pxW > 0, modifier = Modifier.padding(bottom = 4.dp)) {
                 Icon(if (img.lockRatio) Icons.Rounded.Link else Icons.Rounded.LinkOff, "قفل الأبعاد",
                     tint = if (img.lockRatio) Lux.Gold else Lux.Muted)
             }
-            NumberBox("الطول (سم)", img.height, img::setHeight, Modifier.weight(1f))
+            NumberBox("الطول (سم)", img.height, img::updateHeight, Modifier.weight(1f))
         }
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {

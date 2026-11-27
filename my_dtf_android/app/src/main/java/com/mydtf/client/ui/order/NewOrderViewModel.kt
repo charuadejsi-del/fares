@@ -53,12 +53,12 @@ class PickedImage(
     val q: Int? get() = qty.toIntOrNull()
     val valid: Boolean get() = (w ?: 0.0) > 0 && (h ?: 0.0) > 0 && (q ?: 0) > 0
 
-    fun setWidth(v: String) {
+    fun updateWidth(v: String) {
         width = clean(v)
         if (lockRatio) w?.let { height = fmt(it * pxH / pxW) }
     }
 
-    fun setHeight(v: String) {
+    fun updateHeight(v: String) {
         height = clean(v)
         if (lockRatio) h?.let { width = fmt(it * pxW / pxH) }
     }
