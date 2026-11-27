@@ -2,7 +2,7 @@ extends CharacterBody3D
 ## المطاردين: عمي السعيد (بطيء وما يحبسش) والدراري (سراع بصح يعياو).
 
 const B := preload("res://build.gd")
-enum S { RUN, TIRED, KNOCKED, DOWN, GETUP, PILE }
+enum S { RUN, TIRED, KNOCKED, DOWN, GETUP, PILE, WINDUP, DIVE }
 const GRAV := 22.0
 const SAID_LINES := ["حبسوووه!", "أرواح هنا يا الخروف!", "راني جاي!", "الخروف هرب!!"]
 const KID_LINES := ["هههه شدّو!", "راهو هنا!", "جيبوووه!"]
@@ -29,6 +29,10 @@ var stars: Node3D
 var bubble: Label3D
 var bubble_t := 0.0
 var pose_tw: Tween
+var dive_cd := 3.0
+var dive_target := Vector3.ZERO
+var dive_min := 99.0
+var ring: MeshInstance3D
 
 
 func setup(k: String, g, f: Font) -> void:
@@ -38,6 +42,7 @@ func setup(k: String, g, f: Font) -> void:
 	speed = 5.2 if k == "said" else 6.6
 	stamina = randf_range(3.5, 5.0)
 	shout_cd = randf_range(1.0, 3.0)
+	dive_cd = randf_range(2.0, 4.0) if k == "kid" else randf_range(4.0, 6.0)
 
 
 func _ready() -> void:
@@ -69,6 +74,12 @@ func _ready() -> void:
 		var s := B.sphere(0.1, Color("ffd93b"), 6)
 		s.material_override = B.mat(Color("ffd93b"), 1.5)
 		B.put(stars, s, Vector3(cos(i * TAU / 3.0) * 0.45, 0, sin(i * TAU / 3.0) * 0.45))
+	# الدائرة الحمرا وين راح يطيح (تبان وقت التحضير)
+	ring = B.torus(0.55, 0.72, Color("ff3b30"))
+	ring.material_override = B.mat(Color("ff3b30"), 1.2)
+	add_child(ring)
+	ring.top_level = true
+	ring.visible = false
 	bubble = B.label3d("", font, 64, Color.WHITE)
 	add_child(bubble)
 	bubble.position = Vector3(0, 2.5 * sc, 0)
@@ -123,11 +134,90 @@ func _build_kid(m: Node3D) -> void:
 # ---------- الحالة ----------
 
 func can_be_hit() -> bool:
-	return state == S.RUN or state == S.TIRED or state == S.GETUP
+	return state == S.RUN or state == S.TIRED or state == S.GETUP or state == S.WINDUP or state == S.DIVE
 
 
 func can_catch() -> bool:
-	return state == S.RUN or state == S.TIRED
+	return state == S.RUN or state == S.TIRED or state == S.DIVE
+
+
+func catch_radius() -> float:
+	return 1.25 if state == S.DIVE else 1.05
+
+
+func is_diving() -> bool:
+	return state == S.WINDUP or state == S.DIVE
+
+
+# ---------- الـ Dive ----------
+
+func start_windup() -> void:
+	if pose_tw:
+		pose_tw.kill()
+	state = S.WINDUP
+	t = 0.0
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_aim()
+	ring.visible = true
+	pose_tw = create_tween()
+	pose_tw.set_parallel(true)
+	pose_tw.tween_property(rig, "rotation", Vector3(0.3, 0.0, 0.0), 0.2)
+	for a in arms:
+		pose_tw.tween_property(a, "rotation", Vector3(-0.9, 0.0, 0.0), 0.2)
+	say("هاهو!")
+
+
+func _windup_time() -> float:
+	return 0.55 if kind == "said" else 0.42
+
+
+func _aim() -> void:
+	var sp: Vector3 = game.sheep.global_position
+	var sv: Vector3 = game.sheep.velocity
+	dive_target = Vector3(sp.x + sv.x * 0.2, 0.0, sp.z + sv.z * 0.2)
+	ring.global_position = Vector3(dive_target.x, 0.06, dive_target.z)
+	var to := dive_target - global_position
+	to.y = 0.0
+	if to.length() > 0.01:
+		rotation.y = atan2(-to.x, -to.z)
+
+
+func _launch() -> void:
+	state = S.DIVE
+	t = 0.0
+	var to := dive_target - global_position
+	to.y = 0.0
+	var dist := maxf(to.length(), 0.5)
+	var spd := 12.5 if kind == "kid" else 10.5
+	var flight := clampf(dist / spd, 0.3, 0.6)
+	var hv := to / dist * (dist / flight) * 1.15
+	velocity = Vector3(hv.x, GRAV * flight * 0.5, hv.z)
+	dive_min = 99.0
+	if pose_tw:
+		pose_tw.kill()
+	pose_tw = create_tween()
+	pose_tw.set_parallel(true)
+	pose_tw.tween_property(rig, "rotation", Vector3(-1.35, 0.0, 0.0), 0.12)
+	for a in arms:
+		pose_tw.tween_property(a, "rotation", Vector3(1.6, 0.0, 0.0), 0.12)
+	game.sfx.play("jump", -4.0, 0.6)
+
+
+func _dive_land() -> void:
+	ring.visible = false
+	dive_cd = randf_range(3.5, 5.5) if kind == "kid" else randf_range(5.0, 7.0)
+	state = S.DOWN
+	t = 0.8
+	if pose_tw:
+		pose_tw.kill()
+	pose_tw = create_tween()
+	pose_tw.set_parallel(true)
+	pose_tw.tween_property(rig, "rotation", Vector3(-PI / 2.0, 0.0, 0.0), 0.12)
+	pose_tw.tween_property(rig, "position", Vector3(0, 0.28, 0), 0.12)
+	game.sfx.play("hit", -6.0, 0.6)
+	if game.is_playing() and dive_min < 2.2:
+		game.on_dodge(self)
 
 
 func is_knocked() -> bool:
@@ -147,6 +237,7 @@ func knock(dir: Vector3, power: float = 1.0) -> void:
 		pose_tw.kill()
 	state = S.KNOCKED
 	t = 0.0
+	ring.visible = false
 	var flat := Vector3(dir.x, 0.0, dir.z)
 	if flat.length() < 0.01:
 		flat = Vector3(0, 0, -1)
@@ -197,6 +288,7 @@ func pile_on(dest: Vector3, look_at_pos: Vector3, pitch: float = 1.2) -> void:
 	collision_mask = 0
 	velocity = Vector3.ZERO
 	stars.visible = false
+	ring.visible = false
 	if pose_tw:
 		pose_tw.kill()
 	var to := look_at_pos - dest
@@ -237,6 +329,15 @@ func _physics_process(delta: float) -> void:
 			if game.chasers_active():
 				var want: Vector3 = _chase(delta)
 				hv = hv.lerp(want, clampf(delta * 8.0, 0.0, 1.0))
+				dive_cd -= delta
+				if state == S.RUN and game.is_playing() and dive_cd <= 0.0 and is_on_floor():
+					var dd: Vector3 = game.sheep.global_position - global_position
+					var fd := Vector2(dd.x, dd.z).length()
+					if fd > 2.6 and fd < 6.5:
+						start_windup()
+						hv = Vector3.ZERO
+					elif fd <= 2.6:
+						dive_cd = 0.5
 			else:
 				hv = hv.lerp(Vector3.ZERO, clampf(delta * 6.0, 0.0, 1.0))
 			if state == S.TIRED:
@@ -253,6 +354,19 @@ func _physics_process(delta: float) -> void:
 			stars.rotate_y(delta * 5.0)
 			if t > 2.0:
 				_get_up()
+		S.WINDUP:
+			hv = Vector3.ZERO
+			if t < _windup_time() * 0.6:
+				_aim()
+			ring.scale = Vector3.ONE * (1.0 + sin(t * 30.0) * 0.12)
+			if t >= _windup_time():
+				_launch()
+				hv = Vector3(velocity.x, 0.0, velocity.z)
+		S.DIVE:
+			var ds: Vector3 = game.sheep.global_position - global_position
+			dive_min = minf(dive_min, Vector2(ds.x, ds.z).length())
+			if (is_on_floor() and t > 0.15) or t > 1.2:
+				_dive_land()
 		S.GETUP:
 			hv = Vector3.ZERO
 			if t > 0.45:

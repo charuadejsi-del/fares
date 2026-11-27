@@ -444,6 +444,7 @@ func start_game() -> void:
 	combo = 0
 	combo_t = 0.0
 	escapes_left = 1
+	dodges = 0
 	grab_by = null
 	invuln = 0.0
 	escape_box.visible = false
@@ -543,7 +544,7 @@ func _physics_process(delta: float) -> void:
 	for c in chasers:
 		if c.can_catch():
 			var dd: Vector3 = c.global_position - sheep.global_position
-			if Vector2(dd.x, dd.z).length() < 1.05 and absf(dd.y) < 0.9 and not sheep.is_dashing() and invuln <= 0.0:
+			if Vector2(dd.x, dd.z).length() < c.catch_radius() and absf(dd.y) < 0.9 and not sheep.is_dashing() and invuln <= 0.0:
 				if escapes_left > 0:
 					_start_grab(c)
 				else:
@@ -587,6 +588,25 @@ func on_knock_chaser(c, chain: bool = false) -> void:
 		big_word("دومينو!", Color("ff9f43"))
 	sfx.play("hit", 0.0, randf_range(0.9, 1.15))
 	_vibrate(45)
+
+
+## تفادى واحد طاير عليه: slow-motion ونقاط.
+var dodges := 0
+
+
+func on_dodge(c) -> void:
+	if state != State.PLAYING:
+		return
+	dodges += 1
+	combo += 1
+	combo_t = 2.5
+	score += 100 * mini(combo, 5)
+	_pop_score()
+	big_word("تفاداه!", Color("7be04f"))
+	sfx.play("baa", -4.0, 1.4)
+	_vibrate(30)
+	Engine.time_scale = 0.35
+	get_tree().create_timer(0.45, true, false, true).timeout.connect(_end_slowmo)
 
 
 func on_prop_hit(p) -> void:
@@ -860,9 +880,31 @@ func _run_smoke() -> void:
 	spawn_grass_at(sheep.global_position)
 	await _wait(0.2)
 	_check("grass", sheep.energy > 30.0, "energy=%.0f" % sheep.energy)
-	# الحكان الأول: يشدّو، وننقرو 8 مرات باش نتفلتو
-	var g1 = spawn_chaser("said", sheep.global_position + Vector3(0, 0, 0.9))
-	await _wait(0.5)
+	# الـ Dive: يتحضر ويطير، والخروف يتنحى لجنب → تفاداه
+	var fw: Vector3 = sheep.facing
+	var dk = spawn_chaser("kid", sheep.global_position + fw * 4.5)
+	await _wait(0.2)
+	dk.start_windup()
+	_check("windup", dk.is_diving() and dk.ring.visible, "state=%d" % dk.state)
+	for i in 60:
+		await get_tree().physics_frame
+		if dk.state == dk.S.DIVE:
+			break
+	_check("dive", dk.state == dk.S.DIVE, "state=%d" % dk.state)
+	sheep.global_position += Vector3(0, 0, 1.8)
+	await _wait(1.0)
+	_check("dodge", dodges == 1 and state == State.PLAYING, "dodges=%d state=%d" % [dodges, state])
+	chasers.erase(dk)
+	dk.queue_free()
+	await _wait(0.6)
+	# الحكان الأول: واحد يطير عليه ويشدّو، وننقرو 8 مرات باش نتفلتو
+	var g1 = spawn_chaser("kid", sheep.global_position + sheep.facing * 4.0)
+	await _wait(0.2)
+	g1.start_windup()
+	for i in 90:
+		await get_tree().physics_frame
+		if state == State.GRAB:
+			break
 	_check("grab", state == State.GRAB and escape_box.visible, "state=%d" % state)
 	await _wait(0.4)
 	var gd: Vector3 = g1.global_position - sheep.global_position
@@ -993,6 +1035,24 @@ func _run_shots() -> void:
 	sheep.input_override = Vector2(1, 0)
 	await _wait(3.5)
 	await _snap(dir, "05_chase")
+	sheep.input_override = Vector2.ZERO
+	await _wait(0.3)
+	var dv = spawn_chaser("kid", sheep.global_position + Vector3(-5, 0.2, 0))
+	await _wait(0.2)
+	dv.start_windup()
+	await _wait(0.3)
+	await _snap(dir, "05b_windup")
+	for i in 60:
+		await get_tree().physics_frame
+		if dv.state == dv.S.DIVE:
+			break
+	await _wait(0.12)
+	await _snap(dir, "05c_dive")
+	sheep.global_position += Vector3(0, 0, 1.8)
+	await _wait(0.9)
+	await _snap(dir, "05d_dodge")
+	chasers.erase(dv)
+	dv.queue_free()
 	sheep.input_override = Vector2.ZERO
 	var gs = spawn_chaser("said", sheep.global_position + Vector3(0.9, 0.2, 0))
 	await _wait(0.9)
