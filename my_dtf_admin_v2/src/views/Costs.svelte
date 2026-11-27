@@ -1,4 +1,5 @@
 <script>
+  import { countUp } from '../lib/motion.js';
   // Coûts et bénéfices : par mètre, par jour, par mois — mètres réels des commandes.
   import { sb, q, rpc, errMsg } from '../lib/sb.js';
   import { settings, liveTick, toast } from '../lib/store.js';
@@ -64,7 +65,7 @@
 {#if !R}<div class="spinner"></div>
 {:else if tab === 'board'}
   <div class="grid g4">
-    <div class="card accent kp"><span class="muted small">الربح الصافي — {ongoing ? 'حتى اليوم' : 'الشهر'}</span><b class:red={R.actual.profit < 0} class:green={R.actual.profit >= 0}>{da(R.actual.profit)}</b><span class="faint tiny">{m(R.actual.meters, 1)} في {num(R.worked)} يوم عمل</span></div>
+    <div class="card accent kp"><span class="muted small">الربح الصافي — {ongoing ? 'حتى اليوم' : 'الشهر'}</span><b class:red={R.actual.profit < 0} class:green={R.actual.profit >= 0} use:countUp={{ value: R.actual.profit, format: da }}></b><span class="faint tiny">{m(R.actual.meters, 1)} في {num(R.worked)} يوم عمل</span></div>
     <div class="card kp"><span class="muted small">التكلفة للمتر</span><b>{num2(ref.per.cost)}</b><span class="faint tiny">سعر البيع {da(price)}</span></div>
     <div class="card kp"><span class="muted small">الربح للمتر</span><b class:red={ref.per.profit < 0}>{num2(ref.per.profit)}</b><span class="faint tiny">الهامش {ref.margin == null ? '—' : pct(ref.margin * 100)}</span></div>
     <div class="card kp"><span class="muted small">{R.projection ? 'التوقّع لنهاية الشهر' : 'المداخيل'}</span><b class="accent">{R.projection ? da(R.projection.profit) : da(R.actual.revenue)}</b><span class="faint tiny">{R.projection ? `${m(R.projection.meters, 0)} على ${num(cs.work_days)} يوم` : `المفوتر فعلاً ${da(R.actual.revenueReal)}`}</span></div>

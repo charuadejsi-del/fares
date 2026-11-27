@@ -227,7 +227,7 @@
         <div class="notice row" style="margin-bottom:14px"><span class="grow">اقترب وقت نهاية العمل. لا تنسَ تسجيل خروجك بالرمز السري قبل المغادرة.</span>
           <button class="btn sm" on:click={() => openModal(ClockOut, { onDone: bye })}>تسجيل الخروج</button></div>
       {/if}
-      {#key view}<svelte:component this={VIEWS[view]} />{/key}
+      {#key view}<div class="page-in"><svelte:component this={VIEWS[view]} /></div>{/key}
     </main>
 
     <nav class="bottom">

@@ -1,5 +1,7 @@
 import './app.css';
 import App from './App.svelte';
+import { installRipple } from './lib/motion.js';
+installRipple();
 
 const app = new App({ target: document.getElementById('app') });
 

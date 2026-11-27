@@ -49,7 +49,7 @@
       <nav class="desk">{#each NAV as [id, ic, t]}<a href="#/{id === 'home' ? '' : id}" class:on={route === id}><Icon name={ic} size={18} />{t}{#if id === 'chat' && unreadChat}<span class="badge">{unreadChat}</span>{/if}</a>{/each}</nav>
       <a class="bell" href="#/notifications" aria-label="الإشعارات"><Icon name="inbox" size={22} />{#if unread}<span class="badge">{unread}</span>{/if}</a>
     </header>
-    <main>{#key route + param}<svelte:component this={ROUTES[route] || Home} {param} on:logout={logout} />{/key}</main>
+    <main>{#key route + param}<div class="page-in"><svelte:component this={ROUTES[route] || Home} {param} on:logout={logout} /></div>{/key}</main>
     <nav class="bottom">{#each NAV as [id, ic, t]}<a href="#/{id === 'home' ? '' : id}" class="bl" class:on={route === id} class:fab={id === 'new'}><span class="ic"><Icon name={ic} size={id === 'new' ? 26 : 22} />{#if id === 'chat' && unreadChat}<span class="badge dot">{unreadChat}</span>{/if}</span><span>{t}</span></a>{/each}</nav>
   </div>
 {/if}

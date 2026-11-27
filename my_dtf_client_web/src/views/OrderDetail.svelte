@@ -1,4 +1,5 @@
 <script>
+  import { confetti } from '../lib/motion.js';
   import { sb, q, rpc, errMsg } from '../lib/sb.js';
   import { orders, liveTick, toast } from '../lib/store.js';
   import { signedUrls } from '../lib/api.js';
@@ -21,9 +22,11 @@
     } catch (e) { err = errMsg(e); }
   }
   $: param, $liveTick, load();
+  let fired = '';
+  $: if (o && ['printed', 'ready_pickup'].includes(o.status) && fired !== o.id + o.status) { fired = o.id + o.status; if (!sessionStorage.getItem('c' + fired)) { sessionStorage.setItem('c' + fired, '1'); setTimeout(() => confetti(80), 400); } }
   async function rate() {
     busy = true;
-    try { await rpc('dtf_rate_order', { p_order: o.id, p_stars: stars, p_comment: comment }); rating = { stars, comment }; toast('شكراً على تقييمك'); }
+    try { await rpc('dtf_rate_order', { p_order: o.id, p_stars: stars, p_comment: comment }); rating = { stars, comment }; toast('شكراً على تقييمك'); if (stars >= 4) confetti(60); }
     catch (e) { toast(errMsg(e), true); }
     busy = false;
   }
@@ -94,7 +97,8 @@
   .tl > div { position: relative; padding: 6px 0; color: var(--faint); }
   .tl > div::before { content: ''; position: absolute; right: -23px; top: 12px; width: 12px; height: 12px; border-radius: 50%; background: var(--card3); border: 2px solid var(--bg); }
   .tl > div.on { color: var(--text); } .tl > div.on::before { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
-  .stars button { font-size: 34px; color: var(--card3); padding: 0 2px; } .stars button.on { color: var(--amber); }
+  .stars button { font-size: 34px; color: var(--card3); padding: 0 2px; transition: transform .3s cubic-bezier(.34,1.56,.64,1), color .2s; }
+  .stars button:active { transform: scale(.8); } .stars button.on { transform: scale(1.12); } .stars button.on { color: var(--amber); }
   .imgs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .im { text-align: center; } .im img { width: 100%; height: 96px; }
 </style>

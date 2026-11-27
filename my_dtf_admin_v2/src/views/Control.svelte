@@ -1,4 +1,5 @@
 <script>
+  import { countUp } from '../lib/motion.js';
   // Centre de contrôle de l'atelier : machines en direct, chaîne de production, activité, équipe.
   import { onDestroy } from 'svelte';
   import { sb, q, rpc } from '../lib/sb.js';
@@ -79,9 +80,9 @@
 {#if !d}<div class="spinner"></div>{:else}
   <div class="hero card accent">
     <div class="clock"><div class="num big">{hh}</div><div class="faint small">{clockNow.toLocaleDateString('ar-DZ', { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
-    <div class="hk"><span class="faint tiny">مداخيل اليوم</span><b class="accent">{da(d.revToday)}</b><span class="faint tiny">{num(d.nToday)} طلبية</span></div>
-    <div class="hk"><span class="faint tiny">أمتار اليوم</span><b>{m(metersToday, 1)}</b><span class="faint tiny">هدر {m(wasteToday, 1)}</span></div>
-    <div class="hk"><span class="faint tiny">في الإنتاج</span><b>{num(d.inWork)}</b><span class="faint tiny">طلبية مفتوحة</span></div>
+    <div class="hk"><span class="faint tiny">مداخيل اليوم</span><b class="accent" use:countUp={{ value: d.revToday, format: da }}></b><span class="faint tiny">{num(d.nToday)} طلبية</span></div>
+    <div class="hk"><span class="faint tiny">أمتار اليوم</span><b use:countUp={{ value: metersToday, format: v => m(v, 1) }}></b><span class="faint tiny">هدر {m(wasteToday, 1)}</span></div>
+    <div class="hk"><span class="faint tiny">في الإنتاج</span><b use:countUp={{ value: d.inWork, format: v => num(Math.round(v)) }}></b><span class="faint tiny">طلبية مفتوحة</span></div>
     <div class="hk ringk"><Ring value={act.length ? running / act.length : 0} size={70} stroke={7} color="var(--green)"><b class="num">{running}/{act.length}</b></Ring><span class="faint tiny">آلات تطبع</span></div>
     <button class="btn quiet sm tvb" on:click={() => tv.update(v => !v)}><Icon name="tv" size={16} />{$tv ? 'خروج من وضع الشاشة' : 'وضع الشاشة'}</button>
   </div>

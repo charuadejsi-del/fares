@@ -41,6 +41,10 @@
   .dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--gold); transition: background .12s; }
   .dots i.f { background: var(--gold); }
   .err { min-height: 22px; }
+  .pad button { transition: transform .3s cubic-bezier(.34,1.56,.64,1), background .15s; }
+  .pad button:active { transform: scale(.88); transition-duration: .06s; }
+  .dots i { transition: transform .3s cubic-bezier(.34,1.56,.64,1), background .2s; }
+  .dots i.f { transform: scale(1.25); }
   .pad { display: grid; grid-template-columns: repeat(3, 74px); gap: 12px; justify-content: center; margin-top: 6px; }
   .pad button { height: 64px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); font-size: 22px; font-weight: 600; }
   .pad button:active { background: var(--card2); }

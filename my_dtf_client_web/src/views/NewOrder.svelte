@@ -1,4 +1,5 @@
 <script>
+  import { countUp, confetti } from '../lib/motion.js';
   // Nouvelle commande en 4 étapes : images → film → livraison → confirmation.
   import { onMount } from 'svelte';
   import { sb, q, errMsg, BUCKET } from '../lib/sb.js';
@@ -14,6 +15,7 @@
   import Icon from '../components/Icon.svelte';
   export let param = '';
 
+  let sent = false;
   let step = 0, images = [], seq = 0, dz = null, sending = false, progress = '', err = '';
   let mode = 'pickup', name = '', phone = '', wilaya = null, commune = null, address = '', note = '';
   let fileInput, dragging = false;
@@ -74,7 +76,9 @@
         ship: mode === 'pickup' ? { name: name.trim(), phone: phone.trim() } : { name: name.trim(), phone: phone.trim(), wilaya: wilaya?.fr, commune: commune?.fr, address: address.trim() || null },
         note, images: images.map((it, k) => ({ file: it.file, w: items[k].width_cm, h: items[k].height_cm, q: items[k].quantity })) },
         (d, t) => (progress = `رفع الصور ${d}/${t}...`));
-      await loadAll(); toast('أُرسلت طلبيتك بنجاح'); location.hash = '#/order/' + o.id;
+      sent = true; confetti(); navigator.vibrate?.([20, 40, 20]);
+      await loadAll(); toast('أُرسلت طلبيتك بنجاح');
+      setTimeout(() => (location.hash = '#/order/' + o.id), 1300);
     } catch (e) { err = errMsg(e); }
     sending = false; progress = '';
   }
@@ -144,13 +148,13 @@
 <div class="bar-bottom card">
   <div class="grow">
     <div class="muted tiny">{Q ? `${m(Q.meters)} · ${num(copies)} نسخة` : 'أضف صورك ومقاساتها'}</div>
-    <div class="price">{Q ? da(Q.amount) : '—'}</div>
+    {#if Q}<div class="price" use:countUp={{ value: Q.amount, format: v => da(Math.round(v)) }}></div>{:else}<div class="price">—</div>{/if}
     {#if Q && (Q.ppm < Q.base || $me?.special_price != null)}<div class="green tiny">سعرك: {da(Q.ppm)} للمتر</div>{/if}
     {#if Q?.next}<div class="accent tiny">اطلب {m(Q.next.min, 0)} أو أكثر ويصبح المتر {da(Q.next.price)}</div>{/if}
   </div>
   {#if step > 0}<button class="btn quiet" disabled={sending} on:click={() => step--}>رجوع</button>{/if}
   {#if step < 3}<button class="btn lg" disabled={!canNext} on:click={() => step++}>{step === 2 ? 'مراجعة' : 'التالي'}</button>
-  {:else}<button class="btn lg" disabled={sending} on:click={send}><Icon name="check" size={18} />{sending ? progress || '...' : 'تأكيد الإرسال'}</button>{/if}
+  {:else}<button class="btn lg" class:done={sent} class:pop={sent} disabled={sending || sent} on:click={send}><Icon name="check" size={18} />{sent ? 'أُرسلت ✓' : sending ? progress || '...' : 'تأكيد الإرسال'}</button>{/if}
 </div>
 {#if err}<div class="notice bad small" style="margin-top:10px">{err}</div>{/if}
 

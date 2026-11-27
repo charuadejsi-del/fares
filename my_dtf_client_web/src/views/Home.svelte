@@ -1,4 +1,5 @@
 <script>
+  import { countUp } from '../lib/motion.js';
   import { me, orders, settings } from '../lib/store.js';
   import { da, num } from '../lib/fmt.js';
   import ShopStatus from '../components/ShopStatus.svelte';
@@ -21,8 +22,8 @@
 <div class="grid g3" style="margin-top:12px">
   <div class="card kp"><span class="muted small">سعر المتر</span><b class="accent">{da(sp ?? $settings?.price_per_meter ?? 0)}</b>
     {#if sp != null}<span class="green tiny">سعر خاص بك</span>{:else}{#each tiers as t}<span class="faint tiny">من {num(t.min_m)} م: {da(t.price)}</span>{/each}{/if}</div>
-  <div class="card kp"><span class="muted small">طلبياتي</span><b>{num($orders.length)}</b><span class="faint tiny">{num(active.length)} قيد التنفيذ</span></div>
-  <div class="card kp"><span class="muted small">المتبقي للدفع</span><b>{da(Math.max(0, total - paid))}</b><span class="faint tiny">من أصل {da(total)}</span></div>
+  <div class="card kp"><span class="muted small">طلبياتي</span><b use:countUp={{ value: $orders.length, format: v => num(Math.round(v)) }}></b><span class="faint tiny">{num(active.length)} قيد التنفيذ</span></div>
+  <div class="card kp"><span class="muted small">المتبقي للدفع</span><b use:countUp={{ value: Math.max(0, total - paid), format: da }}></b><span class="faint tiny">من أصل {da(total)}</span></div>
 </div>
 <div class="section-title" style="margin-top:20px">قيد التنفيذ</div>
 {#if active.length}<div class="grid g2 stack">{#each active as o (o.id)}<OrderCard {o} />{/each}</div>
