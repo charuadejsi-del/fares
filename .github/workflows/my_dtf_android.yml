@@ -1,0 +1,68 @@
+# My DTF — application client Android native (Kotlin + Jetpack Compose)
+name: My DTF — Android natif
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dtf-atelier]
+    paths: ['my_dtf_android/**', '.github/workflows/my_dtf_android.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: my_dtf_android
+    env:
+      BUILD_NUMBER: ${{ github.run_number }}
+      HAS_KS: ${{ secrets.MYDTF_KEYSTORE_B64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      # Clé de signature : secret GitHub si présent, sinon clé debug conservée en cache
+      # (même signature d'une version à l'autre → mise à jour sans désinstaller).
+      - name: Clé de signature (secret)
+        if: env.HAS_KS == 'true'
+        env:
+          KS: ${{ secrets.MYDTF_KEYSTORE_B64 }}
+        run: |
+          echo "$KS" | base64 -d > $RUNNER_TEMP/release.jks
+          echo "MYDTF_KEYSTORE=$RUNNER_TEMP/release.jks" >> $GITHUB_ENV
+          echo "MYDTF_KEYSTORE_PASSWORD=${{ secrets.MYDTF_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "MYDTF_KEY_ALIAS=${{ secrets.MYDTF_KEY_ALIAS }}" >> $GITHUB_ENV
+          echo "MYDTF_KEY_PASSWORD=${{ secrets.MYDTF_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: Clé debug persistante
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: mydtf-debug-keystore-v1
+
+      - name: Tests du cœur (imbrication, prix, wilayas)
+        run: gradle :core:test --no-daemon
+
+      - name: APK
+        run: |
+          gradle :app:assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk My-DTF.apk
+
+      - name: Release GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: my-dtf-android-v1.0.${{ github.run_number }}
+          name: My DTF Android v1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          body: Application client native (Kotlin + Jetpack Compose).
+          files: my_dtf_android/My-DTF.apk
