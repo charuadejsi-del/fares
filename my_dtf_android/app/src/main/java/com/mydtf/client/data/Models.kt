@@ -12,7 +12,14 @@ data class Profile(
     val wilaya: String? = null,
     val commune: String? = null,
     val address: String? = null,
+    @SerialName("special_price") val specialPrice: Double? = null,
 )
+
+@Serializable
+data class Rating(val stars: Int, val comment: String? = null)
+
+@Serializable
+data class PriceTier(@SerialName("min_m") val minM: Double, val price: Double)
 
 @Serializable
 data class Settings(
@@ -27,6 +34,7 @@ data class Settings(
     @SerialName("workshop_address") val workshopAddress: String? = null,
     @SerialName("is_open") val isOpen: Boolean = true,
     @SerialName("open_note") val openNote: String? = null,
+    @SerialName("price_tiers") val priceTiers: List<PriceTier> = emptyList(),
 )
 
 @Serializable

@@ -172,6 +172,7 @@ fun OrderDetailScreen(orderId: String, main: MainViewModel, onBack: () -> Unit, 
                 }
             }
 
+            if (o.status == "delivered") RatingCard(o.id)
             com.mydtf.client.ui.components.GoldButton("أعِد نفس الطلبية", onClick = { onReorder(o.id) },
                 icon = Icons.Rounded.Replay, modifier = Modifier.fillMaxWidth())
             GhostButton("مراسلة الورشة بخصوص هذه الطلبية", onClick = { onChat(o.id) }, icon = Icons.Rounded.ChatBubbleOutline, modifier = Modifier.fillMaxWidth())

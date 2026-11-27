@@ -1,13 +1,18 @@
 <script>
-  import { rpc, errMsg } from '../lib/sb.js';
+  import { rpc, sb, q, errMsg } from '../lib/sb.js';
+  import { staffName } from '../lib/store.js';
+  import { dt } from '../lib/fmt.js';
+  let ratings = [];
+  q(sb.from('dtf_ratings').select('*,ord:dtf_orders(code,designer_id,printer_id),cl:dtf_profiles(full_name)').order('created_at', { ascending: false }).limit(30)).then(r => (ratings = r)).catch(() => {});
+  $: avgStars = ratings.length ? ratings.reduce((a, r) => a + r.stars, 0) / ratings.length : null;
   import { ROLE, m, num, dur, pct, ymd } from '../lib/fmt.js';
   let range = '7', rows = null, err = '';
   async function load() {
     rows = null; err = '';
     try {
       const to = new Date(), from = new Date(Date.now() - (+range - 1) * 864e5);
-      const r = await rpc('dtf_staff_stats', { p_from: ymd(from), p_to: ymd(to) });
-      rows = score(r);
+      const [r, rt] = await Promise.all([rpc('dtf_staff_stats', { p_from: ymd(from), p_to: ymd(to) }), rpc('dtf_staff_ratings', { p_from: ymd(from), p_to: ymd(to) }).catch(() => [])]);
+      rows = score(r.map(x => { const k = rt.find(y => y.user_id === x.user_id); return { ...x, stars: k ? +k.avg_stars : null, nstars: k ? k.n : 0 }; }));
     } catch (e) { err = errMsg(e); rows = []; }
   }
   // Note /100 : qualité 40 · vitesse 30 (par rapport à la moyenne du même rôle) · volume 20 · discipline 10
@@ -16,7 +21,8 @@
       const peers = r.filter(p => p.role === x.role && p.orders_done > 0);
       const avgT = peers.length ? peers.reduce((a, p) => a + +p.avg_minutes, 0) / peers.length : 0;
       const maxN = Math.max(1, ...r.filter(p => p.role === x.role).map(p => p.orders_done));
-      const quality = x.orders_done ? Math.max(0, 1 - (x.issues / x.orders_done) * 3) : (x.issues ? 0 : 1);
+      const q0 = x.orders_done ? Math.max(0, 1 - (x.issues / x.orders_done) * 3) : (x.issues ? 0 : 1);
+      const quality = x.stars != null ? q0 * 0.5 + ((x.stars - 1) / 4) * 0.5 : q0;
       const speed = x.orders_done && avgT > 0 ? Math.max(0, Math.min(1, (avgT / Math.max(+x.avg_minutes, 1)) * 0.7)) : 0.5;
       const volume = x.orders_done / maxN;
       const disc = x.days_worked ? Math.max(0, 1 - (x.late_days * 0.5 + x.forgot_out) / x.days_worked) : 0.5;
@@ -52,14 +58,24 @@
         {/each}
         <div class="grid g2 tiny stats">
           <span>الملفات: {num(x.orders_done)}</span><span>الأمتار: {m(x.meters, 1)}</span>
-          <span>المعدّل: {x.orders_done ? dur(x.avg_minutes) : '—'}</span><span class:red={x.issues}>المشاكل: {num(x.issues)}</span>
+          <span>المعدّل: {x.orders_done ? dur(x.avg_minutes) : '—'}</span><span class:red={x.issues}>المشاكل: {num(x.issues)}</span>{#if x.stars != null}<span class:red={x.stars < 3}>التقييم: <b class="num">{x.stars.toFixed(1)}★</b> ({num(x.nstars)})</span>{/if}
           <span>أيام العمل: {num(x.days_worked)}</span><span class:red={x.late_days || x.forgot_out}>تأخير {num(x.late_days)} · نسيان {num(x.forgot_out)}</span>
         </div>
       </div>
     {:else}<div class="card empty">أضف أعضاء الفريق أولاً</div>{/each}
   </div>
+  <div class="card" style="margin-top:12px">
+    <div class="section-title">آخر تقييمات الزبائن{#if avgStars != null}<span class="end"><b class="num">{avgStars.toFixed(1)}★</b> <span class="faint small">من {num(ratings.length)}</span></span>{/if}</div>
+    {#if ratings.length}<div class="list">{#each ratings as r}
+      <div class="item row"><span class="st" class:red={r.stars <= 2}><b class="num">{r.stars}★</b></span>
+        <div class="grow small"><b>طلبية {num(r.ord?.code)}</b> · {r.cl?.full_name || ''}{#if r.comment}<div class="muted">{r.comment}</div>{/if}
+          <div class="faint tiny">المصمّم {staffName(r.ord?.designer_id)} · الطابع {staffName(r.ord?.printer_id)}</div></div>
+        <span class="faint tiny">{dt(r.created_at)}</span></div>{/each}</div>
+    {:else}<div class="empty">لا توجد تقييمات بعد — تظهر بعد تسليم الطلبيات</div>{/if}
+  </div>
 {/if}
 <style>
+  .st { min-width: 44px; color: var(--amber); }
   .rank { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--card2); color: var(--gold); font-weight: 700; }
   .score { font-size: 28px; font-weight: 700; color: var(--gold); }
   .stats { margin-top: 12px; gap: 6px; color: var(--muted); }

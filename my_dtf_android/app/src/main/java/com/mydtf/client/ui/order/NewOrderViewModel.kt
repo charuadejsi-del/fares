@@ -92,9 +92,12 @@ class NewOrderViewModel : ViewModel() {
     var settings by mutableStateOf<Settings?>(null)
     private var prefilled = false
 
+    var special by mutableStateOf<Double?>(null)
+    val pricing: PricingSettings? get() = settings?.let { s -> PricingSettings(s.pricePerMeter, s.minOrderAmount, s.meterRoundingStep, s.priceTiers.map { it.minM to it.price }, special) }
     fun prefill(p: Profile?) {
         if (prefilled || p == null) return
         prefilled = true
+        special = p.specialPrice
         name = p.fullName
         phone = p.phone
         wilaya = Algeria.wilayaByName(p.wilaya)
@@ -180,7 +183,7 @@ class NewOrderViewModel : ViewModel() {
         val s = settings ?: return@derivedStateOf null
         val r = nestState.result ?: return@derivedStateOf null
         if (r.placements.isEmpty()) null
-        else computeQuote(r.lengthCm, PricingSettings(s.pricePerMeter, s.minOrderAmount, s.meterRoundingStep))
+        else computeQuote(r.lengthCm, PricingSettings(s.pricePerMeter, s.minOrderAmount, s.meterRoundingStep, s.priceTiers.map { it.minM to it.price }, special))
     }
 
     val copies: Int get() = images.sumOf { if (it.valid) it.q!! else 0 }

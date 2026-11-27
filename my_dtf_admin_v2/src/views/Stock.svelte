@@ -5,6 +5,7 @@
   import Kpi from '../components/Kpi.svelte';
   import MachineSheet from './MachineSheet.svelte';
   import Icon from '../components/Icon.svelte';
+  import Supplies from '../components/Supplies.svelte';
   import Waste from './Waste.svelte';
   import BuyRolls from './BuyRolls.svelte';
 
@@ -37,7 +38,10 @@
       <Kpi label="ربح المتر" value={da(ppm - d.cpm)} sub={ppm ? `سعر البيع ${da(ppm)}` : 'حدّد سعر المتر في الإعدادات'} />
     {/if}
   </div>
-  <div class="grid split" style="margin-top:12px">
+  <div class="section-title" style="margin-top:18px">الحبر والبودرة</div>
+  <Supplies />
+  <div class="section-title" style="margin-top:18px">الفيلم</div>
+  <div class="grid split">
     <div class="card">
       <div class="section-title">رولو كل آلة</div>
       <div class="col">

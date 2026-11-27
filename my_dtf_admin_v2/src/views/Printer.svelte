@@ -11,6 +11,7 @@
   import OrderSheet from './OrderSheet.svelte';
   import MachineSheet from './MachineSheet.svelte';
   import Waste from './Waste.svelte';
+  import Supplies from '../components/Supplies.svelte';
 
   let list = null, th = {}, busy = '';
   async function load() {
@@ -68,6 +69,7 @@
         <div><span class="faint tiny">في الطابور</span><b class="num">{queue.length}</b><span class="faint tiny">{m(need, 1)}</span></div>
         <div><span class="faint tiny">عندي الآن</span><b class="num green">{mine.length}</b><span class="faint tiny">ملف</span></div>
       </div>
+      <Supplies compact />
       {#if cur?.roll_code && need > +cur.roll_remaining}<div class="notice warn small">الطابور يحتاج {m(need, 1)} ورولو {cur.name} فيه {m(cur.roll_remaining, 1)} — جهّز الرولو التالي.</div>{/if}
       {#if cur && !cur.roll_code}<div class="notice warn small">لا يوجد رولو مركّب على {cur.name}. ركّب رولو قبل الطباعة.</div>{/if}
     </div>

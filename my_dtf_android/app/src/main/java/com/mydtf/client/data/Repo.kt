@@ -200,6 +200,15 @@ object Repo {
         return order
     }
 
+    suspend fun rateOrder(orderId: String, stars: Int, comment: String) {
+        sb.postgrest.rpc("dtf_rate_order", buildJsonObject {
+            put("p_order", orderId); put("p_stars", stars); put("p_comment", comment)
+        })
+    }
+
+    suspend fun myRating(orderId: String): Rating? =
+        sb.from("dtf_ratings").select { filter { eq("order_id", orderId) } }.decodeList<Rating>().firstOrNull()
+
     suspend fun reportIssue(orderId: String, text: String) {
         sb.postgrest.rpc("dtf_report_issue", buildJsonObject {
             put("p_order", orderId)

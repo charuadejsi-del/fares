@@ -10,6 +10,11 @@
 
   export let id;
   export let work = false; // vue designer/imprimeur : pas de prix
+  let rating = null, spEdit = null;
+  async function saveSpecial() {
+    try { await rpc('dtf_set_client_price', { p_client: o.client_id, p_price: spEdit === '' ? null : +String(spEdit).replace(',', '.') }); toast(spEdit === '' ? 'أُلغي السعر الخاص' : 'حُفظ السعر الخاص لهذا الزبون'); }
+    catch (e) { toast(errMsg(e), true); }
+  }
   let o = null, imgs = [], thumbs = {}, full = {}, ev = [], issues = [], busy = false, err = '';
   let designerSel = '', finalLen = '', carrier = 'DHD', tracking = '', paid = '', reason = '', machineSel = '', load2 = {};
   const REJECT = ['الصور غير واضحة أو بدقّة ضعيفة', 'المقاسات غير مناسبة للطباعة', 'الصورة تحتاج خلفية شفافة', 'محتوى غير مسموح بطباعته'];
@@ -21,7 +26,7 @@
   async function load() {
     try {
       if (mgr) {
-        o = await q(sb.from('dtf_orders').select('*,client:dtf_profiles!dtf_orders_client_id_fkey(full_name,phone)').eq('id', id).single());
+        o = await q(sb.from('dtf_orders').select('*,client:dtf_profiles!dtf_orders_client_id_fkey(full_name,phone,special_price)').eq('id', id).single());
       } else {
         o = (await rpc('dtf_work_orders')).find(x => x.id === id) || null;
         if (!o) { err = 'لم تعد هذه الطلبية في قائمتك'; return; }
@@ -30,7 +35,13 @@
         q(sb.from('dtf_order_images').select('*').eq('order_id', id)),
         q(sb.from('dtf_order_events').select('*').eq('order_id', id).order('created_at')),
       ]);
-      if (mgr) issues = await q(sb.from('dtf_issues').select('*').eq('order_id', id).order('created_at'));
+      if (mgr) {
+        [issues, rating] = await Promise.all([
+          q(sb.from('dtf_issues').select('*').eq('order_id', id).order('created_at')),
+          q(sb.from('dtf_ratings').select('*').eq('order_id', id).maybeSingle()).catch(() => null),
+        ]);
+        if (spEdit === null) spEdit = o.client?.special_price != null ? String(+o.client.special_price) : '';
+      }
       thumbs = await signedUrls(imgs.map(i => i.thumb_path || i.storage_path));
       full = await signedUrls(imgs.map(i => i.storage_path), true);
       if (!finalLen) finalLen = String(+(o.final_length_cm || o.estimated_length_cm));
@@ -173,6 +184,11 @@
     <div class="muted small" style="margin-top:4px">{MODE[o.delivery_mode]}{#if mgr && o.delivery_mode !== 'pickup'} — {o.ship_name} · <span class="ltr">{o.ship_phone}</span> · {o.ship_wilaya} / {o.ship_commune} {o.ship_address || ''}{/if}</div>
     {#if o.client_note}<div class="notice small" style="margin-top:10px">ملاحظة الزبون: {o.client_note}</div>{/if}
     {#if mgr && o.tracking_number}<div class="small" style="margin-top:6px">{o.carrier} · <b class="ltr">{o.tracking_number}</b></div>{/if}
+    {#if mgr}
+      <label for="spc">سعر خاص لهذا الزبون (دج للمتر) — فارغ = السعر العادي/الجملة</label>
+      <div class="row"><input id="spc" dir="ltr" inputmode="decimal" placeholder="—" bind:value={spEdit} /><button class="btn quiet sm" on:click={saveSpecial}>حفظ</button></div>
+      <p class="faint tiny" style="margin-top:4px">يُطبَّق على طلبياته القادمة وعند إدخال الطول الحقيقي.</p>
+    {/if}
     {#if mgr}<a class="btn quiet sm" style="margin-top:10px" href="#chat" on:click={() => { sessionStorage.setItem('chatWith', o.client_id); closeSheet(); }}>مراسلة الزبون</a>{/if}
   </div>
 
@@ -204,6 +220,13 @@
     {#if mgr}<div class="faint small" style="margin-top:8px">المصمّم: {staffName(o.designer_id)} · الطابع: {staffName(o.printer_id)}</div>{/if}
   </div>
 
+  {#if rating}
+    <div class="card" style="margin-top:12px;{rating.stars <= 2 ? 'border-color:var(--red)' : ''}">
+      <div class="section-title">تقييم الزبون</div>
+      <div class="stars">{#each [1, 2, 3, 4, 5] as k}<span class:on={k <= rating.stars}>★</span>{/each}</div>
+      {#if rating.comment}<p class="small" style="margin-top:6px">{rating.comment}</p>{/if}
+    </div>
+  {/if}
   {#if issues.length}
     <div class="card" style="margin-top:12px;border-color:var(--red)">
       <div class="section-title">مشاكل أبلغ عنها الزبون</div>
@@ -214,6 +237,7 @@
 
 <style>
   .total { font-size: 22px; font-weight: 700; color: var(--gold); }
+  .stars span { font-size: 24px; color: var(--card3); } .stars span.on { color: var(--amber); }
   .dz { display: flex; flex-direction: column; gap: 6px; }
   .dsel { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--line); text-align: right; }
   .dsel.on { border-color: var(--accent); background: var(--accent-soft); }

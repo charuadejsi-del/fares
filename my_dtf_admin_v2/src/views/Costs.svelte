@@ -20,7 +20,7 @@
       if (!form) form = JSON.parse(JSON.stringify(cs));
       const from = new Date(Y, M - 1, 1), last = new Date(Y, M, 0);
       const to = ongoing ? now : last;
-      rows = await rpc('dtf_cost_days', { p_from: ymd(from), p_to: ymd(to) });
+      rows = await rpc('dtf_cost_days2', { p_from: ymd(from), p_to: ymd(to) });
       if (dayIdx === null || dayIdx >= rows.length) dayIdx = rows.length - 1;
     } catch (e) { err = errMsg(e); }
   }
@@ -93,7 +93,7 @@
         <tr><td>{t}</td><td>{num2(v(ref, k))}</td><td>{D?.on ? da(D[k]) : '—'}</td><td>{da(R.actual[k])}</td></tr>
       {/if}{/each}
       <tr class="tot"><td>مجموع التكاليف</td><td>{num2(ref.per.cost)}</td><td>{D?.on ? da(D.cost) : '—'}</td><td>{da(R.actual.cost)}</td></tr>
-      <tr><td>المداخيل (أمتار × {da(price)})</td><td>{da(price)}</td><td>{D?.on ? da(D.revenue) : '—'}</td><td>{da(R.actual.revenue)}</td></tr>
+      <tr><td>المداخيل (أمتار × سعر كل طلبية)</td><td>{da(price)}</td><td>{D?.on ? da(D.revenue) : '—'}</td><td>{da(R.actual.revenue)}</td></tr>
       <tr class="faint"><td>المبالغ المفوترة فعلاً للزبائن</td><td>—</td><td>{D?.on ? da(D.revenueReal) : '—'}</td><td>{da(R.actual.revenueReal)}</td></tr>
       <tr class="tot"><td>الربح الصافي</td><td class:red={ref.per.profit < 0}>{num2(ref.per.profit)}</td><td class:red={D?.profit < 0}>{D?.on ? da(D.profit) : '—'}</td><td class:red={R.actual.profit < 0}>{da(R.actual.profit)}</td></tr>
       <tr><td>الهامش</td><td>{ref.margin == null ? '—' : pct(ref.margin * 100)}</td><td>{D?.on && D.margin != null ? pct(D.margin * 100) : '—'}</td><td>{R.actual.margin == null ? '—' : pct(R.actual.margin * 100)}</td></tr>

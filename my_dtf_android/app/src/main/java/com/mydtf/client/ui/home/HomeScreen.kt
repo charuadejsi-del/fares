@@ -133,7 +133,12 @@ fun HomeScreen(
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text("سعر المتر", style = MaterialTheme.typography.bodySmall, color = Lux.Muted)
-                                    Text(formatDa(s.pricePerMeter), style = MaterialTheme.typography.titleLarge, color = Lux.Gold)
+                                    val sp = vm.profile?.specialPrice
+                                    Text(formatDa(sp ?: s.pricePerMeter), style = MaterialTheme.typography.titleLarge, color = Lux.Gold)
+                                    if (sp != null) Text("سعر خاص بك", style = MaterialTheme.typography.labelSmall, color = Lux.Success)
+                                    else s.priceTiers.sortedBy { it.minM }.forEach { t ->
+                                        Text("من ${t.minM.toInt()} م: ${formatDa(t.price)}", style = MaterialTheme.typography.labelSmall, color = Lux.Muted)
+                                    }
                                 }
                                 Text("عرض ${s.filmWidthCm.toInt()} سم", style = MaterialTheme.typography.labelMedium, color = Lux.Muted)
                             }

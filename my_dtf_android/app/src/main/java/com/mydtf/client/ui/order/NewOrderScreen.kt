@@ -178,6 +178,14 @@ fun NewOrderScreen(main: MainViewModel, onClose: () -> Unit, onCreated: (String)
                         )
                     }
                 }
+                val pr = vm.pricing
+                val q = vm.quote
+                if (q != null && pr != null) {
+                    val nt = pr.nextTier(q.billedMeters)
+                    val cur = pr.priceFor(q.billedMeters)
+                    if (pr.special != null || cur < pr.pricePerMeter) Text("سعرك: ${formatDa(cur)} للمتر", style = MaterialTheme.typography.bodySmall, color = Lux.Success, modifier = Modifier.padding(top = 4.dp))
+                    if (nt != null) Text("اطلب ${meters(nt.first)} أو أكثر ويصبح المتر ${formatDa(nt.second)}", style = MaterialTheme.typography.bodySmall, color = Lux.GoldLight, modifier = Modifier.padding(top = 2.dp))
+                }
                 if (vm.step == 3 && main.settings?.isOpen == false) {
                     com.mydtf.client.ui.components.ShopStatus(main.settings, Modifier.padding(top = 8.dp), detail = "الورشة مغلقة الآن، ستُعالَج طلبيتك عند الفتح")
                 }
