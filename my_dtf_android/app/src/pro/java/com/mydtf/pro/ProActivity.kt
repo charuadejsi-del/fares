@@ -1,6 +1,7 @@
 package com.mydtf.pro
 
 import android.os.Bundle
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -51,7 +52,7 @@ import com.mydtf.client.ui.theme.MyDtfTheme
 
 class ProActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        androidx.core.splashscreen.SplashScreen.installSplashScreen(this)
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(SystemBarStyle.dark(Lux.Night.toArgb()), SystemBarStyle.dark(Lux.Night.toArgb()))
         setContent { MyDtfTheme { ProRoot() } }
