@@ -185,7 +185,12 @@ func _get_up() -> void:
 	pose_tw.tween_property(rig, "position", Vector3.ZERO, 0.4)
 
 
-func pile_on(target: Vector3, idx: int) -> void:
+func body_height() -> float:
+	return 2.0 if kind == "said" else 1.52
+
+
+## يطيح على الخروف: ينقز للبلاصة dest، يشوف للخروف، ويميل عليه بزاوية pitch (بلا ما يدخل فيه).
+func pile_on(dest: Vector3, look_at_pos: Vector3, pitch: float = 1.2) -> void:
 	state = S.PILE
 	collision_layer = 0
 	collision_mask = 0
@@ -193,14 +198,30 @@ func pile_on(target: Vector3, idx: int) -> void:
 	stars.visible = false
 	if pose_tw:
 		pose_tw.kill()
-	var dest := target + Vector3(randf_range(-0.45, 0.45), 0.35 + idx * 0.5, randf_range(-0.45, 0.45))
-	var mid := (global_position + dest) * 0.5 + Vector3.UP * 2.5
+	var to := look_at_pos - dest
+	to.y = 0.0
+	if to.length() > 0.01:
+		rotation.y = atan2(-to.x, -to.z)
+	var mid := (global_position + dest) * 0.5 + Vector3.UP * 1.6
 	var tw := create_tween()
-	tw.tween_property(self, "global_position", mid, 0.28).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "global_position", dest, 0.24).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(self, "global_position", mid, 0.22).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "global_position", dest, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	pose_tw = create_tween()
-	pose_tw.tween_property(rig, "rotation", Vector3(-PI / 2.0, randf() * TAU, 0.0), 0.45)
-	say("حكمتو!!" if kind == "said" else "هههه!")
+	pose_tw.set_parallel(true)
+	pose_tw.tween_property(rig, "rotation", Vector3(-pitch, 0.0, 0.0), 0.35)
+	pose_tw.tween_property(rig, "position", Vector3.ZERO, 0.35)
+	for i in arms.size():
+		pose_tw.tween_property(arms[i], "rotation", Vector3(1.55, 0.0, 0.25 if i == 0 else -0.25), 0.3)
+	say("حكمتو!!" if kind == "said" else "شديتو!")
+
+
+## الخروف تفلّت: يرجع يتصادم ويطير بعيد.
+func release_knock(dir: Vector3) -> void:
+	collision_layer = 4
+	collision_mask = 1 | 2 | 4 | 8
+	for a in arms:
+		a.rotation = Vector3.ZERO
+	knock(dir, 1.2)
 
 
 # ---------- الحركة ----------
@@ -212,7 +233,7 @@ func _physics_process(delta: float) -> void:
 	var hv := Vector3(velocity.x, 0.0, velocity.z)
 	match state:
 		S.RUN, S.TIRED:
-			if game.is_playing():
+			if game.chasers_active():
 				var want: Vector3 = _chase(delta)
 				hv = hv.lerp(want, clampf(delta * 8.0, 0.0, 1.0))
 			else:

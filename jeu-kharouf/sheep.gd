@@ -20,6 +20,7 @@ var facing := Vector3(0, 0, -1)
 var dash_t := 0.0
 var butt_cd := 0.0
 var frozen := false
+var struggle := false
 var hits: Array = []
 var rig: Node3D
 var head: Node3D
@@ -134,6 +135,12 @@ func _animate_bones(delta: float, spd: float) -> void:
 	var amp := clampf(spd / WALK, 0.0, 1.4)
 	var air := not is_on_floor()
 	var ph := anim_t
+	if struggle:
+		# يتخبط: رجلين بزربة والجسم يرتعش
+		ph = Time.get_ticks_msec() * 0.024
+		amp = 1.3
+		air = false
+		model_pivot.rotation.z = sin(Time.get_ticks_msec() * 0.03) * 0.09
 	# الرجلين: كل زوج متقاطع (قدّام يسار + لور يمين) مع بعضاهم
 	var swing := 0.55 * minf(amp, 1.0) + 0.15 * maxf(amp - 1.0, 0.0)
 	var front_l := sin(ph) * swing
@@ -146,7 +153,7 @@ func _animate_bones(delta: float, spd: float) -> void:
 		front_r = -0.6
 		knee_l = 0.9
 		knee_r = 0.9
-	if frozen:
+	if frozen and not struggle:
 		front_l = 0.9
 		front_r = -0.9
 		knee_l = 0.2
@@ -169,7 +176,7 @@ func _animate_bones(delta: float, spd: float) -> void:
 	if dash_t > 0.0:
 		head_down = 0.55
 	elif frozen:
-		head_down = -0.3
+		head_down = -0.3 if not struggle else -0.15 + sin(Time.get_ticks_msec() * 0.02) * 0.25
 	var nod := sin(ph * 2.0) * 0.06 * minf(amp, 1.0)
 	head_pitch = lerpf(head_pitch, head_down, clampf(delta * 18.0, 0.0, 1.0))
 	_bone("Neck", "x", head_pitch * 0.6 + nod)
@@ -177,7 +184,7 @@ func _animate_bones(delta: float, spd: float) -> void:
 	_bone("Spine1", "x", -0.08 * minf(amp, 1.0) if not air else -0.15)
 	# الفك: يتحل كي يبعبع
 	jaw_t = maxf(jaw_t - delta, 0.0)
-	_bone("Jaw", "x", 0.35 if (jaw_t > 0.0 or frozen) else 0.0)
+	_bone("Jaw", "x", 0.35 if (jaw_t > 0.0 or (frozen and not struggle)) else 0.0)
 	# الذيل: يتهز، وبزربة كي يجري
 	var wag := sin(Time.get_ticks_msec() * 0.001 * (8.0 + amp * 10.0)) * (0.25 + 0.35 * minf(amp, 1.0))
 	_bone("Tail1", "y", wag)
@@ -274,6 +281,7 @@ func reset_to(p: Vector3) -> void:
 	dash_t = 0.0
 	butt_cd = 0.0
 	frozen = false
+	struggle = false
 	facing = Vector3(0, 0, -1)
 	rotation = Vector3.ZERO
 	move_input = Vector2.ZERO
@@ -291,7 +299,25 @@ func is_dashing() -> bool:
 	return dash_t > 0.0
 
 
+## مشدود: ما يتحركش، بصح يتخبط برجليه.
+func grabbed() -> void:
+	frozen = true
+	struggle = true
+	dash_t = 0.0
+	velocity = Vector3.ZERO
+
+
+func release() -> void:
+	frozen = false
+	struggle = false
+	if rig:
+		rig.scale = Vector3.ONE
+	if model_pivot:
+		model_pivot.rotation.z = 0.0
+
+
 func caught() -> void:
+	struggle = false
 	frozen = true
 	dash_t = 0.0
 	velocity = Vector3.ZERO

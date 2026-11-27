@@ -11,7 +11,9 @@ const SfxScript := preload("res://sfx.gd")
 const SAVE := "user://kharouf.cfg"
 const CAM_OFF := Vector3(0, 12.5, 6.0)
 
-enum State { MENU, PLAYING, CAUGHT, RESULT }
+enum State { MENU, PLAYING, CAUGHT, RESULT, GRAB }
+const GRAB_TAPS := 8
+const GRAB_TIME := 2.2
 
 var state: int = State.MENU
 var world
@@ -36,6 +38,14 @@ var cam_locked := false
 var smoke := false
 var shot := false
 var smoke_ok := true
+var escapes_left := 1
+var grab_by = null
+var grab_left := 0.0
+var grab_taps := 0
+var invuln := 0.0
+var escape_box: Control
+var escape_lbl: Label
+var escape_bar: ProgressBar
 
 var pad
 var ui_layer: CanvasLayer
@@ -87,8 +97,21 @@ func is_playing() -> bool:
 	return state == State.PLAYING
 
 
+func chasers_active() -> bool:
+	return state == State.PLAYING or state == State.GRAB
+
+
 func difficulty() -> float:
 	return 1.0 + minf(survive / 60.0 * 0.06, 0.4)
+
+
+func _input(ev: InputEvent) -> void:
+	if state != State.GRAB:
+		return
+	if ev is InputEventScreenTouch and ev.is_pressed():
+		escape_tap()
+	elif ev is InputEventKey and ev.is_pressed() and not ev.is_echo():
+		escape_tap()
 
 
 func _notification(what: int) -> void:
@@ -274,6 +297,47 @@ func _build_ui() -> void:
 	hb.add_child(home)
 	rv.add_child(hb)
 
+	# زر «اهرب!» كي يحكمك واحد: تنقر بزربة في أي بلاصة في الشاشة
+	escape_box = VBoxContainer.new()
+	escape_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	escape_box.anchor_left = 0.5
+	escape_box.anchor_right = 0.5
+	escape_box.anchor_top = 1.0
+	escape_box.anchor_bottom = 1.0
+	escape_box.offset_left = -260
+	escape_box.offset_right = 260
+	escape_box.offset_top = -250
+	escape_box.offset_bottom = -40
+	escape_box.add_theme_constant_override("separation", 10)
+	root.add_child(escape_box)
+	var ep := PanelContainer.new()
+	ep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var esb := StyleBoxFlat.new()
+	esb.bg_color = Color("e8452c")
+	esb.set_corner_radius_all(28)
+	esb.set_content_margin_all(18)
+	esb.border_color = Color(1, 1, 1, 0.85)
+	esb.set_border_width_all(4)
+	ep.add_theme_stylebox_override("panel", esb)
+	escape_box.add_child(ep)
+	escape_lbl = _label("", 52, Color.WHITE)
+	ep.add_child(escape_lbl)
+	escape_bar = ProgressBar.new()
+	escape_bar.custom_minimum_size = Vector2(0, 22)
+	escape_bar.show_percentage = false
+	escape_bar.max_value = 100.0
+	escape_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var eb := StyleBoxFlat.new()
+	eb.bg_color = Color(0, 0, 0, 0.5)
+	eb.set_corner_radius_all(11)
+	var ef := StyleBoxFlat.new()
+	ef.bg_color = Color("ffd93b")
+	ef.set_corner_radius_all(11)
+	escape_bar.add_theme_stylebox_override("background", eb)
+	escape_bar.add_theme_stylebox_override("fill", ef)
+	escape_box.add_child(escape_bar)
+	escape_box.visible = false
+
 
 func show_banner(t: String) -> void:
 	lbl_banner.text = t
@@ -326,6 +390,8 @@ func _show_menu() -> void:
 	result.visible = false
 	hud.visible = false
 	pad.visible = false
+	escape_box.visible = false
+	grab_by = null
 	menu_best.text = "أحسن نتيجة: %d   •   دورو: %d" % [best, coins]
 
 
@@ -340,6 +406,10 @@ func start_game() -> void:
 	kids = 0
 	combo = 0
 	combo_t = 0.0
+	escapes_left = 1
+	grab_by = null
+	invuln = 0.0
+	escape_box.visible = false
 	Engine.time_scale = 1.0
 	for i in 14:
 		_spawn_grass_random()
@@ -402,9 +472,19 @@ func _far_point(mn: float, mx: float) -> Vector3:
 
 
 func _physics_process(delta: float) -> void:
+	if state == State.GRAB:
+		# واحد آخر يوصل وهو مشدود؟ خلاص حكموه
+		for c in chasers:
+			if c != grab_by and c.can_catch():
+				var dg: Vector3 = c.global_position - sheep.global_position
+				if Vector2(dg.x, dg.z).length() < 1.15 and absf(dg.y) < 0.9:
+					_caught()
+					return
+		return
 	if state != State.PLAYING:
 		return
 	survive += delta
+	invuln = maxf(invuln - delta, 0.0)
 	score += 10.0 * delta
 	if combo_t > 0.0:
 		combo_t -= delta
@@ -427,8 +507,12 @@ func _physics_process(delta: float) -> void:
 	for c in chasers:
 		if c.can_catch():
 			var dd: Vector3 = c.global_position - sheep.global_position
-			if Vector2(dd.x, dd.z).length() < 1.05 and absf(dd.y) < 0.9 and not sheep.is_dashing():
-				_caught()
+			if Vector2(dd.x, dd.z).length() < 1.05 and absf(dd.y) < 0.9 and not sheep.is_dashing() and invuln <= 0.0:
+				if escapes_left > 0:
+					_start_grab(c)
+				else:
+					grab_by = c
+					_caught()
 				break
 
 
@@ -486,8 +570,96 @@ func on_prop_hit(p) -> void:
 	sfx.play("hit", -6.0, 1.4)
 
 
+# ---------- الحكان ----------
+
+## بُعد حافة الخروف (بيضاوي: عرض ~0.42، طول ~0.98) في زاوية a من القدام.
+func _sheep_edge(a: float) -> float:
+	return 1.0 / sqrt(pow(sin(a) / 0.42, 2.0) + pow(cos(a) / 0.98, 2.0))
+
+
+func _sheep_fwd() -> Vector3:
+	var f: Vector3 = -sheep.global_transform.basis.z
+	f.y = 0.0
+	return f.normalized() if f.length() > 0.01 else Vector3(0, 0, -1)
+
+
+func _angle_of(c) -> float:
+	var f := _sheep_fwd()
+	var r := f.cross(Vector3.UP)
+	var d: Vector3 = c.global_position - sheep.global_position
+	d.y = 0.0
+	return atan2(d.dot(r), d.dot(f))
+
+
+func _slot(a: float, h: float, pitch: float, extra: float = 0.0) -> Vector3:
+	var f := _sheep_fwd()
+	var r := f.cross(Vector3.UP)
+	var dir := (f * cos(a) + r * sin(a)).normalized()
+	var sp: Vector3 = sheep.global_position
+	return Vector3(sp.x, sp.y, sp.z) + dir * (_sheep_edge(a) + h * sin(pitch) + extra)
+
+
+func _start_grab(c) -> void:
+	state = State.GRAB
+	grab_by = c
+	grab_taps = 0
+	grab_left = GRAB_TIME
+	pad.release_all()
+	pad.visible = false
+	Engine.time_scale = 0.5
+	sheep.grabbed()
+	sheep.bleat()
+	sfx.play("baa", 0.0, 0.9)
+	_vibrate(120)
+	var a := _angle_of(c)
+	c.pile_on(_slot(a, c.body_height(), 0.9), sheep.global_position, 0.9)
+	float_text(sheep.global_position + Vector3.UP * 2.6, "شدّوه!", Color("ff6b6b"))
+	escape_lbl.text = "انقر بزربة!  0/%d" % GRAB_TAPS
+	escape_bar.value = 100.0
+	escape_box.visible = true
+
+
+func escape_tap() -> void:
+	if state != State.GRAB:
+		return
+	grab_taps += 1
+	escape_lbl.text = "انقر بزربة!  %d/%d" % [grab_taps, GRAB_TAPS]
+	sfx.play("jump", -10.0, 1.0 + grab_taps * 0.08)
+	_vibrate(15)
+	if grab_taps >= GRAB_TAPS:
+		_escape()
+
+
+func _escape() -> void:
+	escape_box.visible = false
+	escapes_left -= 1
+	state = State.PLAYING
+	var g = grab_by
+	grab_by = null
+	sheep.release()
+	invuln = 1.5
+	if g and is_instance_valid(g):
+		var away: Vector3 = g.global_position - sheep.global_position
+		away.y = 0.0
+		g.release_knock(away.normalized() if away.length() > 0.01 else Vector3(1, 0, 0))
+		on_knock_chaser(g, false)
+	score += 150.0
+	float_text(sheep.global_position + Vector3.UP * 2.8, "تفلّت!  +150", Color("7be04f"))
+	show_banner("تفلّت! المرة الجاية ما كانش")
+	sfx.play("baa", 0.0, 1.3)
+	pad.visible = true
+	Engine.time_scale = 0.3
+	get_tree().create_timer(0.7, true, false, true).timeout.connect(_end_slowmo)
+
+
+func _end_slowmo() -> void:
+	if state == State.PLAYING:
+		Engine.time_scale = 1.0
+
+
 func _caught() -> void:
 	state = State.CAUGHT
+	escape_box.visible = false
 	pad.release_all()
 	pad.visible = false
 	Engine.time_scale = 0.3
@@ -495,8 +667,26 @@ func _caught() -> void:
 	sheep.bleat()
 	sfx.play("baa_long")
 	_vibrate(250)
-	for i in chasers.size():
-		chasers[i].pile_on(sheep.global_position, i)
+	# كل واحد يطيح في بلاصتو حوالين الخروف: الجناب لوّلين، ومن بعد القدام واللور
+	var slots: Array[float] = [PI / 2.0, -PI / 2.0, PI / 4.0, -PI / 4.0, 3.0 * PI / 4.0, -3.0 * PI / 4.0, 0.0, PI]
+	var used: Array[float] = []
+	if grab_by != null and is_instance_valid(grab_by):
+		var ga := _angle_of(grab_by)
+		var best_i := 0
+		for i in slots.size():
+			if absf(angle_difference(slots[i], ga)) < absf(angle_difference(slots[best_i], ga)):
+				best_i = i
+		slots.remove_at(best_i)
+		used.append(ga)
+		grab_by.pile_on(_slot(ga, grab_by.body_height(), 1.2), sheep.global_position, 1.2)
+	var n := 0
+	for c in chasers:
+		if c == grab_by:
+			continue
+		var a: float = slots[n % slots.size()]
+		var layer := n / slots.size()
+		c.pile_on(_slot(a, c.body_height(), 1.2, layer * 0.35), sheep.global_position, 1.2)
+		n += 1
 	float_text(sheep.global_position + Vector3.UP * 2.6, "حكموووه!", Color("ff6b6b"))
 	get_tree().create_timer(2.6, true, false, true).timeout.connect(_show_result)
 
@@ -532,6 +722,11 @@ func _process(delta: float) -> void:
 	for g in grasses:
 		if is_instance_valid(g):
 			g.rotate_y(delta * 2.0)
+	if state == State.GRAB:
+		grab_left -= delta / maxf(Engine.time_scale, 0.01)
+		escape_bar.value = clampf(grab_left / GRAB_TIME * 100.0, 0.0, 100.0)
+		if grab_left <= 0.0:
+			_caught()
 	if state == State.PLAYING:
 		lbl_score.text = str(int(score))
 		lbl_time.text = _fmt_time(survive)
@@ -635,15 +830,44 @@ func _run_smoke() -> void:
 	spawn_grass_at(sheep.global_position)
 	await _wait(0.2)
 	_check("grass", sheep.energy > 30.0, "energy=%.0f" % sheep.energy)
+	# الحكان الأول: يشدّو، وننقرو 8 مرات باش نتفلتو
+	var g1 = spawn_chaser("said", sheep.global_position + Vector3(0, 0, 0.9))
+	await _wait(0.5)
+	_check("grab", state == State.GRAB and escape_box.visible, "state=%d" % state)
+	await _wait(0.4)
+	var gd: Vector3 = g1.global_position - sheep.global_position
+	_check("grab_no_overlap", Vector2(gd.x, gd.z).length() > 0.9, "d=%.2f" % Vector2(gd.x, gd.z).length())
+	for i in GRAB_TAPS:
+		escape_tap()
+	await _wait(0.2)
+	_check("escape", state == State.PLAYING and escapes_left == 0 and g1.is_knocked(), "state=%d esc=%d" % [state, escapes_left])
+	await _wait(1.8)
+	chasers.erase(g1)
+	g1.queue_free()
+	# الحكان الثاني: ما بقاتش فرصة → يطيحو كامل حواليه
+	spawn_chaser("kid", sheep.global_position + Vector3(3, 0, 3))
 	spawn_chaser("said", sheep.global_position + Vector3(0, 0, 0.9))
 	await _wait(0.6)
 	_check("caught", state == State.CAUGHT or state == State.RESULT, "state=%d" % state)
-	await _wait(3.2)
+	await _wait(1.0)
+	var inside := 0
+	for c in chasers:
+		var dc: Vector3 = c.global_position - sheep.global_position
+		if Vector2(dc.x, dc.z).length() < 0.9:
+			inside += 1
+	_check("pile_no_overlap", inside == 0, "inside=%d" % inside)
+	await _wait(2.4)
 	_check("result", state == State.RESULT and result.visible, "state=%d" % state)
 	_check("save", FileAccess.file_exists(SAVE))
 	start_game()
 	await _wait(0.5)
-	_check("restart", state == State.PLAYING and chasers.is_empty(), "state=%d n=%d" % [state, chasers.size()])
+	_check("restart", state == State.PLAYING and chasers.is_empty() and escapes_left == 1, "state=%d n=%d" % [state, chasers.size()])
+	# الحكان مع انتهاء الوقت (بلا نقر)
+	spawn_chaser("said", sheep.global_position + Vector3(0, 0, 0.9))
+	await _wait(0.5)
+	_check("grab2", state == State.GRAB, "state=%d" % state)
+	await _wait(2.6)
+	_check("grab_timeout", state == State.CAUGHT or state == State.RESULT, "state=%d" % state)
 	print("SMOKE all ok" if smoke_ok else "SMOKE FAILED")
 	get_tree().quit()
 
@@ -740,12 +964,23 @@ func _run_shots() -> void:
 	await _wait(3.5)
 	await _snap(dir, "05_chase")
 	sheep.input_override = Vector2.ZERO
+	var gs = spawn_chaser("said", sheep.global_position + Vector3(0.9, 0.2, 0))
+	await _wait(0.9)
+	await _snap(dir, "06_grab")
+	for i in GRAB_TAPS:
+		escape_tap()
+	await _wait(0.25)
+	await _snap(dir, "06b_escape")
+	await _wait(1.6)
+	chasers.erase(gs)
+	gs.queue_free()
 	spawn_chaser("kid", sheep.global_position + Vector3(2.5, 0.2, 2.0))
+	spawn_chaser("kid", sheep.global_position + Vector3(-2.5, 0.2, 2.0))
 	spawn_chaser("said", sheep.global_position + Vector3(0.9, 0.2, 0))
-	await _wait(0.5)
-	await _snap(dir, "06_caught")
-	await _wait(1.0)
+	await _wait(0.6)
+	await _snap(dir, "06c_caught")
+	await _wait(1.2)
 	await _snap(dir, "07_pile")
-	await _wait(2.5)
+	await _wait(2.0)
 	await _snap(dir, "08_result")
 	get_tree().quit()
