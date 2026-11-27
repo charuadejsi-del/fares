@@ -57,7 +57,7 @@
 {#if carriers.length > 1}<label>شركة التوصيل</label><div class="seg">{#each carriers as c}<button class:on={carrier === c.key} on:click={() => (carrier = c.key)}>{c.name}</button>{/each}</div>{/if}
 {#if noData}<div class="notice warn small" style="margin-top:10px">لم تُجلب البلديات والأسعار بعد. اذهب إلى الإعدادات ← التوصيل واضغط «مزامنة»، أو اكتب البلدية كما هي عند الشركة.</div>{/if}
 <div class="seg" style="margin-top:12px"><button class:on={!desk} on:click={() => (desk = false)}>توصيل إلى المنزل</button><button class:on={desk} on:click={() => (desk = true)}>مكتب الشركة (Stop desk)</button></div>
-<div class="grid g2">
+<div class="grid g2 stack">
   <div><label for="sn">اسم المستلم</label><input id="sn" bind:value={name} /></div>
   <div><label for="sp">الهاتف</label><input id="sp" dir="ltr" inputmode="tel" bind:value={phone} /></div>
   <div><label for="sw">الولاية</label><select id="sw" bind:value={wc}><option value={null}>—</option>{#each wilayas as w}<option value={w.code}>{String(w.code).padStart(2, '0')} — {w.ar} / {w.fr}</option>{/each}</select></div>
@@ -66,7 +66,7 @@
     {:else}<input id="sc" dir="ltr" placeholder="كما تُكتب عند الشركة" bind:value={commune} />{/if}</div>
 </div>
 {#if !desk}<label for="sa">العنوان</label><input id="sa" bind:value={address} />{/if}
-<div class="grid g2">
+<div class="grid g2 stack">
   <div><label for="sm">المبلغ الذي يدفعه الزبون للموزّع (دج)</label><input id="sm" dir="ltr" inputmode="numeric" bind:value={amount} /></div>
   <div><label for="sg">الوزن (كغ) — اختياري</label><input id="sg" dir="ltr" inputmode="decimal" bind:value={weight} /></div>
 </div>

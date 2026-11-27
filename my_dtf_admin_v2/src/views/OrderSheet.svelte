@@ -197,28 +197,45 @@
         {/if}
       {/if}
       {#if mgr && ['printed', 'shipped', 'ready_pickup'].includes(o.status)}
+        {#if o.tracking_number && ['Expedia', 'DHD'].includes(o.carrier)}
+          <p class="faint small" style="margin-top:12px">تتحوّل الطلبية إلى «سُلّمت» تلقائياً عندما تسلّمها شركة التوصيل. استعمل الزر أدناه فقط إذا سلّمتها بنفسك.</p>
+        {/if}
         <label for="pd">المبلغ المدفوع</label>
-        <div class="row"><input id="pd" inputmode="numeric" dir="ltr" bind:value={paid} /><button class="btn quiet" disabled={busy} on:click={() => act('deliver')}>تم التسليم والدفع</button></div>
+        <input id="pd" inputmode="numeric" dir="ltr" bind:value={paid} />
+        <button class="btn block {o.tracking_number ? 'quiet' : ''}" style="margin-top:8px" disabled={busy} on:click={() => act('deliver')}><Icon name="check" size={17} />تم التسليم والدفع</button>
       {/if}
     </div>
   {/if}
 
   <div class="card" style="margin-top:12px">
     <div class="section-title">{mgr ? 'الزبون والاستلام' : 'الاستلام'}</div>
-    {#if mgr}<div class="row between"><b>{o.client?.full_name}</b><a class="ltr" href="tel:{o.client?.phone}">{o.client?.phone}</a></div>
+    {#if mgr}<div class="row between wrap"><b>{o.client?.full_name}</b><a class="ltr" href="tel:{o.client?.phone}">{o.client?.phone}</a></div>
     {:else}<div><b>{o.client_name}</b></div>{/if}
-    <div class="muted small" style="margin-top:4px">{MODE[o.delivery_mode]}{#if mgr && o.delivery_mode !== 'pickup'} — {o.ship_name} · <span class="ltr">{o.ship_phone}</span> · {o.ship_wilaya} / {o.ship_commune} {o.ship_address || ''}{/if}</div>
+    <div class="kvs">
+      <div><span class="faint">الاستلام</span><b>{MODE[o.delivery_mode]}</b></div>
+      {#if mgr && o.delivery_mode !== 'pickup'}
+        {#if o.ship_name}<div><span class="faint">المستلم</span><b>{o.ship_name}</b></div>{/if}
+        {#if o.ship_phone}<div><span class="faint">الهاتف</span><a class="ltr" href="tel:{o.ship_phone}">{o.ship_phone}</a></div>{/if}
+        <div><span class="faint">الولاية / البلدية</span><b>{o.ship_wilaya || '—'} / {o.ship_commune || '—'}</b></div>
+        {#if o.ship_address}<div><span class="faint">العنوان</span><b>{o.ship_address}</b></div>{/if}
+      {/if}
+    </div>
     {#if o.client_note}<div class="notice small" style="margin-top:10px">ملاحظة الزبون: {o.client_note}</div>{/if}
     {#if mgr && o.tracking_number}
       <div class="dhd">
-        <div class="row between"><span class="row"><Icon name="truck" size={18} /><b>{o.carrier}</b> · <b class="ltr">{o.tracking_number}</b></span>
+        <div class="row between wrap"><span class="row"><Icon name="truck" size={18} /><b>{o.carrier}</b></span>
           {#if o.ship_status}<span class="chip c-{SHIP[o.ship_status]?.[1] || 'gray'}">{SHIP[o.ship_status]?.[0] || o.ship_status}</span>{/if}</div>
-        {#if o.ship_status_raw}<div class="faint tiny" style="margin-top:4px">{o.ship_status_raw}{#if o.ship_synced_at} · آخر تحديث {dt(o.ship_synced_at)}{/if}{#if o.ship_cod != null} · يُحصَّل {da(o.ship_cod)}{/if}</div>{/if}
+        <div class="trkrow"><b class="ltr trk">{o.tracking_number}</b><button class="btn quiet sm" on:click={() => { navigator.clipboard?.writeText(o.tracking_number); toast('نُسخ رقم التتبّع'); }}>نسخ</button></div>
+        <div class="kvs">
+          {#if o.ship_cod != null}<div><span class="faint">يُحصَّل من الزبون</span><b class="gold">{da(o.ship_cod)}</b></div>{/if}
+          {#if o.ship_status_raw}<div><span class="faint">آخر حالة</span><b>{o.ship_status_raw}</b></div>{/if}
+          {#if o.ship_synced_at}<div><span class="faint">آخر تحديث</span><b>{dt(o.ship_synced_at)}</b></div>{/if}
+        </div>
         {#if ['Expedia', 'DHD'].includes(o.carrier)}
-          <div class="row wrap" style="margin-top:10px">
-            <button class="btn ghost sm" disabled={busy} on:click={label}><Icon name="file" size={15} />طباعة الملصق</button>
-            <button class="btn quiet sm" disabled={busy} on:click={trackNow}><Icon name="refresh" size={15} />تحديث الحالة</button>
-            {#if !o.ship_status || o.ship_status === 'created'}<button class="btn danger sm" disabled={busy} on:click={cancelShip}>إلغاء الطرد</button>{/if}
+          <div class="acts">
+            <button class="btn ghost sm" disabled={busy} on:click={label}><Icon name="file" size={15} />الملصق</button>
+            <button class="btn quiet sm" disabled={busy} on:click={trackNow}><Icon name="refresh" size={15} />تحديث</button>
+            {#if !o.ship_status || o.ship_status === 'created'}<button class="btn danger sm" disabled={busy} on:click={cancelShip}><Icon name="x" size={15} />إلغاء</button>{/if}
           </div>
           {#if o.ship_events?.length}<div class="evs">{#each [...o.ship_events].reverse().slice(0, 8) as e}<div class="tiny"><span class="faint ltr">{e.d}</span> · {e.s}{e.w ? ' — ' + e.w : ''}</div>{/each}</div>{/if}
         {/if}
@@ -276,6 +293,13 @@
 {/if}
 
 <style>
+  .kvs { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 13.5px; }
+  .kvs > div { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .kvs > div > :last-child { text-align: left; overflow-wrap: anywhere; min-width: 0; }
+  .kvs > div > span:first-child { flex-shrink: 0; }
+  .trkrow { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: var(--bg2); border: 1px dashed var(--line2); }
+  .trk { flex: 1; min-width: 0; font-size: 15px; letter-spacing: .5px; overflow-wrap: anywhere; }
+  .acts { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin-top: 12px; }
   .dhd { margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--card2); border: 1px solid var(--line2); }
   .evs { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--line); padding-top: 8px; }
   .total { font-size: 22px; font-weight: 700; color: var(--gold); }
