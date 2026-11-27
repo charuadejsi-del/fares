@@ -151,7 +151,7 @@ object Pro {
     val uid: String? get() = sb.auth.currentUserOrNull()?.id
     const val NOT_STAFF = "هذا الحساب خاص بالزبائن — استعمل تطبيق My DTF"
 
-    private suspend inline fun <reified T> call(fn: String, args: JsonObject = buildJsonObject { }): T =
+    private suspend inline fun <reified T : Any> call(fn: String, args: JsonObject = buildJsonObject { }): T =
         sb.postgrest.rpc(fn, args).decodeAs<T>()
     private suspend fun exec(fn: String, args: JsonObject = buildJsonObject { }) { sb.postgrest.rpc(fn, args) }
 
