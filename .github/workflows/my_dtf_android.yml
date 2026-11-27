@@ -55,8 +55,9 @@ jobs:
 
       - name: APK
         run: |
-          gradle :app:assembleRelease --no-daemon
-          cp app/build/outputs/apk/release/app-release.apk My-DTF.apk
+          gradle :app:assembleClientRelease :app:assembleProRelease --no-daemon
+          cp app/build/outputs/apk/client/release/app-client-release.apk My-DTF.apk
+          cp app/build/outputs/apk/pro/release/app-pro-release.apk My-DTF-Pro.apk
 
       - name: Release GitHub
         uses: softprops/action-gh-release@v2
@@ -64,5 +65,9 @@ jobs:
           tag_name: my-dtf-android-v1.0.${{ github.run_number }}
           name: My DTF Android v1.0.${{ github.run_number }}
           target_commitish: ${{ github.sha }}
-          body: Application client native (Kotlin + Jetpack Compose).
-          files: my_dtf_android/My-DTF.apk
+          body: |
+            My-DTF.apk : application des clients.
+            My-DTF-Pro.apk : application de l'équipe (gérant, designer, imprimeur, administrateur).
+          files: |
+            my_dtf_android/My-DTF.apk
+            my_dtf_android/My-DTF-Pro.apk

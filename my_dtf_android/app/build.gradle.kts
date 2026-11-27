@@ -30,6 +30,21 @@ android {
         }
     }
 
+    // Deux applications à partir du même code : « My DTF » (clients) et « My DTF Pro » (équipe).
+    flavorDimensions += "app"
+    productFlavors {
+        create("client") {
+            dimension = "app"
+            applicationId = "com.mydtf.client"
+            resValue("string", "app_name", "My DTF")
+        }
+        create("pro") {
+            dimension = "app"
+            applicationId = "com.mydtf.pro"
+            resValue("string", "app_name", "My DTF Pro")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
