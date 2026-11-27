@@ -264,8 +264,9 @@ object Repo {
         val orders = ch.postgresChangeFlow<PostgresAction>(schema = "public") { table = "dtf_orders" }
         val notifs = ch.postgresChangeFlow<PostgresAction>(schema = "public") { table = "dtf_notifications" }
         val msgs = ch.postgresChangeFlow<PostgresAction>(schema = "public") { table = "dtf_messages" }
+        val shop = ch.postgresChangeFlow<PostgresAction>(schema = "public") { table = "dtf_settings" }
         ch.subscribe()
-        return merge(orders, notifs, msgs)
+        return merge(orders, notifs, msgs, shop)
     }
 
     suspend fun stopLive() {

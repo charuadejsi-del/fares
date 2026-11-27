@@ -178,6 +178,9 @@ fun NewOrderScreen(main: MainViewModel, onClose: () -> Unit, onCreated: (String)
                         )
                     }
                 }
+                if (vm.step == 3 && main.settings?.isOpen == false) {
+                    com.mydtf.client.ui.components.ShopStatus(main.settings, Modifier.padding(top = 8.dp), detail = "الورشة مغلقة الآن، ستُعالَج طلبيتك عند الفتح")
+                }
                 vm.progress?.let { Text(it, color = Lux.GoldLight, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)) }
                 vm.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)) }
             }

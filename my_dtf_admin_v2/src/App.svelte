@@ -13,6 +13,7 @@
   import Printer from './views/Printer.svelte';
   import Icon from './components/Icon.svelte';
   import Costs from './views/Costs.svelte';
+  import OpenToggle from './components/OpenToggle.svelte';
   import Orders from './views/Orders.svelte';
   import Stock from './views/Stock.svelte';
   import Perf from './views/Perf.svelte';
@@ -105,6 +106,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_orders' }, bump)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_rolls' }, bump)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_machines' }, bump)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dtf_settings' }, async () => { try { settings.set(await q(sb.from('dtf_settings').select('*').single())); } catch (_) {} bump(); })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_machine_events' }, bump)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_messages' }, bump)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_notifications' }, bump)
@@ -217,6 +219,7 @@
     <main>
       <header class="top">
         <div class="grow"><h1>{nav.find(n => n.id === view)?.t || ''}</h1></div>
+        <OpenToggle compact={false} />
         {#if $shift?.since}<button class="btn danger sm mobile-only" on:click={() => openModal(ClockOut, { onDone: bye })}>خروج {time($shift.since)}</button>{/if}
         <div class="who"><div class="text-left"><b>{$me.full_name}</b><div class="faint tiny">{ROLE[$me.role]}</div></div><div class="avatar">{firstName[0] || '?'}</div></div>
       </header>
@@ -272,7 +275,7 @@
   .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
   .shift { padding: 12px; }
   main { flex: 1; min-width: 0; padding: 22px 26px 40px; }
-  .top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
   .who { display: flex; align-items: center; gap: 10px; }
   .text-left { text-align: left; }
   .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: var(--card2); color: var(--accent2); border: 1px solid var(--line2); }

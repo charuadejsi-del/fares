@@ -28,5 +28,5 @@ export const clock = mn => { const t = Math.max(0, Math.floor(mn * 60)); const h
 export const ACT = {
   new: 'أرسل طلبية جديدة', in_design: 'حوّل إلى التصميم', ready_to_print: 'أنهى التصميم', printing: 'بدأ الطباعة',
   printed: 'أنهى الطباعة', ready_pickup: 'أنهى الطباعة — جاهزة للاستلام', shipped: 'سلّم لشركة التوصيل', delivered: 'سلّم للزبون',
-  rejected: 'رفض', cancelled: 'ألغى', idle: 'الآلة جاهزة', running: 'الآلة تطبع', maintenance: 'صيانة', down: 'عطل',
+  rejected: 'رفض', cancelled: 'ألغى', open: 'فتح الورشة', closed: 'أغلق الورشة', idle: 'الآلة جاهزة', running: 'الآلة تطبع', maintenance: 'صيانة', down: 'عطل',
 };

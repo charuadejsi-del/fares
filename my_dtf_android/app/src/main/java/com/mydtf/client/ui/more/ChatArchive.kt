@@ -104,6 +104,9 @@ fun ChatScreen(main: MainViewModel, onBack: () -> Unit, presetOrder: String? = n
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).imePadding()) {
         Bar("الدردشة مع الورشة", onBack)
+        if (main.settings?.isOpen == false) {
+            com.mydtf.client.ui.components.ShopStatus(main.settings, Modifier.padding(12.dp, 4.dp, 12.dp, 0.dp), detail = "قد يتأخر الرد حتى فتح الورشة")
+        }
         Box(Modifier.weight(1f)) {
             if (main.messages.isEmpty()) {
                 EmptyState(Icons.Rounded.ChatBubbleOutline, "مرحباً بك 👋", "اكتب لنا أي سؤال أو مشكل، ونردّ عليك هنا.")

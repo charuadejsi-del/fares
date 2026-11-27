@@ -49,6 +49,7 @@ import com.mydtf.client.ui.MainViewModel
 import com.mydtf.client.ui.components.EmptyState
 import com.mydtf.client.ui.components.GoldButton
 import com.mydtf.client.ui.components.LuxCard
+import com.mydtf.client.ui.components.ShopStatus
 import com.mydtf.client.ui.components.SectionTitle
 import com.mydtf.client.ui.components.StatusChip
 import com.mydtf.client.ui.components.StepProgress
@@ -119,6 +120,9 @@ fun HomeScreen(
                         }
                     }
                 }
+
+                // ---------- État de l'atelier ----------
+                item { ShopStatus(vm.settings, Modifier.padding(16.dp, 16.dp, 16.dp, 0.dp)) }
 
                 // ---------- Bannière prix ----------
                 vm.settings?.let { s ->

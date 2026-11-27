@@ -25,6 +25,8 @@ data class Settings(
     @SerialName("workshop_name") val workshopName: String,
     @SerialName("workshop_phone") val workshopPhone: String? = null,
     @SerialName("workshop_address") val workshopAddress: String? = null,
+    @SerialName("is_open") val isOpen: Boolean = true,
+    @SerialName("open_note") val openNote: String? = null,
 )
 
 @Serializable

@@ -72,8 +72,8 @@
   $: m7 = act.map(x => ({ n: x.name, v: +x.meters_7d })); $: m7max = Math.max(1, ...m7.map(x => x.v));
   $: hh = String(clockNow.getHours()).padStart(2, '0') + ':' + String(clockNow.getMinutes()).padStart(2, '0');
   $: admin = $me?.role === 'admin';
-  const feedIcon = f => f.kind.startsWith('machine') ? (f.kind === 'machine_roll' ? 'roll' : f.kind === 'machine_maintenance' ? 'wrench' : 'machine') : f.kind === 'client' ? 'user' : 'orders';
-  const feedText = f => f.kind === 'machine_roll' || f.kind === 'machine_maintenance' ? f.note : f.kind === 'machine_status' ? `${ACT[f.to_status] || ''}${f.note ? ' — ' + f.note : ''}` : `${ACT[f.to_status] || f.to_status}${f.order_code ? ' · طلبية ' + f.order_code : ''}${f.machine ? ' على ' + f.machine : ''}`;
+  const feedIcon = f => f.kind === 'workshop' ? 'bolt' : f.kind.startsWith('machine') ? (f.kind === 'machine_roll' ? 'roll' : f.kind === 'machine_maintenance' ? 'wrench' : 'machine') : f.kind === 'client' ? 'user' : 'orders';
+  const feedText = f => f.kind === 'workshop' ? `${ACT[f.to_status]}${f.note ? ' — ' + f.note : ''}` : f.kind === 'machine_roll' || f.kind === 'machine_maintenance' ? f.note : f.kind === 'machine_status' ? `${ACT[f.to_status] || ''}${f.note ? ' — ' + f.note : ''}` : `${ACT[f.to_status] || f.to_status}${f.order_code ? ' · طلبية ' + f.order_code : ''}${f.machine ? ' على ' + f.machine : ''}`;
 </script>
 
 {#if !d}<div class="spinner"></div>{:else}

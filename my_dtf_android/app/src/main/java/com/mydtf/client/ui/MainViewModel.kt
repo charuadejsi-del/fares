@@ -94,7 +94,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 profile = p
                 needsProfile = profile == null
             }
-            if (settings == null) settings = Repo.settings()
+            settings = Repo.settings()
             orders = Repo.myOrders()
             notifications = Repo.notifications()
             messages = Repo.messages()
