@@ -31,7 +31,7 @@ var skel: Skeleton3D
 
 const MODEL_PATH := "res://models/sheep.glb"
 const MODEL_HEIGHT := 1.35
-const MODEL_YAW := 0.0
+const MODEL_YAW := PI  # الموديل يشوف لـ +Z، واللعبة تعتبر القدام -Z
 
 
 func _ready() -> void:
@@ -74,6 +74,118 @@ func _fit_model() -> void:
 	box = _model_aabb()
 	model_pivot.position = Vector3(-box.get_center().x, -box.position.y, -box.get_center().z)
 	skel = _find_skeleton(model)
+	if skel:
+		_setup_bones()
+
+
+# ---------- العظام ----------
+# كل عظم نحركو حول محور ثابت تاع الخروف (جنب = X، فوق = Y، قدام = Z)
+# ونحولو لمحور العظم المحلي مرة وحدة في البداية.
+
+var bones := {}       # اسم -> رقم العظم
+var bone_axes := {}   # "اسم:محور" -> المحور المحلي
+var bone_rest := {}   # اسم -> دوران الراحة
+
+
+func _setup_bones() -> void:
+	var to_skel := skel.global_transform.basis.orthonormalized().inverse() * model.global_transform.basis.orthonormalized()
+	var axes := {"x": (to_skel * Vector3.RIGHT).normalized(), "y": (to_skel * Vector3.UP).normalized(), "z": (to_skel * Vector3.BACK).normalized()}
+	var names: Array[String] = ["LeftArm", "LeftForeArm", "RightArm", "RightForeArm", "LeftUpLeg", "LeftLeg", "RightUpLeg", "RightLeg",
+		"Neck", "Head", "Jaw", "Spine1", "Tail1", "Tail2", "Tail3"]
+	for n in names:
+		var i := skel.find_bone(n)
+		if i < 0:
+			continue
+		bones[n] = i
+		bone_rest[n] = skel.get_bone_rest(i).basis.orthonormalized().get_rotation_quaternion()
+		var par := skel.get_bone_parent(i)
+		var pg := Basis()
+		if par >= 0:
+			pg = skel.get_bone_global_rest(par).basis.orthonormalized()
+		for k in axes:
+			bone_axes[n + ":" + k] = (pg.inverse() * axes[k]).normalized()
+
+
+## يدوّر العظم بزاوية حول محور الخروف (x/y/z)، أو يرجعو للراحة كي تكون الزاوية 0.
+func _bone(n: String, axis: String, ang: float) -> void:
+	if not bones.has(n):
+		return
+	var rest: Quaternion = bone_rest[n]
+	var la: Vector3 = bone_axes[n + ":" + axis]
+	skel.set_bone_pose_rotation(bones[n], Quaternion(la, ang) * rest)
+
+
+func _bone2(n: String, ax: String, a: float, ay: String, b: float) -> void:
+	if not bones.has(n):
+		return
+	var rest: Quaternion = bone_rest[n]
+	var q := Quaternion(bone_axes[n + ":" + ax], a) * Quaternion(bone_axes[n + ":" + ay], b)
+	skel.set_bone_pose_rotation(bones[n], q * rest)
+
+
+var jaw_t := 0.0
+
+
+func bleat() -> void:
+	jaw_t = 0.5
+
+
+func _animate_bones(delta: float, spd: float) -> void:
+	var amp := clampf(spd / WALK, 0.0, 1.4)
+	var air := not is_on_floor()
+	var ph := anim_t
+	# الرجلين: كل زوج متقاطع (قدّام يسار + لور يمين) مع بعضاهم
+	var swing := 0.55 * minf(amp, 1.0) + 0.15 * maxf(amp - 1.0, 0.0)
+	var front_l := sin(ph) * swing
+	var front_r := sin(ph + PI) * swing
+	var knee_l := maxf(0.0, sin(ph + 0.6)) * 0.8 * minf(amp, 1.0)
+	var knee_r := maxf(0.0, sin(ph + PI + 0.6)) * 0.8 * minf(amp, 1.0)
+	if air:
+		# في النقزة: القدام يتمدو لقدام واللور لور
+		front_l = -0.6
+		front_r = -0.6
+		knee_l = 0.9
+		knee_r = 0.9
+	if frozen:
+		front_l = 0.9
+		front_r = -0.9
+		knee_l = 0.2
+		knee_r = 0.2
+	_bone("LeftArm", "x", -front_l)
+	_bone("RightArm", "x", -front_r)
+	_bone("LeftForeArm", "x", knee_l)
+	_bone("RightForeArm", "x", knee_r)
+	var hind_l := front_r
+	var hind_r := front_l
+	if air:
+		hind_l = 0.6
+		hind_r = 0.6
+	_bone("LeftUpLeg", "x", -hind_l)
+	_bone("RightUpLeg", "x", -hind_r)
+	_bone("LeftLeg", "x", -(knee_r if not air else 0.9) * 0.8)
+	_bone("RightLeg", "x", -(knee_l if not air else 0.9) * 0.8)
+	# الراس والرقبة: يهبطو في النطحة، ويتهزو شوية في المشي
+	var head_down := 0.0
+	if dash_t > 0.0:
+		head_down = 0.55
+	elif frozen:
+		head_down = -0.3
+	var nod := sin(ph * 2.0) * 0.06 * minf(amp, 1.0)
+	head_pitch = lerpf(head_pitch, head_down, clampf(delta * 18.0, 0.0, 1.0))
+	_bone("Neck", "x", head_pitch * 0.6 + nod)
+	_bone("Head", "x", head_pitch * 0.5)
+	_bone("Spine1", "x", -0.08 * minf(amp, 1.0) if not air else -0.15)
+	# الفك: يتحل كي يبعبع
+	jaw_t = maxf(jaw_t - delta, 0.0)
+	_bone("Jaw", "x", 0.35 if (jaw_t > 0.0 or frozen) else 0.0)
+	# الذيل: يتهز، وبزربة كي يجري
+	var wag := sin(Time.get_ticks_msec() * 0.001 * (8.0 + amp * 10.0)) * (0.25 + 0.35 * minf(amp, 1.0))
+	_bone("Tail1", "y", wag)
+	_bone("Tail2", "y", wag * 0.8)
+	_bone("Tail3", "y", wag * 0.6)
+
+
+var head_pitch := 0.0
 
 
 func _model_aabb() -> AABB:
@@ -194,6 +306,7 @@ func _physics_process(delta: float) -> void:
 		if not is_on_floor():
 			velocity.y -= GRAV * delta
 		move_and_slide()
+		_animate(delta)
 		return
 	var active: bool = game != null and game.is_playing()
 	var inp: Vector2 = input_override if use_override else move_input
@@ -295,10 +408,12 @@ func _animate(delta: float) -> void:
 		else:
 			head.rotation.x = lerpf(head.rotation.x, sin(anim_t * 0.5) * 0.05, 0.2)
 	elif model_pivot:
-		# بلا عظام بعد: الجسم كامل يميل لقدام في النطحة ويتمايل في الجري
-		var pitch := -0.18 if dash_t > 0.0 else -0.05 * amp
+		# الجسم يميل شوية لقدام في الجري والنطحة، والعظام تتحرك
+		var pitch := -0.08 if dash_t > 0.0 else -0.03 * amp
 		model_pivot.rotation.x = lerpf(model_pivot.rotation.x, pitch, 0.3)
-		model_pivot.rotation.z = sin(anim_t * 0.5) * 0.05 * amp
+		model_pivot.rotation.z = sin(anim_t * 0.5) * 0.03 * amp
+		if skel:
+			_animate_bones(delta, spd)
 	if not is_on_floor():
 		rig.rotation.x = lerpf(rig.rotation.x, 0.25 if velocity.y > 0.0 else -0.15, 0.2)
 	else:

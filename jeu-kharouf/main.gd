@@ -445,6 +445,7 @@ func _collect(g) -> void:
 
 func on_butt() -> void:
 	sfx.play("baa", -4.0, randf_range(1.1, 1.35))
+	sheep.bleat()
 	_vibrate(20)
 
 
@@ -491,6 +492,7 @@ func _caught() -> void:
 	pad.visible = false
 	Engine.time_scale = 0.3
 	sheep.caught()
+	sheep.bleat()
 	sfx.play("baa_long")
 	_vibrate(250)
 	for i in chasers.size():
@@ -669,9 +671,44 @@ func _model_shots(dir: String) -> void:
 		cam.look_at(c, Vector3.UP)
 		await _wait(0.3)
 		await _snap(dir, k)
+	# لقطات الحركة من الجنب: جري، نقزة، نطحة
+	state = State.PLAYING
+	var was_auto := auto_spawn
+	auto_spawn = false
+	sheep.use_override = true
+	sheep.input_override = Vector2(1, 0)
+	var shots := {12: "00e_run1", 17: "00f_run2", 22: "00g_run3"}
+	for f in 40:
+		await get_tree().physics_frame
+		_side_cam()
+		if f == 26:
+			sheep.want_jump = true
+		if shots.has(f):
+			await _snap(dir, shots[f])
+	for f in 12:
+		await get_tree().physics_frame
+		_side_cam()
+	await _snap(dir, "00h_jump")
+	for f in 30:
+		await get_tree().physics_frame
+		_side_cam()
+	sheep.want_butt = true
+	for f in 6:
+		await get_tree().physics_frame
+		_side_cam()
+	await _snap(dir, "00i_butt")
+	auto_spawn = was_auto
 	state = State.MENU
+	_clear_round()
+	sheep.reset_to(world.start_pos)
 	cam_locked = false
 	ui_layer.visible = true
+
+
+func _side_cam() -> void:
+	var c: Vector3 = sheep.global_position + Vector3.UP * 0.7
+	cam.global_position = c + Vector3(0, 0.4, 3.6)
+	cam.look_at(c, Vector3.UP)
 
 
 func _run_shots() -> void:
