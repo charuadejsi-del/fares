@@ -6,14 +6,32 @@ export const sb = createClient(
   { realtime: { params: { eventsPerSecond: 5 } } },
 );
 
+// Session perdue (jeton expiré / révoqué) : la requête part en « anon » → « permission denied ».
+const lostSession = e => e && (e.code === '42501' || e.code === 'PGRST301' || /permission denied|JWT/i.test(e.message || ''));
+let healing = null;
+/** Tente de récupérer la session une seule fois (partagé entre les appels simultanés). */
+export async function heal() {
+  if (!healing) healing = (async () => {
+    const { data } = await sb.auth.getSession();
+    if (data.session && data.session.expires_at * 1000 > Date.now() + 30000) return true;
+    const r = await sb.auth.refreshSession();
+    return !r.error && !!r.data.session;
+  })().finally(() => setTimeout(() => (healing = null), 3000));
+  return healing;
+}
+export const SESSION_LOST = 'انتهت جلستك — أعد الدخول بحسابك';
+
 export async function rpc(fn, args = {}) {
-  const { data, error } = await sb.rpc(fn, args);
+  let { data, error } = await sb.rpc(fn, args);
+  if (error && lostSession(error) && await heal()) ({ data, error } = await sb.rpc(fn, args));
+  if (error && lostSession(error)) { window.dispatchEvent(new Event('mydtfsessionlost')); throw new Error(SESSION_LOST); }
   if (error) throw error;
   return data;
 }
 
 export async function q(promise) {
   const { data, error } = await promise;
+  if (error && lostSession(error)) { heal().then(ok => window.dispatchEvent(new Event(ok ? 'mydtfhealed' : 'mydtfsessionlost'))); throw new Error(SESSION_LOST); }
   if (error) throw error;
   return data;
 }

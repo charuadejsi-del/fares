@@ -158,7 +158,7 @@
   $: greeting = new Date().getHours() < 12 ? 'صباح الخير' : 'مساء الخير';
 </script>
 
-<svelte:window on:hashchange={syncRoute} on:beforeunload={beforeUnload} on:keydown={e => e.key === "Escape" && $tv && tv.set(false)} />
+<svelte:window on:mydtfsessionlost={() => { if (stage === 'app') { loginErr = 'انتهت جلستك — أعد الدخول بحسابك'; channel?.unsubscribe(); stage = 'login'; } }} on:mydtfhealed={() => liveTick.update(n => n + 1)} on:hashchange={syncRoute} on:beforeunload={beforeUnload} on:keydown={e => e.key === "Escape" && $tv && tv.set(false)} />
 
 {#if stage === 'loading'}
   <div class="center"><div class="spinner"></div></div>
