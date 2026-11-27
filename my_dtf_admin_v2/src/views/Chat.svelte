@@ -11,7 +11,7 @@
     sel = cid;
     [msgs, client, orders] = await Promise.all([
       q(sb.from('dtf_messages').select('*').eq('client_id', cid).order('created_at')),
-      q(sb.from('dtf_profiles').select('full_name,phone,wilaya').eq('id', cid).single()),
+      q(sb.from('dtf_profiles').select('full_name,phone,wilaya').eq('id', cid).maybeSingle()),
       q(sb.from('dtf_orders').select('id,code').eq('client_id', cid).order('created_at', { ascending: false }).limit(20)),
     ]);
     await tick(); if (thread) thread.scrollTop = thread.scrollHeight;

@@ -17,7 +17,7 @@
 
   async function load() {
     try {
-      cs = await q(sb.from('dtf_cost_settings').select('*').single());
+      cs = await q(sb.from('dtf_cost_settings').select('*').limit(1).maybeSingle());
       if (!form) form = JSON.parse(JSON.stringify(cs));
       const from = new Date(Y, M - 1, 1), last = new Date(Y, M, 0);
       const to = ongoing ? now : last;

@@ -65,7 +65,7 @@
       const p = await q(sb.from('dtf_profiles').select('*').eq('id', session.user.id).maybeSingle());
       if (!p || p.role === 'client' || !p.active) { await sb.auth.signOut(); loginErr = 'هذا الحساب ليس من فريق الورشة'; stage = 'login'; return; }
       me.set(p);
-      settings.set(await q(sb.from('dtf_settings').select('*').single()));
+      settings.set(await q(sb.from('dtf_settings').select('*').limit(1).maybeSingle()));
       staff.set(await q(sb.from('dtf_profiles').select('id,full_name,role,active,phone').neq('role', 'client').order('full_name')));
       if (p.role === 'admin') return enter();
       const st = (await rpc('dtf_pin_status'))[0];
@@ -108,7 +108,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_orders' }, e => { if (e.eventType === 'INSERT' && isMgr($me)) notify('طلبية جديدة رقم ' + e.new.code, (+e.new.billed_meters).toFixed(2) + ' م', 'o' + e.new.id); bump(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_rolls' }, bump)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_machines' }, bump)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dtf_settings' }, async () => { try { settings.set(await q(sb.from('dtf_settings').select('*').single())); } catch (_) {} bump(); })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dtf_settings' }, async () => { try { settings.set(await q(sb.from('dtf_settings').select('*').limit(1).maybeSingle())); } catch (_) {} bump(); })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_machine_events' }, bump)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_messages' }, e => { if (!e.new.from_staff && isMgr($me)) notify('رسالة جديدة من زبون', e.new.body?.slice(0, 120), 'm' + e.new.client_id); bump(); })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_notifications' }, e => { if (e.new.user_id === $me.id) notify(e.new.title, e.new.body, 'n' + e.new.id); bump(); })

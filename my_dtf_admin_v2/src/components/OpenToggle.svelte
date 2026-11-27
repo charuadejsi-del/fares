@@ -11,7 +11,7 @@
     busy = true;
     try {
       await rpc('dtf_set_open', { p_open: v, p_note: v ? null : note });
-      settings.set(await q(sb.from('dtf_settings').select('*').single()));
+      settings.set(await q(sb.from('dtf_settings').select('*').limit(1).maybeSingle()));
       toast(v ? 'الورشة تعمل الآن — يرى الزبائن ذلك' : 'الورشة مغلقة — يرى الزبائن ذلك');
       asking = false; note = '';
     } catch (e) { toast(errMsg(e), true); }

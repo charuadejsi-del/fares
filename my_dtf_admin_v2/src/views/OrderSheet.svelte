@@ -26,7 +26,8 @@
   async function load() {
     try {
       if (mgr) {
-        o = await q(sb.from('dtf_orders').select('*,client:dtf_profiles!dtf_orders_client_id_fkey(full_name,phone,special_price)').eq('id', id).single());
+        o = await q(sb.from('dtf_orders').select('*,client:dtf_profiles!dtf_orders_client_id_fkey(full_name,phone,special_price)').eq('id', id).maybeSingle());
+        if (!o) { toast('هذه الطلبية لم تعد موجودة', true); closeSheet(); return; }
       } else {
         o = (await rpc('dtf_work_orders')).find(x => x.id === id) || null;
         if (!o) { err = 'لم تعد هذه الطلبية في قائمتك'; return; }

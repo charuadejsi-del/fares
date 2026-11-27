@@ -31,7 +31,7 @@
       q(sb.from('dtf_orders').select('id,code,status,billed_meters,updated_at,designer_id,printer_id,machine_id,client:dtf_profiles!dtf_orders_client_id_fkey(full_name)').in('status', STAGES.flatMap(s => s.k))),
       q(sb.from('dtf_attendance').select('user_id,clock_in,clock_out,auto_closed,work_date').gte('work_date', ymd(new Date(Date.now() - 864e5)))),
       q(sb.from('dtf_conversations').select('unread')),
-      q(sb.from('dtf_stock_summary').select('*').single()),
+      q(sb.from('dtf_stock_summary').select('*').limit(1).maybeSingle()),
       rpc('dtf_activity', { p_limit: 30 }).catch(() => []),
       loadBoard(),
     ]);

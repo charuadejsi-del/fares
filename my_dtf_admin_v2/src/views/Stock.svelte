@@ -13,7 +13,7 @@
   $: mgr = ['admin', 'manager'].includes($me?.role);
   async function load() {
     const [s, rolls, , moves] = await Promise.all([
-      q(sb.from('dtf_stock_summary').select('*').single()),
+      q(sb.from('dtf_stock_summary').select('*').limit(1).maybeSingle()),
       q(sb.from('dtf_rolls').select('*').order('code', { ascending: false }).limit(200)),
       loadBoard(),
       q(sb.from('dtf_film_moves').select('*,roll:dtf_rolls(code),ord:dtf_orders(code),mach:dtf_machines(name)').order('created_at', { ascending: false }).limit(60)),

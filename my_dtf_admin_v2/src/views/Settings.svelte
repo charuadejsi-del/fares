@@ -7,15 +7,17 @@
   async function save() {
     busy = true;
     try {
-      const row = await q(sb.from('dtf_settings').update({
+      await q(sb.from('dtf_settings').update({
         price_per_meter: +s.price_per_meter, min_order_amount: +s.min_order_amount, meter_rounding_step: +s.meter_rounding_step,
         film_width_cm: +s.film_width_cm, gap_cm: +s.gap_cm, roll_alert_m: +s.roll_alert_m, allow_rotation: !!s.allow_rotation,
         workshop_name: s.workshop_name, workshop_phone: s.workshop_phone || null, workshop_address: s.workshop_address || null,
         work_end_time: s.work_end_time || '18:00',
         price_tiers: s.price_tiers.filter(t => +t.min_m > 0 && +t.price > 0).map(t => ({ min_m: +t.min_m, price: +t.price })).sort((a, b) => a.min_m - b.min_m),
         updated_at: new Date().toISOString(),
-      }).eq('id', 1).select().single());
-      settings.set(row); s = { ...row, price_tiers: JSON.parse(JSON.stringify(row.price_tiers || [])) }; toast('حُفظت الإعدادات');
+      }).eq('id', 1));
+      const fresh = await q(sb.from('dtf_settings').select('*').eq('id', 1).maybeSingle());
+      if (!fresh) throw new Error('تعذّر قراءة الإعدادات بعد الحفظ');
+      const row = fresh; settings.set(row); s = { ...row, price_tiers: JSON.parse(JSON.stringify(row.price_tiers || [])) }; toast('حُفظت الإعدادات');
     } catch (e) { toast(errMsg(e), true); }
     busy = false;
   }

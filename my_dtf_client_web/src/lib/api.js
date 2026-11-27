@@ -24,7 +24,7 @@ export async function createProfile(f) {
 export async function loadAll() {
   const id = uid(); if (!id) return;
   const [s, o, m, n] = await Promise.all([
-    q(sb.from('dtf_settings').select('*').single()),
+    q(sb.from('dtf_settings').select('*').limit(1).maybeSingle()),
     q(sb.from('dtf_orders').select('*').eq('client_id', id).order('created_at', { ascending: false })),
     q(sb.from('dtf_messages').select('*').eq('client_id', id).order('created_at').limit(500)),
     q(sb.from('dtf_notifications').select('*').eq('user_id', id).order('created_at', { ascending: false }).limit(100)),
