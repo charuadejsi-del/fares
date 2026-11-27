@@ -38,6 +38,25 @@ jobs:
           grep -q 'android.permission.INTERNET' $MANIFEST || \
             sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <application#' $MANIFEST
           sed -i 's#android:label="my_dtf"#android:label="My DTF"#' $MANIFEST
+          # Plugins (file_picker…) encore en compileSdk 34 : on force 36 partout.
+          GRADLE=android/build.gradle.kts
+          { cat <<'EOF'
+          subprojects {
+              afterEvaluate {
+                  val androidExt = extensions.findByName("android")
+                  if (androidExt != null) {
+                      try {
+                          androidExt.javaClass
+                              .getMethod("compileSdkVersion", Int::class.javaPrimitiveType)
+                              .invoke(androidExt, 36)
+                      } catch (e: Exception) {
+                          logger.warn("compileSdk non forcé pour ${project.name}: ${e.message}")
+                      }
+                  }
+              }
+          }
+          EOF
+          cat $GRADLE; } > /tmp/build.gradle.kts && mv /tmp/build.gradle.kts $GRADLE
 
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings
