@@ -48,18 +48,29 @@ Deno.serve(async (req) => {
       if (!STAFF_ROLES.includes(role)) return json({ error: "دور غير صحيح" }, 400);
 
       const { data: created, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-      if (error || !created.user) {
-        const msg = error?.message?.includes("already") ? "هذا البريد مستعمل من قبل" : (error?.message ?? "خطأ");
-        return json({ error: msg }, 400);
+      let userId = created?.user?.id;
+      let existing = false;
+      if (error || !userId) {
+        if (!error?.message?.includes("already")) return json({ error: error?.message ?? "خطأ" }, 400);
+        // Compte déjà existant : on cherche son id
+        for (let page = 1; page <= 20 && !userId; page++) {
+          const { data: list } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+          const found = list?.users?.find((x) => (x.email ?? "").toLowerCase() === email);
+          if (found) userId = found.id;
+          if (!list?.users?.length) break;
+        }
+        if (!userId) return json({ error: "هذا البريد مستعمل من قبل" }, 400);
+        existing = true;
       }
-      const { error: pe } = await admin.from("dtf_profiles").insert({
-        id: created.user.id, role, full_name: fullName, phone: phone || "-",
-      });
+      const { data: prof } = await admin.from("dtf_profiles").select("role").eq("id", userId).maybeSingle();
+      if (prof?.role === "client") return json({ error: "هذا البريد حساب زبون. لا يمكن تحويل زبون إلى عضو في الفريق، استعمل بريداً آخر." }, 400);
+      if (prof) return json({ error: "هذا البريد عضو في الفريق من قبل" }, 400);
+      const { error: pe } = await admin.from("dtf_profiles").insert({ id: userId, role, full_name: fullName, phone: phone || "-" });
       if (pe) {
-        await admin.auth.admin.deleteUser(created.user.id);
+        if (!existing) await admin.auth.admin.deleteUser(userId);
         return json({ error: pe.message }, 400);
       }
-      return json({ ok: true, id: created.user.id });
+      return json({ ok: true, id: userId, existing });
     }
 
     if (body.action === "set_password") {

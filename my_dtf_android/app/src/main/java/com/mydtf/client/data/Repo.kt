@@ -92,8 +92,14 @@ object Repo {
             this.email = email
             this.password = password
         }
-        ensureProfile()
+        val p = ensureProfile()
+        if (p != null && p.role != "client") {
+            sb.auth.signOut()
+            throw IllegalStateException(STAFF_ONLY)
+        }
     }
+
+    const val STAFF_ONLY = "هذا الحساب خاص بفريق الورشة، ادخل من موقع الإدارة mydtf-admin.pages.dev"
 
     suspend fun signOut() = sb.auth.signOut()
 

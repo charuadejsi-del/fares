@@ -69,10 +69,10 @@ import kotlinx.coroutines.launch
 private val phoneRegex = Regex("^0[5-7]\\d{8}$")
 
 @Composable
-fun AuthScreen() {
+fun AuthScreen(notice: String? = null) {
     var signup by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(notice) }
     var info by remember { mutableStateOf<String?>(null) }
     var tried by remember { mutableStateOf(false) }
 

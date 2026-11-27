@@ -59,7 +59,7 @@ private fun Root() {
     val status by Supa.client.auth.sessionStatus.collectAsState()
     when (status) {
         is SessionStatus.Authenticated -> ClientNav()
-        is SessionStatus.NotAuthenticated -> AuthScreen()
+        is SessionStatus.NotAuthenticated -> AuthScreen(if (com.mydtf.client.ui.StaffFlag.blocked) com.mydtf.client.data.Repo.STAFF_ONLY else null)
         else -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = Lux.Gold)
         }

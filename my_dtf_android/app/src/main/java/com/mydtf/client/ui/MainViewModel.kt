@@ -30,6 +30,7 @@ import java.io.File
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     var profile by mutableStateOf<Profile?>(null); private set
     var needsProfile by mutableStateOf(false); private set
+    var staffBlocked by mutableStateOf(false)
     var settings by mutableStateOf<Settings?>(null); private set
     var orders by mutableStateOf<List<Order>>(emptyList()); private set
     var notifications by mutableStateOf<List<AppNotification>>(emptyList()); private set
@@ -82,7 +83,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun load(silent: Boolean = false) {
         try {
             if (profile == null) {
-                profile = Repo.ensureProfile()
+                val p = Repo.ensureProfile()
+                if (p != null && p.role != "client") {
+                    // session restaurée d'un compte équipe : interdit dans l'app client
+                    staffBlocked = true
+                    StaffFlag.blocked = true
+                    runCatching { Repo.signOut() }
+                    return
+                }
+                profile = p
                 needsProfile = profile == null
             }
             if (settings == null) settings = Repo.settings()
@@ -153,3 +162,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 }
+
+/** Mémorise qu'un compte équipe a été refusé, pour l'afficher sur l'écran de connexion. */
+object StaffFlag { var blocked = false }
