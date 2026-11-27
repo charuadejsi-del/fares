@@ -9,7 +9,7 @@ const ChaserScript := preload("res://chaser.gd")
 const PadScript := preload("res://pad.gd")
 const SfxScript := preload("res://sfx.gd")
 const SAVE := "user://kharouf.cfg"
-const CAM_OFF := Vector3(0, 15.0, 8.0)
+const CAM_OFF := Vector3(0, 12.5, 6.0)
 
 enum State { MENU, PLAYING, CAUGHT, RESULT }
 
@@ -111,14 +111,14 @@ func _setup_env() -> void:
 	sky.sky_material = sm
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.9
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color("b4b9c2")
+	env.ambient_light_energy = 0.42
 	we.environment = env
 	add_child(we)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55, -35, 0)
-	sun.light_energy = 1.25
+	sun.light_energy = 0.8
 	sun.light_color = Color("fff1d6")
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 45.0
