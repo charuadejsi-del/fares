@@ -57,7 +57,7 @@
         {#if o.status === 'rejected' && o.reject_reason}<div class="notice bad small" style="margin-top:8px">سبب الرفض: {o.reject_reason}</div>{/if}
       </div>
       {#if o.tracking_number}
-        <div class="card"><div class="section-title">التوصيل — {o.carrier || 'DHD'}</div>
+        <div class="card"><div class="section-title">التوصيل — {o.carrier || ''}</div>
           <div class="kv"><span>رقم التتبّع</span><b class="ltr">{o.tracking_number}</b></div>
           {#if o.ship_status}<div class="kv"><span>الحالة</span><b class={SHIPC[o.ship_status] || ''}>{SHIPT[o.ship_status] || o.ship_status_raw || '—'}</b></div>{/if}
           {#if o.ship_cod != null}<div class="kv"><span>تدفع للموزّع</span><b>{da(o.ship_cod)}</b></div>{/if}

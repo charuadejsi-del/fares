@@ -17,7 +17,7 @@
     catch (e) { toast(errMsg(e), true); }
   }
   let o = null, imgs = [], thumbs = {}, full = {}, ev = [], issues = [], busy = false, err = '';
-  let designerSel = '', finalLen = '', carrier = 'DHD', tracking = '', paid = '', reason = '', machineSel = '', load2 = {};
+  let designerSel = '', finalLen = '', carrier = '', tracking = '', paid = '', reason = '', machineSel = '', load2 = {};
   const REJECT = ['الصور غير واضحة أو بدقّة ضعيفة', 'المقاسات غير مناسبة للطباعة', 'الصورة تحتاج خلفية شفافة', 'محتوى غير مسموح بطباعته'];
 
   $: role = $me?.role;
@@ -96,7 +96,7 @@
         await rpc('dtf_finish_printing', { p_order: id }); toast('انتهت الطباعة');
       } else if (kind === 'ship') {
         if (!tracking.trim()) throw new Error('أدخل رقم التتبّع');
-        await rpc('dtf_mark_shipped', { p_order: id, p_carrier: carrier.trim() || 'DHD', p_tracking: tracking.trim() }); toast('سُلّمت إلى شركة التوصيل');
+        await rpc('dtf_mark_shipped', { p_order: id, p_carrier: carrier.trim() || 'أخرى', p_tracking: tracking.trim() }); toast('سُلّمت إلى شركة التوصيل');
       } else if (kind === 'deliver') {
         await rpc('dtf_mark_delivered', { p_order: id, p_amount_paid: +paid || 0 }); toast('تم التسليم');
       }
@@ -105,7 +105,7 @@
     busy = false;
   }
   let manualShip = false;
-  const SHIP = { created: ['أُنشئ الطرد', 'blue'], pending: ['جاهز للإرسال', 'blue'], picked: ['استلمته DHD', 'indigo'], transit: ['في الطريق', 'violet'],
+  const SHIP = { created: ['أُنشئ الطرد', 'blue'], pending: ['جاهز للإرسال', 'blue'], picked: ['استلمته الشركة', 'indigo'], transit: ['في الطريق', 'violet'],
     hub: ['في المركز / المكتب', 'violet'], out: ['خرج للتوصيل', 'amber'], attempt: ['محاولة فاشلة', 'orange'], hold: ['معلّق', 'orange'],
     delivered: ['سُلّم', 'green'], returned: ['مرتجع', 'red'], cancelled: ['ملغى', 'gray'], unknown: ['—', 'gray'] };
   async function label() {
@@ -114,14 +114,14 @@
       const r = await invokeDhd({ action: 'label', order_id: o.id });
       const bin = Uint8Array.from(atob(r.pdf), c => c.charCodeAt(0));
       const u = URL.createObjectURL(new Blob([bin], { type: 'application/pdf' }));
-      const w = window.open(u, '_blank'); if (!w) { const a = document.createElement('a'); a.href = u; a.download = `DHD-${r.tracking}.pdf`; a.click(); }
+      const w = window.open(u, '_blank'); if (!w) { const a = document.createElement('a'); a.href = u; a.download = `${o.carrier}-${r.tracking}.pdf`; a.click(); }
       setTimeout(() => URL.revokeObjectURL(u), 60000);
     } catch (e) { toast(errMsg(e), true); }
     busy = false;
   }
   async function trackNow() { busy = true; try { const r = await invokeDhd({ action: 'track' }); toast(`حُدّثت الحالة (${r.updated} تغيير)`); liveTick.update(n => n + 1); } catch (e) { toast(errMsg(e), true); } busy = false; }
   async function cancelShip() {
-    if (!confirm('إلغاء الطرد عند DHD؟ تعود الطلبية إلى «مطبوعة» ويُحذف رقم التتبّع.')) return;
+    if (!confirm('إلغاء الطرد عند شركة التوصيل؟ تعود الطلبية إلى «مطبوعة» ويُحذف رقم التتبّع.')) return;
     busy = true; try { await invokeDhd({ action: 'cancel', order_id: o.id }); toast('أُلغي الطرد'); liveTick.update(n => n + 1); } catch (e) { toast(errMsg(e), true); } busy = false;
   }
   function downloadAll() {
@@ -188,7 +188,7 @@
         <button class="btn lg block" disabled={busy} on:click={() => act('finish')}>انتهت الطباعة</button>
       {/if}
       {#if mgr && o.status === 'printed' && o.delivery_mode !== 'pickup'}
-        <button class="btn lg block" disabled={busy} on:click={() => openModal(ShipForm, { o })}><Icon name="truck" size={18} />إرسال إلى DHD</button>
+        <button class="btn lg block" disabled={busy} on:click={() => openModal(ShipForm, { o })}><Icon name="truck" size={18} />إرسال إلى شركة التوصيل</button>
         <button class="btn quiet sm" style="margin-top:8px" on:click={() => (manualShip = !manualShip)}>شركة أخرى / إدخال رقم التتبّع يدوياً</button>
         {#if manualShip}
           <div class="grid g2 stack"><div><label for="cr">شركة التوصيل</label><input id="cr" bind:value={carrier} /></div>
@@ -214,7 +214,7 @@
         <div class="row between"><span class="row"><Icon name="truck" size={18} /><b>{o.carrier}</b> · <b class="ltr">{o.tracking_number}</b></span>
           {#if o.ship_status}<span class="chip c-{SHIP[o.ship_status]?.[1] || 'gray'}">{SHIP[o.ship_status]?.[0] || o.ship_status}</span>{/if}</div>
         {#if o.ship_status_raw}<div class="faint tiny" style="margin-top:4px">{o.ship_status_raw}{#if o.ship_synced_at} · آخر تحديث {dt(o.ship_synced_at)}{/if}{#if o.ship_cod != null} · يُحصَّل {da(o.ship_cod)}{/if}</div>{/if}
-        {#if o.carrier === 'DHD'}
+        {#if ['Expedia', 'DHD'].includes(o.carrier)}
           <div class="row wrap" style="margin-top:10px">
             <button class="btn ghost sm" disabled={busy} on:click={label}><Icon name="file" size={15} />طباعة الملصق</button>
             <button class="btn quiet sm" disabled={busy} on:click={trackNow}><Icon name="refresh" size={15} />تحديث الحالة</button>

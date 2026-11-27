@@ -146,7 +146,7 @@
     <div class="kv"><span>سعر المتر</span><b>{da(Q.ppm)}</b></div>
     <div class="kv"><span>الاستلام</span><b>{MODE[mode]}{mode !== 'pickup' ? ` — ${wilaya?.ar} / ${commune?.ar}` : ''}</b></div>
     <div class="kv"><span>سعر الطباعة</span><b>{da(Q.amount)}</b></div>
-    {#if mode !== 'pickup'}<div class="kv"><span>التوصيل (DHD)</span><b>{fee ? da(fee) : 'يُحدَّد لاحقاً'}</b></div>{/if}
+    {#if mode !== 'pickup'}<div class="kv"><span>التوصيل</span><b>{fee ? da(fee) : 'يُحدَّد لاحقاً'}</b></div>{/if}
     <div class="kv tot"><span>المجموع</span><b class="accent">{da(Q.amount + (fee || 0))}</b></div>
     {#if mode !== 'pickup'}<div class="faint tiny" style="margin-top:4px">تدفع المبلغ للموزّع عند الاستلام.</div>{/if}
     <label for="nt">ملاحظة للورشة (اختياري)</label><textarea id="nt" rows="3" bind:value={note} placeholder="مثال: اطبع الصورة 2 بالمرآة"></textarea>

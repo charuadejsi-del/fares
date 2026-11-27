@@ -57,7 +57,7 @@
     ($board || []).filter(x => x.active && !x.roll_code).forEach(x => alerts.push({ lvl: 'warn', icon: 'roll', t: `لا يوجد رولو مركّب على ${x.name}`, mach: x.id }));
     if (+stock.rolls_in_stock === 0) alerts.push({ lvl: 'bad', icon: 'stock', t: 'لا يوجد أي رولو احتياطي في المخزون', href: '#stock' });
     if (pipe[0].n) alerts.push({ lvl: pipe[0].oldest > 60 ? 'bad' : 'warn', icon: 'inbox', t: `${pipe[0].n} طلبية تنتظر القبول — أقدمها منذ ${dur(pipe[0].oldest)}`, href: '#orders' });
-    open.filter(o => ['returned', 'attempt', 'hold'].includes(o.ship_status)).forEach(o => alerts.push({ lvl: o.ship_status === 'returned' ? 'bad' : 'warn', icon: 'truck', t: `طلبية ${o.code}: ${o.ship_status === 'returned' ? 'طرد مرتجع' : o.ship_status === 'attempt' ? 'محاولة توصيل فاشلة — اتصل بالزبون' : 'طرد معلّق عند DHD'}`, href: '#orders' }));
+    open.filter(o => ['returned', 'attempt', 'hold'].includes(o.ship_status)).forEach(o => alerts.push({ lvl: o.ship_status === 'returned' ? 'bad' : 'warn', icon: 'truck', t: `طلبية ${o.code}: ${o.ship_status === 'returned' ? 'طرد مرتجع' : o.ship_status === 'attempt' ? 'محاولة توصيل فاشلة — اتصل بالزبون' : 'طرد معلّق عند شركة التوصيل'}`, href: '#orders' }));
     if (unread) alerts.push({ lvl: 'warn', icon: 'chat', t: `${unread} رسالة من الزبائن لم تُقرأ`, href: '#chat' });
     att.filter(a => a.auto_closed).forEach(a => alerts.push({ lvl: 'warn', icon: 'clock', t: `${$staff.find(s => s.id === a.user_id)?.full_name || '—'} نسي تسجيل الخروج (${a.work_date})`, href: '#attendance' }));
     if (!($board || []).length) alerts.push({ lvl: 'warn', icon: 'machine', t: 'لم تُضف أي آلة بعد — أضف آلاتك ليعمل مركز التحكّم بالكامل' });
