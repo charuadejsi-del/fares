@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
@@ -45,6 +46,7 @@ import io.github.jan.supabase.auth.status.SessionStatus
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        androidx.core.splashscreen.SplashScreen.installSplashScreen(this)
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Lux.Night.toArgb()),
@@ -54,8 +56,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private var introShown = false
+
 @Composable
 private fun Root() {
+    var intro by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(!introShown) }
+    if (intro) { com.mydtf.client.ui.components.Intro { introShown = true; intro = false }; return }
     val status by Supa.client.auth.sessionStatus.collectAsState()
     when (status) {
         is SessionStatus.Authenticated -> ClientNav()

@@ -73,3 +73,16 @@ fun RatingCard(orderId: String) {
         }
     }
 }
+
+private val celebrated = mutableSetOf<String>()
+
+/** Petite fête quand la commande est prête (une fois par commande). */
+@Composable
+fun ReadyConfetti(orderId: String, status: String) {
+    val ready = status in setOf("printed", "ready_pickup")
+    var show by remember(orderId, status) { mutableStateOf(ready && orderId !in celebrated) }
+    if (show) {
+        LaunchedEffect(Unit) { celebrated += orderId }
+        com.mydtf.client.ui.components.Confetti(Modifier.fillMaxWidth().height(220.dp), pieces = 70) { show = false }
+    }
+}

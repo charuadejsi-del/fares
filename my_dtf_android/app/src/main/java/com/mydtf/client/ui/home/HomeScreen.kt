@@ -48,6 +48,9 @@ import com.mydtf.client.data.Order
 import com.mydtf.client.ui.MainViewModel
 import com.mydtf.client.ui.components.EmptyState
 import com.mydtf.client.ui.components.GoldButton
+import com.mydtf.client.ui.components.staggerIn
+import com.mydtf.client.ui.components.breathe
+import androidx.compose.foundation.lazy.itemsIndexed
 import com.mydtf.client.ui.components.LuxCard
 import com.mydtf.client.ui.components.ShopStatus
 import com.mydtf.client.ui.components.SectionTitle
@@ -100,12 +103,12 @@ fun HomeScreen(
                                     Text("My DTF · طباعة على الفيلم", style = MaterialTheme.typography.bodySmall, color = Lux.Muted)
                                 }
                                 IconButton(onClick = onNotifications) {
-                                    BadgedBox(badge = { if (vm.unread > 0) Badge(containerColor = Lux.Gold, contentColor = Lux.Night) { Text("${vm.unread}") } }) {
+                                    BadgedBox(badge = { if (vm.unread > 0) Badge(containerColor = Lux.Gold, contentColor = Lux.OnAccent) { Text("${vm.unread}") } }) {
                                         Icon(Icons.Rounded.NotificationsNone, "الإشعارات", tint = Lux.Ivory)
                                     }
                                 }
                                 IconButton(onClick = onChat) {
-                                    BadgedBox(badge = { if (vm.unreadChat > 0) Badge(containerColor = Lux.Gold, contentColor = Lux.Night) { Text("${vm.unreadChat}") } }) {
+                                    BadgedBox(badge = { if (vm.unreadChat > 0) Badge(containerColor = Lux.Gold, contentColor = Lux.OnAccent) { Text("${vm.unreadChat}") } }) {
                                         Icon(Icons.Rounded.ChatBubbleOutline, "الدردشة", tint = Lux.Ivory)
                                     }
                                 }
@@ -147,7 +150,7 @@ fun HomeScreen(
                 }
 
                 if (vm.loading) {
-                    item { Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Lux.Gold) } }
+                    items(3) { com.mydtf.client.ui.components.Shimmer(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).height(110.dp)) }
                 } else if (orders.isEmpty()) {
                     item {
                         EmptyState(
@@ -160,10 +163,8 @@ fun HomeScreen(
                 } else {
                     if (active.isNotEmpty()) {
                         item { SectionTitle("قيد التنفيذ", Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
-                        items(active, key = { "a" + it.id }) { o ->
-                            AnimatedVisibility(true, enter = fadeIn() + slideInVertically { it / 3 }) {
-                                ActiveOrderCard(o) { onOrder(o.id) }
-                            }
+                        itemsIndexed(active, key = { _, it -> "a" + it.id }) { i, o ->
+                            Box(Modifier.staggerIn(i)) { ActiveOrderCard(o) { onOrder(o.id) } }
                         }
                     }
                     val past = orders.filter { it.status in finished }
@@ -173,7 +174,7 @@ fun HomeScreen(
                                 androidx.compose.material3.TextButton(onClick = onArchive) { Text("الأرشيف كاملاً", color = Lux.Gold) }
                             }
                         }
-                        items(past.take(5), key = { "p" + it.id }) { o -> PastOrderRow(o) { onOrder(o.id) } }
+                        itemsIndexed(past.take(5), key = { _, it -> "p" + it.id }) { i, o -> Box(Modifier.staggerIn(i + active.size)) { PastOrderRow(o) { onOrder(o.id) } } }
                     }
                 }
                 if (vm.offline && orders.isNotEmpty()) item {
@@ -190,7 +191,7 @@ fun HomeScreen(
             "طلبية جديدة",
             onClick = onNewOrder,
             icon = Icons.Rounded.AddPhotoAlternate,
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
+            modifier = Modifier.breathe().then(Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
                 .padding(horizontal = 20.dp, vertical = 16.dp).fillMaxWidth(),
             height = 60.dp,
         )

@@ -21,31 +21,34 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mydtf.client.R
 
-// ---------- Palette « Nuit & Or » ----------
+// ---------- Palette « Charbon & Violet » (identique aux sites) ----------
+// Les noms Gold* sont conservés : ils désignent désormais l'accent violet.
 object Lux {
-    val Gold = Color(0xFFE3C27A)
-    val GoldLight = Color(0xFFF1DCA6)
-    val GoldDeep = Color(0xFFB8955A)
-    val Night = Color(0xFF0F1420)
-    val Night2 = Color(0xFF131A28)
-    val Surface = Color(0xFF171E2E)
-    val Surface2 = Color(0xFF1F2840)
-    val Ivory = Color(0xFFE8EAF0)
-    val Muted = Color(0xFF9AA3B5)
-    val Danger = Color(0xFFE5675F)
-    val Success = Color(0xFF5ED3C7)
+    val Gold = Color(0xFFA78BFA)
+    val GoldLight = Color(0xFFC4B5FD)
+    val GoldDeep = Color(0xFF7C4DEB)
+    val Night = Color(0xFF0B0C0F)
+    val Night2 = Color(0xFF101116)
+    val Surface = Color(0xFF15161B)
+    val Surface2 = Color(0xFF1C1D24)
+    val Ivory = Color(0xFFF2F2F3)
+    val Muted = Color(0xFF9A9CA6)
+    val Danger = Color(0xFFF87171)
+    val Success = Color(0xFF4ADE80)
+    /** Texte / icône posé sur l'accent. */
+    val OnAccent = Color.White
 
-    val goldBrush = Brush.linearGradient(listOf(GoldLight, Gold, GoldDeep))
-    val nightBrush = Brush.verticalGradient(listOf(Color(0xFF182033), Night2, Night))
+    val goldBrush = Brush.linearGradient(listOf(Color(0xFFB794FF), Color(0xFF8B5CF6), Color(0xFF7C4DEB)))
+    val nightBrush = Brush.verticalGradient(listOf(Color(0xFF15131F), Night2, Night))
 }
 
 private val DarkLux = darkColorScheme(
     primary = Lux.Gold,
-    onPrimary = Lux.Night,
-    primaryContainer = Color(0xFF3A3322),
+    onPrimary = Lux.OnAccent,
+    primaryContainer = Color(0xFF2A2045),
     onPrimaryContainer = Lux.GoldLight,
     secondary = Lux.GoldLight,
-    onSecondary = Lux.Night,
+    onSecondary = Lux.OnAccent,
     background = Lux.Night,
     onBackground = Lux.Ivory,
     surface = Lux.Surface,
@@ -54,10 +57,10 @@ private val DarkLux = darkColorScheme(
     onSurfaceVariant = Lux.Muted,
     surfaceContainer = Lux.Surface,
     surfaceContainerHigh = Lux.Surface2,
-    surfaceContainerHighest = Color(0xFF26304A),
+    surfaceContainerHighest = Color(0xFF23252D),
     surfaceContainerLow = Lux.Night2,
-    outline = Color(0xFF2E3850),
-    outlineVariant = Color(0xFF242D42),
+    outline = Color(0xFF2E3039),
+    outlineVariant = Color(0xFF23252B),
     error = Lux.Danger,
 )
 

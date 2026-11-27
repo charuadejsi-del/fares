@@ -147,7 +147,7 @@ fun AuthScreen(notice: String? = null) {
                             .background(if (sel) Lux.goldBrush else androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Transparent))
                             .clickable { signup = isSignup; error = null; tried = false },
                         contentAlignment = Alignment.Center,
-                    ) { Text(label, color = if (sel) Lux.Night else Lux.Muted, style = MaterialTheme.typography.labelLarge) }
+                    ) { Text(label, color = if (sel) Lux.OnAccent else Lux.Muted, style = MaterialTheme.typography.labelLarge) }
                 }
             }
             Spacer(Modifier.height(18.dp))

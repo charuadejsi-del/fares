@@ -38,6 +38,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -62,7 +65,7 @@ fun LuxCard(
     val border = if (highlight) BorderStroke(1.2.dp, Lux.goldBrush)
     else BorderStroke(1.dp, Lux.Gold.copy(alpha = 0.16f))
     Surface(
-        modifier = modifier.then(if (onClick != null) Modifier.clip(shape).clickable(onClick = onClick) else Modifier),
+        modifier = modifier.then(if (onClick != null) Modifier.bouncyClick(pressedScale = 0.97f, onClick = onClick) else Modifier),
         shape = shape,
         color = MaterialTheme.colorScheme.surface,
         border = border,
@@ -82,33 +85,48 @@ fun GoldButton(
     loading: Boolean = false,
     icon: ImageVector? = null,
     height: Dp = 56.dp,
+    success: Boolean = false,
+    shine: Boolean = true,
 ) {
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, tween(120), label = "press")
-    val active = enabled && !loading
+    val active = enabled && !loading && !success
+    val glow by animateFloatAsState(if (active) 1f else 0f, tween(300), label = "glow")
     Box(
         modifier = modifier
-            .scale(scale)
             .height(height)
+            .bouncyClick(enabled = active, onClick = onClick)
+            .graphicsLayer { shadowElevation = 18f * glow; shape = RoundedCornerShape(18.dp); clip = false; ambientShadowColor = Lux.GoldDeep; spotShadowColor = Lux.GoldDeep }
             .clip(RoundedCornerShape(18.dp))
-            .background(if (active) Lux.goldBrush else Brush.linearGradient(listOf(Color(0xFF3A3A44), Color(0xFF2C2C35))))
-            .clickable(interactionSource = source, indication = null, enabled = active, onClick = onClick),
+            .background(
+                when {
+                    success -> Brush.linearGradient(listOf(Color(0xFF34D399), Color(0xFF10B981)))
+                    active || loading -> Lux.goldBrush
+                    else -> Brush.linearGradient(listOf(Color(0xFF2A2B33), Color(0xFF22232A)))
+                }
+            )
+            .shine(enabled = shine && active),
         contentAlignment = Alignment.Center,
     ) {
-        if (loading) {
-            CircularProgressIndicator(Modifier.size(24.dp), color = Lux.Night, strokeWidth = 2.5.dp)
+        androidx.compose.animation.AnimatedContent(
+            targetState = if (success) 2 else if (loading) 1 else 0,
+            transitionSpec = { (androidx.compose.animation.scaleIn(initialScale = 0.6f) + androidx.compose.animation.fadeIn()) togetherWith androidx.compose.animation.fadeOut() },
+            label = "btn",
+        ) { st ->
+        if (st == 2) {
+            Icon(androidx.compose.material.icons.Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(28.dp))
+        } else if (st == 1) {
+            CircularProgressIndicator(Modifier.size(24.dp), color = Lux.OnAccent, strokeWidth = 2.5.dp)
         } else Row(verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) {
-                Icon(icon, null, tint = if (active) Lux.Night else Lux.Muted)
+                Icon(icon, null, tint = if (active) Lux.OnAccent else Lux.Muted)
                 Spacer(Modifier.width(8.dp))
             }
             Text(
                 text,
                 style = MaterialTheme.typography.labelLarge,
-                color = if (active) Lux.Night else Lux.Muted,
+                color = if (active) Lux.OnAccent else Lux.Muted,
                 fontWeight = FontWeight.ExtraBold,
             )
+        }
         }
     }
 }
@@ -120,8 +138,9 @@ fun GhostButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
         modifier = modifier
             .height(52.dp)
             .clip(RoundedCornerShape(16.dp))
+            .bouncyClick(enabled = enabled, onClick = onClick)
+            .clip(RoundedCornerShape(16.dp))
             .border(1.dp, Lux.Gold.copy(alpha = if (enabled) 0.6f else 0.2f), RoundedCornerShape(16.dp))
-            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
@@ -208,7 +227,7 @@ fun GoldIconBadge(icon: ImageVector, size: Dp = 44.dp) {
     Box(
         Modifier.size(size).clip(CircleShape).background(Lux.goldBrush),
         contentAlignment = Alignment.Center,
-    ) { Icon(icon, null, tint = Lux.Night, modifier = Modifier.size(size * 0.5f)) }
+    ) { Icon(icon, null, tint = Lux.OnAccent, modifier = Modifier.size(size * 0.5f)) }
 }
 
 @Composable

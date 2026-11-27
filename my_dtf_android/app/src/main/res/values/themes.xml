@@ -4,6 +4,11 @@
         <item name="android:statusBarColor">@color/night</item>
         <item name="android:navigationBarColor">@color/night</item>
     </style>
-    <color name="night">#FF0B0B0F</color>
-    <color name="gold">#FFD4AF37</color>
+    <style name="Theme.MyDTF.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/night</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.MyDTF</item>
+    </style>
+    <color name="night">#FF0B0C0F</color>
+    <color name="gold">#FF8B5CF6</color>
 </resources>

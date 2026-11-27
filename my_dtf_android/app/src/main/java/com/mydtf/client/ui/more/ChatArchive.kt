@@ -122,13 +122,13 @@ fun ChatScreen(main: MainViewModel, onBack: () -> Unit, presetOrder: String? = n
                                 .padding(horizontal = 14.dp, vertical = 10.dp),
                         ) {
                             m.orderId?.let { codes[it] }?.let {
-                                Text("طلبية #$it", style = MaterialTheme.typography.labelSmall, color = if (mine) Lux.Night else Lux.Gold)
+                                Text("طلبية #$it", style = MaterialTheme.typography.labelSmall, color = if (mine) Lux.OnAccent else Lux.Gold)
                             }
-                            Text(m.body, color = if (mine) Lux.Night else MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
+                            Text(m.body, color = if (mine) Lux.OnAccent else MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
                             Text(
                                 (if (mine) "" else "الورشة · ") + formatDate(m.createdAt),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (mine) Lux.Night.copy(alpha = 0.6f) else Lux.Muted,
+                                color = if (mine) Lux.OnAccent.copy(alpha = 0.6f) else Lux.Muted,
                             )
                         }
                     }
@@ -163,8 +163,8 @@ fun ChatScreen(main: MainViewModel, onBack: () -> Unit, presetOrder: String? = n
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                if (sending) CircularProgressIndicator(Modifier.size(22.dp), color = Lux.Night, strokeWidth = 2.dp)
-                else Icon(Icons.AutoMirrored.Rounded.Send, "إرسال", tint = if (text.isBlank()) Lux.Muted else Lux.Night)
+                if (sending) CircularProgressIndicator(Modifier.size(22.dp), color = Lux.OnAccent, strokeWidth = 2.dp)
+                else Icon(Icons.AutoMirrored.Rounded.Send, "إرسال", tint = if (text.isBlank()) Lux.Muted else Lux.OnAccent)
             }
         }
     }

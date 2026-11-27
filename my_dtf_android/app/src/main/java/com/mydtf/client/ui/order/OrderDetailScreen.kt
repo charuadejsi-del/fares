@@ -130,6 +130,7 @@ fun OrderDetailScreen(orderId: String, main: MainViewModel, onBack: () -> Unit, 
                 LuxCard(Modifier.fillMaxWidth()) {
                     val dates = events.filter { it.toStatus != null }.associate { it.toStatus!! to formatDate(it.createdAt) }
                     StatusTimeline(o.status, o.deliveryMode, dates)
+                    ReadyConfetti(o.id, o.status)
                 }
             }
 

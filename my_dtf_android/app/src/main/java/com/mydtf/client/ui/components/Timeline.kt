@@ -57,11 +57,14 @@ fun StatusTimeline(status: String, mode: String, dates: Map<String, String>) {
         initialValue = 1f, targetValue = 1.18f,
         animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "p",
     )
+    val fill = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
+    androidx.compose.runtime.LaunchedEffect(current) { fill.animateTo(current.toFloat().coerceAtLeast(0f), tween(380 * (current.coerceAtLeast(1)))) }
     Column {
         steps.forEachIndexed { i, s ->
             val info = statusInfo(s)
-            val done = i < current
-            val now = i == current
+            val reachedT = (fill.value - i + 1).coerceIn(0f, 1f)
+            val done = i < current && fill.value >= i
+            val now = i == current && fill.value >= i - 0.01f
             Row(verticalAlignment = Alignment.Top) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
@@ -76,13 +79,12 @@ fun StatusTimeline(status: String, mode: String, dates: Map<String, String>) {
                             .border(1.dp, if (done || now) Lux.GoldLight.copy(alpha = 0.6f) else Lux.Gold.copy(alpha = 0.1f), CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(info.icon, null, tint = if (done || now) Lux.Night else Lux.Muted, modifier = Modifier.size(18.dp))
+                        Icon(info.icon, null, tint = if (done || now) Lux.OnAccent else Lux.Muted, modifier = Modifier.size(18.dp))
                     }
                     if (i < steps.lastIndex) {
-                        Box(
-                            Modifier.width(2.dp).height(26.dp)
-                                .background(if (done) Lux.Gold else Lux.Gold.copy(alpha = 0.15f), RoundedCornerShape(1.dp)),
-                        )
+                        Box(Modifier.width(2.dp).height(26.dp).background(Lux.Gold.copy(alpha = 0.15f), RoundedCornerShape(1.dp))) {
+                            Box(Modifier.width(2.dp).height(26.dp * (fill.value - i).coerceIn(0f, 1f)).background(Lux.goldBrush, RoundedCornerShape(1.dp)))
+                        }
                     }
                 }
                 Spacer(Modifier.width(14.dp))

@@ -148,7 +148,7 @@ fun <T> SearchPickerField(
                                 ) {
                                     Text(
                                         itemBadge(item),
-                                        color = if (selected) Lux.Night else Lux.Gold,
+                                        color = if (selected) Lux.OnAccent else Lux.Gold,
                                         fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.labelLarge,
                                     )

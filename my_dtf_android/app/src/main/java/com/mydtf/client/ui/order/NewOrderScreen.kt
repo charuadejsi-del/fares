@@ -61,6 +61,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -101,7 +103,16 @@ fun NewOrderScreen(main: MainViewModel, onClose: () -> Unit, onCreated: (String)
         vm.prefill(main.profile)
         if (main.settings == null) main.reloadSettings()
     }
-    LaunchedEffect(vm.created) { vm.created?.let { onCreated(it.id) } }
+    var celebrate by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val hf = androidx.compose.ui.platform.LocalHapticFeedback.current
+    LaunchedEffect(vm.created) {
+        vm.created?.let {
+            celebrate = true
+            hf.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+            kotlinx.coroutines.delay(1500)
+            onCreated(it.id)
+        }
+    }
     LaunchedEffect(fromOrder) { fromOrder?.let { vm.loadFrom(context, it) } }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) { uris ->
@@ -156,10 +167,8 @@ fun NewOrderScreen(main: MainViewModel, onClose: () -> Unit, onCreated: (String)
                             if (q != null) "${meters(q.billedMeters)} · ${vm.copies} نسخة" else "أضف صورك ومقاساتها",
                             style = MaterialTheme.typography.bodySmall, color = Lux.Muted,
                         )
-                        Text(
-                            if (q != null) formatDa(q.printAmount) else "—",
-                            style = MaterialTheme.typography.headlineSmall, color = Lux.Gold,
-                        )
+                        if (q != null) com.mydtf.client.ui.components.AnimatedNumber(q.printAmount, { formatDa(Math.round(it).toDouble()) }, MaterialTheme.typography.headlineSmall, Lux.Gold)
+                        else Text("—", style = MaterialTheme.typography.headlineSmall, color = Lux.Gold)
                     }
                     if (vm.step < 3) {
                         GoldButton(
@@ -170,9 +179,10 @@ fun NewOrderScreen(main: MainViewModel, onClose: () -> Unit, onCreated: (String)
                         )
                     } else {
                         GoldButton(
-                            "تأكيد الإرسال",
+                            if (celebrate) "أُرسلت" else "تأكيد الإرسال",
                             onClick = vm::send,
                             loading = vm.sending,
+                            success = celebrate,
                             icon = Icons.Rounded.Send,
                             modifier = Modifier.width(190.dp),
                         )
@@ -194,6 +204,7 @@ fun NewOrderScreen(main: MainViewModel, onClose: () -> Unit, onCreated: (String)
             }
         }
     }
+    if (celebrate) com.mydtf.client.ui.components.Confetti()
 }
 
 @Composable
@@ -208,8 +219,8 @@ private fun StepHeader(current: Int, onTap: (Int) -> Unit) {
                         .background(if (done || now) Lux.goldBrush else androidx.compose.ui.graphics.SolidColor(Lux.Surface2)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (done) Icon(Icons.Rounded.CheckCircle, null, tint = Lux.Night, modifier = Modifier.size(18.dp))
-                    else Text("${i + 1}", color = if (now) Lux.Night else Lux.Muted, fontWeight = FontWeight.Bold)
+                    if (done) Icon(Icons.Rounded.CheckCircle, null, tint = Lux.OnAccent, modifier = Modifier.size(18.dp))
+                    else Text("${i + 1}", color = if (now) Lux.OnAccent else Lux.Muted, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(t, style = MaterialTheme.typography.labelSmall, color = if (now) Lux.GoldLight else Lux.Muted)
@@ -264,7 +275,7 @@ private fun ImageCard(index: Int, img: PickedImage, onRemove: () -> Unit) {
                 Box(
                     Modifier.align(Alignment.TopStart).padding(4.dp).size(24.dp).clip(CircleShape).background(color),
                     contentAlignment = Alignment.Center,
-                ) { Text("${index + 1}", color = Lux.Night, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium) }
+                ) { Text("${index + 1}", color = Lux.OnAccent, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium) }
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -424,7 +435,7 @@ private fun ModeCard(mode: String, icon: androidx.compose.ui.graphics.vector.Ima
                 Modifier.size(46.dp).clip(RoundedCornerShape(14.dp))
                     .background(if (sel) Lux.goldBrush else androidx.compose.ui.graphics.SolidColor(Lux.Gold.copy(alpha = 0.08f))),
                 contentAlignment = Alignment.Center,
-            ) { Icon(icon, null, tint = if (sel) Lux.Night else Lux.Gold) }
+            ) { Icon(icon, null, tint = if (sel) Lux.OnAccent else Lux.Gold) }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(deliveryLabels[mode]!!, style = MaterialTheme.typography.titleMedium)
