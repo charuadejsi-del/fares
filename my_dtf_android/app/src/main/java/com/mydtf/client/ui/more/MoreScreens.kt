@@ -116,7 +116,7 @@ fun ProfileScreen(main: MainViewModel, onBack: () -> Unit, onSignedOut: () -> Un
     var phone by remember(p) { mutableStateOf(p?.phone.orEmpty()) }
     var wilaya by remember(p) { mutableStateOf<Wilaya?>(Algeria.wilayaByName(p?.wilaya)) }
     var commune by remember(p) {
-        mutableStateOf<Commune?>(wilaya?.let { w -> Algeria.communesOf(w.c).firstOrNull { it.fr == p?.commune || it.ar == p?.commune } })
+        mutableStateOf<Commune?>(Algeria.communeByName(wilaya, p?.commune))
     }
     var address by remember(p) { mutableStateOf(p?.address.orEmpty()) }
     var busy by remember { mutableStateOf(false) }

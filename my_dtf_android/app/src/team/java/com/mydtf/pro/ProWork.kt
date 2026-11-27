@@ -92,7 +92,7 @@ fun ThumbStrip(orderId: String, size: Int = 56, max: Int = 4) {
     val list = Thumbs.imgs[orderId].orEmpty()
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         list.take(max).forEach { im ->
-            Box(Modifier.size(size.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF1C1D24)).border(1.dp, Lux.Gold.copy(alpha = 0.12f), RoundedCornerShape(12.dp))) {
+            Box(Modifier.size(size.dp).clip(RoundedCornerShape(12.dp)).background(Lux.Surface2).border(1.dp, Lux.Gold.copy(alpha = 0.12f), RoundedCornerShape(12.dp))) {
                 AsyncImage(Thumbs.urls[im.thumbPath ?: im.storagePath], null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(3.dp))
                 Text("×${im.quantity}", style = MaterialTheme.typography.labelSmall, color = Color.White,
                     modifier = Modifier.align(Alignment.BottomStart).clip(RoundedCornerShape(6.dp)).background(Color(0xAA000000)).padding(horizontal = 4.dp))
@@ -402,7 +402,7 @@ fun DesignSheet(vm: ProViewModel, o: WorkOrder, onClose: () -> Unit) {
             }
             imgs.forEachIndexed { i, im ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(70.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF1C1D24))) {
+                    Box(Modifier.size(70.dp).clip(RoundedCornerShape(12.dp)).background(Lux.Surface2)) {
                         AsyncImage(Thumbs.urls[im.thumbPath ?: im.storagePath], null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(3.dp))
                     }
                     Spacer(Modifier.width(10.dp))

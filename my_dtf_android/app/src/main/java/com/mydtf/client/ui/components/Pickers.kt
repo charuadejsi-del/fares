@@ -171,16 +171,23 @@ fun <T> SearchPickerField(
     }
 }
 
+/** Montant arrondi avec espace des milliers : « 1 500 دج ». */
+private fun dzd(v: Int) = v.toString().reversed().chunked(3).joinToString("\u202F").reversed() + " دج"
+
 @Composable
 fun WilayaPicker(selected: Wilaya?, onSelect: (Wilaya) -> Unit, modifier: Modifier = Modifier) {
     SearchPickerField(
         label = "الولاية",
         value = selected?.let { "${it.code} - ${it.ar} · ${it.fr}" },
         icon = Icons.Rounded.Map,
-        sheetTitle = "اختر الولاية",
+        sheetTitle = if (Algeria.isLive) "الولايات التي تصلها شركة التوصيل" else "اختر الولاية",
         search = { Algeria.searchWilayas(it) },
-        itemTitle = { it.ar },
-        itemSubtitle = { it.fr },
+        itemTitle = { it.ar + "  ·  " + it.fr },
+        itemSubtitle = { w ->
+            if (!Algeria.isLive) null
+            else listOfNotNull(w.desk?.let { "المكتب ${dzd(it)}" }, w.home?.let { "المنزل ${dzd(it)}" }).joinToString(" · ")
+                .ifEmpty { null }?.let { it + if (w.hasDesk) "" else " — منزل فقط" }
+        },
         itemBadge = { it.code },
         isSelected = { it.c == selected?.c },
         onSelect = onSelect,
@@ -188,16 +195,17 @@ fun WilayaPicker(selected: Wilaya?, onSelect: (Wilaya) -> Unit, modifier: Modifi
     )
 }
 
+/** [deskOnly] : seulement les communes où la société a un bureau (retrait au stop desk). */
 @Composable
-fun CommunePicker(wilaya: Wilaya?, selected: Commune?, onSelect: (Commune) -> Unit, modifier: Modifier = Modifier) {
+fun CommunePicker(wilaya: Wilaya?, selected: Commune?, onSelect: (Commune) -> Unit, modifier: Modifier = Modifier, deskOnly: Boolean = false) {
     SearchPickerField(
-        label = "البلدية",
+        label = if (deskOnly) "مكتب الاستلام (البلدية)" else "البلدية",
         value = selected?.let { "${it.ar} · ${it.fr}" },
         icon = Icons.Rounded.LocationCity,
-        sheetTitle = "بلديات ${wilaya?.ar ?: ""}",
-        search = { q -> wilaya?.let { Algeria.searchCommunes(it.c, q) } ?: emptyList() },
+        sheetTitle = (if (deskOnly) "مكاتب " else "بلديات ") + (wilaya?.ar ?: ""),
+        search = { q -> wilaya?.let { w -> Algeria.searchCommunes(w.c, q).filter { !deskOnly || it.desk != false } } ?: emptyList() },
         itemTitle = { it.ar },
-        itemSubtitle = { it.fr },
+        itemSubtitle = { c -> c.fr + when (c.desk) { true -> "  ·  فيها مكتب"; false -> "  ·  منزل فقط"; null -> "" } },
         isSelected = { c -> selected?.let { s -> c.fr == s.fr && c.w == s.w } ?: false },
         onSelect = onSelect,
         modifier = modifier,

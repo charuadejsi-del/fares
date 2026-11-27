@@ -61,7 +61,35 @@ data class ShipInfo(
     val address: String? = null,
 )
 
+@kotlinx.serialization.Serializable
+private data class ShipRateRow(@kotlinx.serialization.SerialName("wilaya_code") val w: Int, val home: Double? = null, val desk: Double? = null)
+@kotlinx.serialization.Serializable
+private data class ShipCommuneRow(
+    @kotlinx.serialization.SerialName("wilaya_code") val w: Int, val name: String,
+    @kotlinx.serialization.SerialName("has_desk") val hasDesk: Boolean = false,
+    @kotlinx.serialization.SerialName("code_postal") val code: String? = null,
+)
+
 object Repo {
+    /** Wilayas, communes et tarifs de la société de livraison (lisibles même avant connexion). */
+    suspend fun loadShipping() {
+        runCatching {
+            val rates = sb.from("dtf_ship_rates").select().decodeList<ShipRateRow>()
+            val coms = mutableListOf<ShipCommuneRow>()
+            var from = 0L
+            while (true) {
+                val part = sb.from("dtf_ship_communes").select { range(from, from + 999) }.decodeList<ShipCommuneRow>()
+                coms += part
+                if (part.size < 1000) break
+                from += 1000
+            }
+            com.mydtf.core.Algeria.applyShipping(
+                rates.map { com.mydtf.core.ShipRate(it.w, it.home?.toInt(), it.desk?.toInt()) },
+                coms.map { com.mydtf.core.ShipCommune(it.w, it.name, it.hasDesk, it.code) },
+            )
+        }
+    }
+
     private val sb get() = Supa.client
 
     val uid: String? get() = sb.auth.currentUserOrNull()?.id

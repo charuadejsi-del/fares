@@ -52,6 +52,10 @@ data class Order(
     @SerialName("ship_commune") val shipCommune: String? = null,
     val carrier: String? = null,
     @SerialName("tracking_number") val trackingNumber: String? = null,
+    @SerialName("ship_status") val shipStatus: String? = null,
+    @SerialName("ship_status_raw") val shipStatusRaw: String? = null,
+    @SerialName("ship_cod") val shipCod: Double? = null,
+    @SerialName("ship_events") val shipEvents: List<ShipEvent>? = null,
     @SerialName("amount_paid") val amountPaid: Double = 0.0,
     @SerialName("reject_reason") val rejectReason: String? = null,
     @SerialName("client_note") val clientNote: String? = null,
@@ -59,6 +63,18 @@ data class Order(
 ) {
     val total: Double get() = printAmount + deliveryFee
 }
+
+/** Étape de suivi renvoyée par la société de livraison (s = statut, d = date, w = lieu). */
+@Serializable
+data class ShipEvent(val s: String? = null, val d: String? = null, val w: String? = null)
+
+/** Libellés client des états de colis (normalisés par le serveur). */
+val shipLabels = mapOf(
+    "created" to "سُجّل الطرد عند شركة التوصيل", "pending" to "جاهز للإرسال", "picked" to "استلمته شركة التوصيل",
+    "transit" to "في الطريق إليك", "hub" to "وصل إلى مكتب ولايتك", "out" to "خرج للتوصيل — ترقّب الاتصال",
+    "attempt" to "لم نتمكن من الوصول إليك — أجب على الهاتف", "hold" to "معلّق مؤقتاً", "delivered" to "سُلّم",
+    "returned" to "أُرجع إلى الورشة", "cancelled" to "أُلغي",
+)
 
 @Serializable
 data class OrderImage(

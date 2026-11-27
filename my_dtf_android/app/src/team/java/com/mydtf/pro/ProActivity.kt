@@ -5,6 +5,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -55,6 +57,7 @@ class ProActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(SystemBarStyle.dark(Lux.Night.toArgb()), SystemBarStyle.dark(Lux.Night.toArgb()))
+        lifecycleScope.launch { com.mydtf.client.data.Repo.loadShipping() }
         setContent { MyDtfTheme { ProRoot() } }
     }
 }

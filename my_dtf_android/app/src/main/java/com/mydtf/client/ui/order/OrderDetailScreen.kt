@@ -151,6 +151,17 @@ fun OrderDetailScreen(orderId: String, main: MainViewModel, onBack: () -> Unit, 
                         Icon(Icons.Rounded.ContentCopy, "نسخ", tint = Lux.Gold, modifier = Modifier.size(18.dp))
                     }
                 }
+                o.shipStatus?.let { st ->
+                    KeyValue("حالة الطرد", com.mydtf.client.data.shipLabels[st] ?: (o.shipStatusRaw ?: st),
+                        valueColor = when (st) { "delivered" -> Lux.Success; "attempt", "returned" -> Lux.Danger; "out" -> Lux.Gold; else -> Lux.Ivory })
+                }
+                o.shipCod?.let { KeyValue("تدفع للموزّع", formatDa(it)) }
+                o.shipEvents?.takeIf { it.isNotEmpty() }?.let { ev ->
+                    Spacer(Modifier.height(6.dp))
+                    ev.reversed().take(6).forEach { e ->
+                        Text("${e.d.orEmpty()} · ${e.s.orEmpty()}", style = MaterialTheme.typography.bodySmall, color = Lux.Muted)
+                    }
+                }
                 KeyValue("تاريخ الطلب", formatDate(o.createdAt))
             }
 

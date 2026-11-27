@@ -5,6 +5,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -53,6 +55,7 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(Lux.Night.toArgb()),
             navigationBarStyle = SystemBarStyle.dark(Lux.Night.toArgb()),
         )
+        lifecycleScope.launch { com.mydtf.client.data.Repo.loadShipping() }
         setContent { MyDtfTheme { Root() } }
     }
 }

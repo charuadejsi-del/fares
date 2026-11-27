@@ -692,5 +692,6 @@ private fun SettingsScreen(vm: ProViewModel) {
             }.getOrNull()
             if (n == null) msg = "تحقّق من الأرقام" else vm.act(onDone = { e -> msg = e ?: "✓ حُفظت الإعدادات — تُطبَّق فوراً على التطبيق والموقع" }) { Admin.saveSettings(n); s = n }
         })
+        DeliverySettingsCard()
     }
 }

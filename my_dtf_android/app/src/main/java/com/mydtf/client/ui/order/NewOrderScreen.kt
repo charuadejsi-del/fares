@@ -65,6 +65,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -167,7 +168,7 @@ fun NewOrderScreen(main: MainViewModel, onClose: () -> Unit, onCreated: (String)
                             if (q != null) "${meters(q.billedMeters)} · ${vm.copies} نسخة" else "أضف صورك ومقاساتها",
                             style = MaterialTheme.typography.bodySmall, color = Lux.Muted,
                         )
-                        if (q != null) com.mydtf.client.ui.components.AnimatedNumber(q.printAmount, { formatDa(Math.round(it).toDouble()) }, MaterialTheme.typography.headlineSmall, Lux.Gold)
+                        if (q != null) com.mydtf.client.ui.components.AnimatedNumber(q.printAmount + (vm.deliveryFee ?: 0), { formatDa(Math.round(it).toDouble()) }, MaterialTheme.typography.headlineSmall, Lux.Gold)
                         else Text("—", style = MaterialTheme.typography.headlineSmall, color = Lux.Gold)
                     }
                     if (vm.step < 3) {
@@ -403,9 +404,13 @@ private fun PreviewStep(vm: NewOrderViewModel) {
 private fun DeliveryStep(vm: NewOrderViewModel) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionTitle("طريقة الاستلام")
+        val w = vm.wilaya
         ModeCard("pickup", Icons.Rounded.Storefront, "مجاناً — تستلمها من الورشة", vm)
-        ModeCard("home", Icons.Rounded.Home, "يوصلها لك عامل التوصيل إلى بابك", vm)
-        ModeCard("stopdesk", Icons.Rounded.LocalShipping, "تستلمها من مكتب شركة التوصيل في ولايتك", vm)
+        ModeCard("home", Icons.Rounded.Home, w?.home?.let { "التوصيل إلى بابك — ${formatDa(it.toDouble())}" } ?: "يوصلها لك عامل التوصيل إلى بابك", vm)
+        ModeCard("stopdesk", Icons.Rounded.LocalShipping,
+            if (vm.deskUnavailable) "لا يوجد مكتب لشركة التوصيل في ولايتك"
+            else w?.desk?.let { "من مكتب شركة التوصيل — ${formatDa(it.toDouble())}" } ?: "تستلمها من مكتب شركة التوصيل في ولايتك",
+            vm, enabled = !vm.deskUnavailable)
         if (vm.mode == "pickup") {
             vm.settings?.workshopAddress?.let { Text("عنوان الورشة: $it", color = Lux.GoldLight) }
         }
@@ -416,9 +421,12 @@ private fun DeliveryStep(vm: NewOrderViewModel) {
                 LuxField(vm.phone, { vm.phone = it.filter { c -> c.isDigit() || c == ' ' }.take(12) }, "هاتف المستلم",
                     leading = Icons.Rounded.Phone, keyboard = KeyboardType.Phone)
                 WilayaPicker(vm.wilaya, { vm.wilaya = it; vm.commune = null })
-                CommunePicker(vm.wilaya, vm.commune, { vm.commune = it })
+                CommunePicker(vm.wilaya, vm.commune, { vm.commune = it }, deskOnly = vm.mode == "stopdesk")
                 if (vm.mode == "home") LuxField(vm.address, { vm.address = it }, "العنوان الكامل", leading = Icons.Rounded.Home)
-                Text("سعر التوصيل يُحسب حسب الولاية وشركة التوصيل.", style = MaterialTheme.typography.bodySmall, color = Lux.Muted)
+                if (vm.mode == "stopdesk" && vm.deskUnavailable)
+                    Text("لا يوجد مكتب لشركة التوصيل في ${vm.wilaya?.ar} — اختر التوصيل إلى المنزل.", style = MaterialTheme.typography.bodySmall, color = Lux.Danger)
+                Text(vm.deliveryFee?.let { "سعر التوصيل: ${formatDa(it.toDouble())} — تدفعه للموزّع عند الاستلام." } ?: "اختر الولاية لرؤية سعر التوصيل.",
+                    style = MaterialTheme.typography.bodySmall, color = Lux.GoldLight)
             }
         }
         LuxField(vm.note, { vm.note = it }, "ملاحظة للورشة (اختياري)", leading = Icons.Rounded.Notes, singleLine = false, minLines = 2)
@@ -427,9 +435,9 @@ private fun DeliveryStep(vm: NewOrderViewModel) {
 }
 
 @Composable
-private fun ModeCard(mode: String, icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, vm: NewOrderViewModel) {
+private fun ModeCard(mode: String, icon: androidx.compose.ui.graphics.vector.ImageVector, desc: String, vm: NewOrderViewModel, enabled: Boolean = true) {
     val sel = vm.mode == mode
-    LuxCard(Modifier.fillMaxWidth(), highlight = sel, onClick = { vm.mode = mode }, padding = PaddingValues(16.dp)) {
+    LuxCard(Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.45f), highlight = sel, onClick = { vm.chooseMode(mode) }, padding = PaddingValues(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(46.dp).clip(RoundedCornerShape(14.dp))
@@ -470,8 +478,9 @@ private fun ConfirmStep(vm: NewOrderViewModel) {
                 KeyValue("الولاية", vm.wilaya?.let { "${it.code} - ${it.ar}" } ?: "")
                 KeyValue("البلدية", vm.commune?.ar ?: "")
                 if (vm.mode == "home") KeyValue("العنوان", vm.address)
-                KeyValue("التوصيل", "يُضاف حسب الشركة")
+                KeyValue("التوصيل", vm.deliveryFee?.let { formatDa(it.toDouble()) } ?: "يُحدَّد لاحقاً")
             }
+            q?.let { KeyValue("المجموع", formatDa(it.printAmount + (vm.deliveryFee ?: 0)), strong = true) }
             if (vm.note.isNotBlank()) KeyValue("ملاحظة", vm.note)
         }
         Text(

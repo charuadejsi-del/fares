@@ -100,7 +100,7 @@ fun GoldButton(
                 when {
                     success -> Brush.linearGradient(listOf(Color(0xFF34D399), Color(0xFF10B981)))
                     active || loading -> Lux.goldBrush
-                    else -> Brush.linearGradient(listOf(Color(0xFF2A2B33), Color(0xFF22232A)))
+                    else -> Brush.linearGradient(listOf(Color(0xFF1E2330), Color(0xFF171B26)))
                 }
             )
             .shine(enabled = shine && active),

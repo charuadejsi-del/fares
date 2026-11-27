@@ -36,6 +36,6 @@ fun ltr(s: String) = "\u2066$s\u2069"
 
 fun formatDa(v: Double): String {
     val n = v.roundToLong()
-    val s = n.toString().reversed().chunked(3).joinToString(".").reversed()
+    val s = n.toString().reversed().chunked(3).joinToString("\u202F").reversed()
     return "${ltr(s)} دج"
 }

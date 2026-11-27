@@ -101,8 +101,18 @@ class NewOrderViewModel : ViewModel() {
         name = p.fullName
         phone = p.phone
         wilaya = Algeria.wilayaByName(p.wilaya)
-        commune = wilaya?.let { w -> Algeria.communesOf(w.c).firstOrNull { it.fr == p.commune || it.ar == p.commune } }
+        commune = Algeria.communeByName(wilaya, p.commune)
         address = p.address.orEmpty()
+    }
+
+    /** Frais de livraison (tarifs de la société, recalculés aussi par le serveur) ; null = inconnu. */
+    val deliveryFee: Int? get() = when (mode) { "pickup" -> 0; "stopdesk" -> wilaya?.desk; else -> wilaya?.home }
+    /** Pas de bureau dans la wilaya choisie → le retrait au stop desk est impossible. */
+    val deskUnavailable: Boolean get() = Algeria.isLive && wilaya != null && wilaya?.hasDesk == false
+    fun chooseMode(m: String) {
+        if (m == "stopdesk" && deskUnavailable) return
+        mode = m
+        if (m == "stopdesk" && commune?.desk == false) commune = null
     }
 
     /** Lecture des images choisies (octets + dimensions en pixels) hors du thread UI. */
@@ -193,6 +203,7 @@ class NewOrderViewModel : ViewModel() {
         1 -> quote != null
         2 -> mode == "pickup" || (
             name.isNotBlank() && phone.replace(" ", "").length >= 9 && wilaya != null && commune != null &&
+                !(mode == "stopdesk" && (deskUnavailable || commune?.desk == false)) &&
                 (mode == "stopdesk" || address.isNotBlank())
             )
         else -> true

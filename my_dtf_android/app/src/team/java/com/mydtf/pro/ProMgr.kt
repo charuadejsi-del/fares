@@ -194,7 +194,9 @@ private fun OrderMgrSheet(vm: ProViewModel, o: MgrOrder, onClose: () -> Unit) {
     val loadOf = { id: String -> vm.orders.count { it.status == "in_design" && it.designerId == id } }
     var pick by remember { mutableStateOf(designers.minByOrNull { loadOf(it.id) }?.id) }
     var reason by remember { mutableStateOf("") }
-    var carrier by remember { mutableStateOf("DHD") }
+    var carrier by remember { mutableStateOf("") }
+    var shipForm by remember { mutableStateOf(false) }
+    var manual by remember { mutableStateOf(false) }
     var tracking by remember { mutableStateOf("") }
     var paid by remember { mutableStateOf("%.0f".format(o.printAmount + o.deliveryFee)) }
     var err by remember { mutableStateOf<String?>(null) }
@@ -225,13 +227,21 @@ private fun OrderMgrSheet(vm: ProViewModel, o: MgrOrder, onClose: () -> Unit) {
                     GhostButton("رفض الطلبية", { if (reason.isNotBlank()) run { Pro.reject(o.id, reason.trim()) } else err = "اكتب سبب الرفض" }, Modifier.fillMaxWidth(), Icons.Rounded.Close)
                 }
                 "printed" -> if (o.deliveryMode != "pickup") {
-                    LuxField(carrier, { carrier = it }, "شركة التوصيل")
-                    LuxField(tracking, { tracking = it }, "رقم التتبّع")
-                    GoldButton("سُلّمت لشركة التوصيل", icon = Icons.Rounded.LocalShipping, success = ok, modifier = Modifier.fillMaxWidth(), onClick = { run { Pro.shipped(o.id, carrier.ifBlank { "DHD" }, tracking.trim()) } })
+                    GoldButton("إرسال إلى شركة التوصيل", icon = Icons.Rounded.LocalShipping, success = ok, modifier = Modifier.fillMaxWidth(), onClick = { shipForm = true })
+                    GhostButton(if (manual) "إخفاء الإدخال اليدوي" else "شركة أخرى / رقم تتبّع يدوي", { manual = !manual }, Modifier.fillMaxWidth())
+                    if (manual) {
+                        LuxField(carrier, { carrier = it }, "شركة التوصيل")
+                        LuxField(tracking, { tracking = it }, "رقم التتبّع")
+                        GhostButton("سُلّمت لشركة التوصيل", { run { Pro.shipped(o.id, carrier.ifBlank { "أخرى" }, tracking.trim()) } }, Modifier.fillMaxWidth(), Icons.Rounded.LocalShipping)
+                    }
                 }
                 "ready_pickup", "shipped" -> {
+                    if (o.trackingNumber != null) ShipBox(vm, o) { vm.refresh() }
+                    val auto = o.status == "shipped" && o.carrier in API_CARRIERS
+                    if (auto) Text("تتحوّل الطلبية إلى «سُلّمت» تلقائياً عندما تسلّمها شركة التوصيل. استعمل الزر أدناه فقط إذا سلّمتها بنفسك.", color = Lux.Muted, style = MaterialTheme.typography.bodySmall)
                     LuxField(paid, { paid = it }, "المبلغ المقبوض (دج)", keyboard = KeyboardType.Number)
-                    GoldButton("سُلّمت للزبون", icon = Icons.Rounded.CheckCircle, success = ok, modifier = Modifier.fillMaxWidth(),
+                    if (auto) GhostButton("سُلّمت للزبون", { run { Pro.delivered(o.id, paid.replace(',', '.').toDoubleOrNull() ?: 0.0) } }, Modifier.fillMaxWidth(), Icons.Rounded.CheckCircle)
+                    else GoldButton("سُلّمت للزبون", icon = Icons.Rounded.CheckCircle, success = ok, modifier = Modifier.fillMaxWidth(),
                         onClick = { run { Pro.delivered(o.id, paid.replace(',', '.').toDoubleOrNull() ?: 0.0) } })
                 }
                 else -> Text("الطلبية عند ${if (o.status == "in_design") "المصمّم " + vm.name(o.designerId) else "الطابعين"}", color = Lux.Muted)
@@ -240,6 +250,7 @@ private fun OrderMgrSheet(vm: ProViewModel, o: MgrOrder, onClose: () -> Unit) {
             Spacer(Modifier.height(20.dp))
         }
     }
+    if (shipForm) ShipFormSheet(o, onClose = { shipForm = false }) { m -> shipForm = false; err = m; vm.refresh(); scope.launch { kotlinx.coroutines.delay(1200); onClose() } }
 }
 
 // =========================== Discussions ===========================
