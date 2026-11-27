@@ -196,7 +196,7 @@
       <div class="brand"><img src="/icon.svg" alt="" width="38" height="38" /><div><b>My DTF</b><div class="faint tiny">مركز تحكّم الورشة</div></div></div>
       <nav>
         {#each nav as n}
-          <a href="#{n.id}" class:on={view === n.id}>
+          <a href="#{n.id}" class="nl" class:on={view === n.id}>
             <Icon name={n.icon} size={20} />
             <span class="grow">{n.t}</span>
             {#if $badges[n.id]}<span class="badge">{$badges[n.id]}</span>{/if}
@@ -227,21 +227,21 @@
 
     <nav class="bottom">
       {#each mobileNav as n}
-        <a href="#{n.id}" class:on={view === n.id}>
+        <a href="#{n.id}" class="bl" class:on={view === n.id}>
           <span class="ic"><Icon name={n.icon} size={22} />{#if $badges[n.id]}<span class="badge dot">{$badges[n.id]}</span>{/if}</span>
           <span>{n.t}</span>
         </a>
       {/each}
       {#if nav.length > 5}
-        <a href="#{nav[5].id}" class:on={nav.slice(5).some(n => n.id === view)} on:click|preventDefault={() => (moreOpen = !moreOpen)}>
+        <a href="#{nav[5].id}" class="bl" class:on={nav.slice(5).some(n => n.id === view)} on:click|preventDefault={() => (moreOpen = !moreOpen)}>
           <span class="ic"><Icon name="more" size={22} /></span><span>المزيد</span>
         </a>
       {/if}
     </nav>
     {#if moreOpen}
       <div class="more card" on:click={() => (moreOpen = false)} role="presentation">
-        {#each nav.slice(5) as n}<a href="#{n.id}" class="row"><Icon name={n.icon} size={20} />{n.t}</a>{/each}
-        <button class="row" on:click={logout}><Icon name="logout" size={20} />الخروج من الحساب</button>
+        {#each nav.slice(5) as n}<a href="#{n.id}" class="row ml"><Icon name={n.icon} size={20} />{n.t}</a>{/each}
+        <button class="row ml" on:click={logout}><Icon name="logout" size={20} />الخروج من الحساب</button>
       </div>
     {/if}
   </div>
@@ -261,11 +261,11 @@
   .side { width: 240px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column;
     background: var(--bg2); border-left: 1px solid var(--line); padding: 18px 12px; }
   .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 20px; }
-  .side nav a { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; color: var(--muted); margin-bottom: 2px; font-weight: 500; }
-  .side nav a:hover { background: var(--card); color: var(--text); }
-  .side nav a.on { background: linear-gradient(90deg, transparent, var(--accent-soft)); color: var(--accent3); box-shadow: inset -3px 0 0 var(--accent); }
-  .tv .side, .tv .top, .tv .bottom { display: none !important; }
-  .tv main { padding: 18px; }
+  .nl { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; color: var(--muted); margin-bottom: 2px; font-weight: 500; }
+  .nl:hover { background: var(--card); color: var(--text); }
+  .nl.on { background: linear-gradient(90deg, transparent, var(--accent-soft)); color: var(--accent3); box-shadow: inset -3px 0 0 var(--accent); }
+  .shell.tv .side, .shell.tv .top, .shell.tv .bottom { display: none !important; }
+  .shell.tv main { padding: 18px; }
   :global(.tv) { font-size: 16.5px; }
   .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
   .shift { padding: 12px; }
@@ -276,8 +276,8 @@
   .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: var(--card2); color: var(--accent2); border: 1px solid var(--line2); }
   .bottom, .mobile-only { display: none; }
   .more { position: fixed; z-index: 90; bottom: calc(70px + env(safe-area-inset-bottom)); left: 12px; width: 220px; padding: 6px; }
-  .more a, .more button { padding: 11px 12px; border-radius: 10px; color: var(--text); width: 100%; }
-  .more a:hover, .more button:hover { background: var(--card2); }
+  .ml { padding: 11px 12px; border-radius: 10px; color: var(--text); width: 100%; }
+  .ml:hover { background: var(--card2); }
   @media (max-width: 900px) {
     .side { display: none; }
     main { padding: 14px 14px calc(86px + env(safe-area-inset-bottom)); }
@@ -285,10 +285,10 @@
     .mobile-only { display: inline-flex; }
     .bottom { display: flex; position: fixed; z-index: 80; left: 0; right: 0; bottom: 0; background: var(--bg2); border-top: 1px solid var(--line);
       padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
-    .bottom a { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11.5px; color: var(--muted); padding: 4px 0; }
-    .bottom a.on { color: var(--accent2); }
+    .bl { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11.5px; color: var(--muted); padding: 4px 0; }
+    .bl.on { color: var(--accent2); }
     .ic { position: relative; display: grid; place-items: center; width: 52px; height: 30px; border-radius: 15px; }
-    .bottom a.on .ic { background: var(--accent-soft); }
+    .bl.on .ic { background: var(--accent-soft); }
     .badge.dot { position: absolute; top: -4px; left: 6px; }
   }
 </style>
