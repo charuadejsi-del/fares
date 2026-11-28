@@ -2,7 +2,9 @@
 // (administrateur, gérant, designers, imprimeurs). Elle charge le site de l'équipe : toujours identique
 // au site et à jour sans réinstallation. En plus : téléchargements directs, PDF imprimables,
 // notifications Windows, icône près de l'horloge, démarrage avec Windows, mise à jour automatique.
-const { app, BrowserWindow, Menu, Tray, shell, nativeImage, session, Notification, dialog, globalShortcut, screen } = require('electron');
+const { app, BrowserWindow, Menu, Tray, shell, nativeImage, session, Notification, dialog, globalShortcut, screen, ipcMain } = require('electron');
+const { Collector } = require('./collector');
+const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -14,7 +16,7 @@ const NAME = PKG.productName || 'My DTF';
 const ICON = path.join(__dirname, 'build', 'icon.png');
 const STATE = () => path.join(app.getPath('userData'), 'window.json');
 const DL_DIR = () => path.join(app.getPath('downloads'), 'MyDTF');
-let win, tray, quitting = false, updateReady = false;
+let win, tray, quitting = false, updateReady = false, collector = null;
 
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
@@ -48,7 +50,7 @@ function create() {
     x: st.x, y: st.y, width: Math.min(st.width || 1360, wa.width), height: Math.min(st.height || 860, wa.height),
     minWidth: Math.min(900, wa.width), minHeight: Math.min(600, wa.height), show: false,
     backgroundColor: '#090B11', title: NAME, icon: ICON, autoHideMenuBar: true,
-    webPreferences: { contextIsolation: true, sandbox: true, spellcheck: false, plugins: true },
+    webPreferences: { contextIsolation: true, sandbox: true, spellcheck: false, plugins: true, preload: path.join(__dirname, 'preload.js') },
   });
   if (st.max) win.maximize();
   Menu.setApplicationMenu(null);
@@ -101,6 +103,34 @@ function setupDownloads() {
   });
 }
 
+// ---------- PrintExp : collecteur en lecture seule (voir collector/) ----------
+// Seule la page de l'équipe (même origine) reçoit les relevés ; elle les enregistre avec la session connectée.
+function setupCollector() {
+  collector = new Collector(app, data => { if (win && !win.isDestroyed() && inApp(win.webContents.getURL())) win.webContents.send('collector:report', data); });
+  const fromApp = e => e.senderFrame && inApp(e.senderFrame.url);
+  ipcMain.on('collector:ready', e => { if (fromApp(e)) collector.push(); });
+  ipcMain.on('collector:ack', (e, keys) => { if (fromApp(e)) collector.ack(keys); });
+  ipcMain.handle('collector:status', e => (fromApp(e) ? collector.status() : null));
+  collector.start();
+}
+function printexpLabel() {
+  const s = collector?.status(); if (!s) return '—';
+  if (!s.configured) return s.cfgErr || 'غير مُعدّ بعد (source = off)';
+  return `${s.source} · ${s.stale ? 'لا توجد قراءة حديثة' : 'يقرأ'}${s.pending ? ` · ${s.pending} بانتظار الإرسال` : ''}`;
+}
+// Rapport de diagnostic (version de PrintExp, journaux, arbre de la fenêtre) dans Téléchargements\MyDTF.
+function runProbe() {
+  const out = path.join(DL_DIR(), 'PrintExp-diagnostic-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-'));
+  fs.mkdirSync(out, { recursive: true });
+  notify('أداة الفحص', 'جارٍ إنشاء التقرير… اترك PrintExp مفتوحاً');
+  execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', collector.script, '-Report', out],
+    { windowsHide: true, timeout: 180000, maxBuffer: 4 << 20 }, err => {
+      if (err) notify('تعذّر إنشاء التقرير', String(err.message || err).slice(0, 200));
+      else notify('التقرير جاهز', 'أرسل محتوى هذا المجلد', () => shell.openPath(out));
+      shell.openPath(out);
+    });
+}
+
 function buildTray() {
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
   const auto = () => app.getLoginItemSettings().openAtLogin;
@@ -108,6 +138,12 @@ function buildTray() {
     { label: `فتح ${NAME}`, click: () => { win.show(); win.focus(); } },
     { label: 'تحديث الصفحة', click: () => win.loadURL(URL) },
     { label: 'مجلد التنزيلات', click: () => { fs.mkdirSync(DL_DIR(), { recursive: true }); shell.openPath(DL_DIR()); } },
+    { label: 'PrintExp (قراءة فقط)', submenu: [
+      { label: printexpLabel(), enabled: false },
+      { label: 'أداة الفحص — إنشاء تقرير لإرساله', click: runProbe },
+      { label: 'فتح ملف الإعداد printexp.json', click: () => shell.openPath(collector.cfgFile) },
+      { label: 'إعادة تحميل الإعداد', click: () => { collector.restart(); tray.setContextMenu(menu()); } },
+    ] },
     { type: 'separator' },
     { label: 'التشغيل مع ويندوز', type: 'checkbox', checked: auto(), click: i => { app.setLoginItemSettings({ openAtLogin: i.checked }); tray.setContextMenu(menu()); } },
     { label: updateReady ? 'تثبيت التحديث الآن' : 'البحث عن تحديث', click: () => (updateReady ? installUpdate() : checkUpdates(true)) },
@@ -151,11 +187,12 @@ app.whenReady().then(() => {
   const first = path.join(app.getPath('userData'), 'first');
   if (!fs.existsSync(first)) { app.setLoginItemSettings({ openAtLogin: true }); try { fs.writeFileSync(first, '1'); } catch (_) {} }
   setupDownloads();
+  setupCollector();
   create();
   const menu = buildTray();
   refreshTray = () => tray.setContextMenu(menu());
   setupUpdates();
 });
-app.on('before-quit', () => { quitting = true; saveState(); });
+app.on('before-quit', () => { quitting = true; saveState(); collector?.save(); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', () => {});

@@ -3,7 +3,8 @@
   // Centre de contrôle de l'atelier : machines en direct, chaîne de production, activité, équipe.
   import { onDestroy } from 'svelte';
   import { sb, q, rpc } from '../lib/sb.js';
-  import { me, staff, board, liveTick, tv, openSheet, openModal, loadBoard, MSTATUS } from '../lib/store.js';
+  import { me, staff, board, liveTick, tv, openSheet, openModal, loadBoard, MSTATUS, liveOrphans } from '../lib/store.js';
+  import { get } from 'svelte/store';
   import { da, m, num, pct, time, dur, minsSince, ymd, ROLE, STATUS, ACT, ltr } from '../lib/fmt.js';
   import MachineCard from '../components/MachineCard.svelte';
   import Ring from '../components/Ring.svelte';
@@ -60,6 +61,7 @@
     open.filter(o => ['returned', 'attempt', 'hold'].includes(o.ship_status)).forEach(o => alerts.push({ lvl: o.ship_status === 'returned' ? 'bad' : 'warn', icon: 'truck', t: `طلبية ${o.code}: ${o.ship_status === 'returned' ? 'طرد مرتجع' : o.ship_status === 'attempt' ? 'محاولة توصيل فاشلة — اتصل بالزبون' : 'طرد معلّق عند شركة التوصيل'}`, href: '#orders' }));
     if (unread) alerts.push({ lvl: 'warn', icon: 'chat', t: `${unread} رسالة من الزبائن لم تُقرأ`, href: '#chat' });
     att.filter(a => a.auto_closed).forEach(a => alerts.push({ lvl: 'warn', icon: 'clock', t: `${$staff.find(s => s.id === a.user_id)?.full_name || '—'} نسي تسجيل الخروج (${a.work_date})`, href: '#attendance' }));
+    get(liveOrphans).forEach(l => alerts.push({ lvl: 'warn', icon: 'machine', t: `طابعة PrintExp «${l.printer_name || l.printer_key}» تُرسل قراءات لكنها غير مربوطة بآلة — أدخل المعرّف ${l.printer_key} في إعدادات الآلة` }));
     if (!($board || []).length) alerts.push({ lvl: 'warn', icon: 'machine', t: 'لم تُضف أي آلة بعد — أضف آلاتك ليعمل مركز التحكّم بالكامل' });
     d = { revToday: today.reduce((s, o) => s + +o.print_amount, 0), nToday: today.length,
       rev30: valid.reduce((s, o) => s + +o.print_amount, 0), rev14: days.reduce((s, x) => s + x.v, 0), n14: days.reduce((s, x) => s + x.n, 0), days, max: Math.max(1, ...days.map(x => x.v)),

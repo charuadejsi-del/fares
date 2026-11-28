@@ -8,7 +8,8 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win nsis --publish never"
+    "dist": "electron-builder --win nsis --publish never",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "electron-updater": "6.3.9"
@@ -26,8 +27,10 @@
     },
     "files": [
       "main.js",
+      "preload.js",
       "offline.html",
-      "build/icon.png"
+      "build/icon.png",
+      "collector/**"
     ],
     "win": {
       "target": "nsis",
@@ -42,7 +45,11 @@
       "shortcutName": "My DTF",
       "uninstallDisplayName": "My DTF",
       "runAfterFinish": true,
-      "installerLanguages": ["ar_SA", "fr_FR", "en_US"],
+      "installerLanguages": [
+        "ar_SA",
+        "fr_FR",
+        "en_US"
+      ],
       "multiLanguageInstaller": true,
       "artifactName": "My-DTF-Setup.exe"
     },
@@ -51,6 +58,9 @@
         "provider": "generic",
         "url": "https://github.com/charuadejsi-del/fares/releases/download/my-dtf-desktop-latest/"
       }
+    ],
+    "asarUnpack": [
+      "collector/printexp-probe.ps1"
     ]
   },
   "mydtf": {

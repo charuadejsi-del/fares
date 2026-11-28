@@ -3,7 +3,8 @@
   import { askNotify, notify } from './lib/notify.js';
   import { onMount } from 'svelte';
   import { sb, rpc, q, errMsg } from './lib/sb.js';
-  import { me, settings, staff, shift, badges, liveTick, tv, toast, openModal, closeSheet, isMgr } from './lib/store.js';
+  import { startCollectorRelay } from './lib/collector.js';
+  import { me, settings, staff, shift, badges, liveTick, tv, toast, openModal, closeSheet, isMgr, loadBoard } from './lib/store.js';
   import { ROLE, time, dur, minsSince } from './lib/fmt.js';
   import Toast from './components/Toast.svelte';
   import Overlays from './components/Overlays.svelte';
@@ -68,6 +69,7 @@
       const p = await q(sb.from('dtf_profiles').select('*').eq('id', session.user.id).maybeSingle());
       if (!p || p.role === 'client' || !p.active) { await sb.auth.signOut(); loginErr = 'هذا الحساب ليس من فريق الورشة'; stage = 'login'; return; }
       me.set(p);
+      startCollectorRelay();   // programme Windows : relevés PrintExp (lecture seule)
       settings.set(await q(sb.from('dtf_settings').select('*').limit(1).maybeSingle()));
       staff.set(await q(sb.from('dtf_profiles').select('id,full_name,role,active,phone').neq('role', 'client').order('full_name')));
       if (p.role === 'admin') return enter();
@@ -111,6 +113,8 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_orders' }, e => { if (e.eventType === 'INSERT' && isMgr($me)) notify('طلبية جديدة رقم ' + e.new.code, (+e.new.billed_meters).toFixed(2) + ' م', 'o' + e.new.id); bump(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_rolls' }, bump)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_machines' }, bump)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dtf_machine_live' }, () => loadBoard())   // relevé PrintExp : seule la carte des machines
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_print_runs' }, bump)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dtf_settings' }, async () => { try { settings.set(await q(sb.from('dtf_settings').select('*').limit(1).maybeSingle())); } catch (_) {} bump(); })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_machine_events' }, bump)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dtf_messages' }, e => { if (!e.new.from_staff && isMgr($me)) notify('رسالة جديدة من زبون', e.new.body?.slice(0, 120), 'm' + e.new.client_id); bump(); })

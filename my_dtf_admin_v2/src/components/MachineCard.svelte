@@ -2,8 +2,8 @@
   // Carte vivante d'une machine. Deux faits distincts : l'état déclaré (تطبع / متوقفة / صيانة / عطل)
   // et l'aptitude réelle à imprimer (rouleau monté, restant) — un blocage s'affiche en clair avec l'action à faire.
   import { onDestroy, createEventDispatcher } from 'svelte';
-  import { MSTATUS, readiness } from '../lib/store.js';
-  import { m, num, clock, dur, minsSince } from '../lib/fmt.js';
+  import { MSTATUS, readiness, liveView } from '../lib/store.js';
+  import { m, num, clock, dur, minsSince, time } from '../lib/fmt.js';
   import Icon from './Icon.svelte';
   export let x; export let big = false; export let selected = false; export let compact = false;
   const dispatch = createEventDispatcher();
@@ -14,6 +14,7 @@
   $: low = x.roll_code && +x.roll_remaining <= +x.alert_m;
   $: elapsed = (n, x.job_started ? clock(minsSince(x.job_started)) : '');
   $: since = (n, dur(minsSince(x.status_since)));
+  $: lv = (n, liveView(x.live));
 </script>
 <button class="mc s-{x.status} r-{rd.c}" class:big class:selected class:off={!x.active} class:blocked={rd.block} on:click={() => dispatch('open', x)}>
   <div class="head">
@@ -32,6 +33,17 @@
       <div class="grow">{rd.why}</div>{#if rd.block}<span class="muted since">منذ {since}</span>{/if}</div>
   {:else if !compact}
     <div class="job idlebox"><Icon name="check" size={18} /><span class="grow">جاهزة — في انتظار ملف</span><span class="muted since">منذ {since}</span></div>
+  {/if}
+  {#if lv}
+    <div class="pe" class:pe-stale={lv.stale}>
+      <div class="row between"><span class="muted">PrintExp</span>
+        <span class="row" style="gap:6px"><span class="chip c-{lv.conn.c}">{lv.conn.t}</span>{#if lv.act}<span class="chip c-{lv.act.c}">{lv.act.t}</span>{/if}</span></div>
+      {#if !lv.stale && (lv.activity === 'printing' || lv.activity === 'paused')}
+        <div class="row between"><span class="ell">{lv.job_name || '—'}</span>{#if lv.printed_m != null}<b class="num">الأمتار المطبوعة {(+lv.printed_m).toFixed(2)}{lv.planned_m ? ` / ${(+lv.planned_m).toFixed(2)}` : ''} م</b>{/if}</div>
+        {#if lv.progress != null}<div class="bar ok"><i style="width:{Math.min(100, +lv.progress)}%"></i></div>{/if}
+      {/if}
+      <div class="upd">آخر تحديث: <span class="num">{time(lv.read_at)}</span>{lv.stale ? ' — البرنامج لا يرسل قراءات حديثة' : ''}</div>
+    </div>
   {/if}
   <div class="roll">
     <div class="row between rl"><span>{x.roll_code ? `الرولو ${x.roll_code}` : 'لا يوجد رولو مركّب'}</span>
@@ -77,4 +89,8 @@
   .foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 10px; font-size: 13.5px; }
   .op b { display: inline-block; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
   .big .name { font-size: 20px; } .big .job { font-size: 16px; }
+  .pe { display: flex; flex-direction: column; gap: 6px; padding: 9px 12px; border-radius: 12px; border: 1px dashed var(--line2); font-size: 13.5px; }
+  .pe .chip { font-size: 12.5px; } .pe-stale { opacity: .8; }
+  .upd { font-size: 12.5px; color: var(--muted); }
+  .pe .ell { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

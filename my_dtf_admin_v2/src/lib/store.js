@@ -26,11 +26,32 @@ export const isMgr = () => ['admin', 'manager'].includes(get(me)?.role);
 
 // Parc de machines (tableau de bord temps réel) — partagé par toutes les vues.
 export const board = writable(null);
+export const liveOrphans = writable([]);
+// État PrintExp affichable : la connexion, l'activité et la fraîcheur sont trois signaux distincts.
+export const LIVE_STALE_S = 60;
+export function liveView(l, now = Date.now()) {
+  if (!l) return null;
+  const age = (now - new Date(l.read_at).getTime()) / 1000;
+  const stale = age > LIVE_STALE_S;
+  const conn = stale || l.connection === 'unknown' ? { t: 'حالة غير متاحة', c: 'gray' } : l.connection === 'connected' ? { t: 'متصلة', c: 'green' } : { t: 'غير متصلة', c: 'red' };
+  const act = stale ? null : l.activity === 'printing' ? { t: 'تطبع الآن', c: 'green' } : l.activity === 'paused' ? { t: 'متوقفة مؤقتاً', c: 'amber' }
+    : l.activity === 'error' ? { t: 'خطأ في الطابعة', c: 'red' } : l.activity === 'idle' ? { t: 'لا تطبع', c: 'blue' } : null;
+  return { ...l, age, stale, conn, act };
+}
+export const OUTCOME = { completed: ['اكتملت', 'green'], cancelled: ['أُلغيت', 'amber'], failed: ['فشلت', 'red'], unknown: ['النتيجة غير معروفة', 'gray'] };
 export async function loadBoard() {
   const { sb } = await import('./sb.js');
-  const { data, error } = await sb.rpc('dtf_machine_board');
-  if (!error) board.set(data || []);
-  return data || [];
+  const [{ data, error }, live, ids] = await Promise.all([
+    sb.rpc('dtf_machine_board'),
+    sb.from('dtf_machine_live').select('*'),
+    sb.from('dtf_machines').select('id,printexp_id'),
+  ]);
+  // Relevé PrintExp (lecture seule, programme Windows) rattaché à chaque machine ; les imprimantes non reliées restent dans liveOrphans.
+  const L = live.data || [], P = Object.fromEntries((ids.data || []).map(r => [r.id, r.printexp_id]));
+  const rows = (data || []).map(x => ({ ...x, printexp_id: P[x.id] || null, live: L.find(l => l.machine_id === x.id) || null }));
+  liveOrphans.set(L.filter(l => !l.machine_id));
+  if (!error) board.set(rows);
+  return rows;
 }
 // Machine choisie par le poste d'impression (mémorisée sur cet appareil).
 const MK = 'mydtf.machine';
