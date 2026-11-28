@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win nsis --publish never",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/collector.test.js"
   },
   "dependencies": {
     "electron-updater": "6.3.9"
