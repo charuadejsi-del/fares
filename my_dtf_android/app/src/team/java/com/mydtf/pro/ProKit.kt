@@ -90,7 +90,23 @@ fun mstate(s: String) = when (s) {
     "running" -> MState("تطبع", Lux.Success)
     "maintenance" -> MState("صيانة", Color(0xFFFBBF24))
     "down" -> MState("عطل", Lux.Danger)
-    else -> MState("جاهزة", Color(0xFF60A5FA))
+    else -> MState("متوقفة", Color(0xFF60A5FA))
+}
+
+/** Aptitude réelle à imprimer : état déclaré + rouleau monté (même règle que le site). */
+data class Ready(val label: String, val color: Color, val block: Boolean = false, val why: String? = null)
+fun readiness(m: Machine): Ready {
+    val amber = Color(0xFFFBBF24); val left = m.rollRemaining ?: 0.0; val has = m.rollCode != null
+    return when {
+        !m.active -> Ready("غير مفعّلة", Lux.Muted, true, "الآلة موقوفة من الإعدادات")
+        m.status == "down" -> Ready("معطّلة", Lux.Danger, true, m.statusNote ?: "عطل — أصلح الآلة ثم غيّر حالتها")
+        m.status == "maintenance" -> Ready("في الصيانة", amber, true, m.statusNote ?: "صيانة جارية")
+        m.status == "running" -> if (has) Ready("تطبع", Lux.Success) else Ready("تطبع — دون رولو مسجّل", amber, false, "سجّل الرولو المركّب حتى يُحسب الاستهلاك")
+        !has -> Ready("تحتاج رولو", amber, true, "لا يوجد رولو مركّب — ركّب رولو لتبدأ الطباعة")
+        left <= 0.0 -> Ready("الرولو انتهى", Lux.Danger, true, "الرولو فارغ — بدّله برولو جديد")
+        left <= (m.alertM ?: 0.0) -> Ready("جاهزة — الرولو ينفد", amber, false, "بقي %.1f م فقط — جهّز رولو جديداً".format(left))
+        else -> Ready("جاهزة للطباعة", Lux.Success)
+    }
 }
 
 /** Voyant lumineux (pulse quand la machine imprime ou est en panne). */

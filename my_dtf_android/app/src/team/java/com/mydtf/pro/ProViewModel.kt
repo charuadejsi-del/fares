@@ -100,9 +100,11 @@ class ProViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Dernier échec de chargement (réseau, serveur) — affiché en bandeau avec « إعادة المحاولة ». */
+    var netError by mutableStateOf<String?>(null)
     fun refresh() = viewModelScope.launch {
-        runCatching { work = Pro.workOrders() }
-        runCatching { board = Pro.board() }
+        val r = runCatching { work = Pro.workOrders(); board = Pro.board() }
+        netError = r.exceptionOrNull()?.let { friendlyError(it) }
         runCatching { shop = Pro.shop() }
         runCatching { supplies = Pro.supplies() }
         if (isMgr) { runCatching { orders = Pro.mgrOrders() }; runCatching { convs = Pro.conversations() } }

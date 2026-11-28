@@ -32,7 +32,7 @@ object Lux {
     val Surface = Color(0xFF11141D)
     val Surface2 = Color(0xFF171B26)
     val Ivory = Color(0xFFEEF0F5)
-    val Muted = Color(0xFF8E95A8)
+    val Muted = Color(0xFFA9B0C0)
     val Danger = Color(0xFFF05A5A)
     val Success = Color(0xFF34D399)
     val Chart = Color(0xFF7C6CF0)
@@ -100,10 +100,10 @@ private val LuxTypography = Typography(
     titleSmall = t(15, FontWeight.Medium),
     bodyLarge = t(16),
     bodyMedium = t(15),
-    bodySmall = t(13),
+    bodySmall = t(14),
     labelLarge = t(15, FontWeight.Bold),
-    labelMedium = t(13, FontWeight.Medium),
-    labelSmall = t(12, FontWeight.Medium),
+    labelMedium = t(14, FontWeight.Medium),
+    labelSmall = t(13, FontWeight.Medium),
 )
 
 private val LuxShapes = Shapes(

@@ -2,7 +2,7 @@
 // (administrateur, gérant, designers, imprimeurs). Elle charge le site de l'équipe : toujours identique
 // au site et à jour sans réinstallation. En plus : téléchargements directs, PDF imprimables,
 // notifications Windows, icône près de l'horloge, démarrage avec Windows, mise à jour automatique.
-const { app, BrowserWindow, Menu, Tray, shell, nativeImage, session, Notification, dialog, globalShortcut } = require('electron');
+const { app, BrowserWindow, Menu, Tray, shell, nativeImage, session, Notification, dialog, globalShortcut, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -40,15 +40,23 @@ function openPreview(url) {
 
 function create() {
   const st = loadState();
+  // Première ouverture : fenêtre adaptée à l'écran (portables 1366×768 inclus) et position valide même si un écran a été débranché.
+  const wa = screen.getPrimaryDisplay().workAreaSize;
+  const onScreen = st.x != null && screen.getAllDisplays().some(d => { const b = d.workArea; return st.x >= b.x - 50 && st.y >= b.y - 50 && st.x < b.x + b.width - 100 && st.y < b.y + b.height - 100; });
+  if (!onScreen) { delete st.x; delete st.y; }
   win = new BrowserWindow({
-    x: st.x, y: st.y, width: st.width || 1360, height: st.height || 860, minWidth: 980, minHeight: 640, show: false,
+    x: st.x, y: st.y, width: Math.min(st.width || 1360, wa.width), height: Math.min(st.height || 860, wa.height),
+    minWidth: Math.min(900, wa.width), minHeight: Math.min(600, wa.height), show: false,
     backgroundColor: '#090B11', title: NAME, icon: ICON, autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, sandbox: true, spellcheck: false, plugins: true },
   });
   if (st.max) win.maximize();
   Menu.setApplicationMenu(null);
   win.loadURL(URL);
-  win.once('ready-to-show', () => { win.show(); if (st.zoom) win.webContents.setZoomFactor(st.zoom); });
+  // Zoom : celui choisi par l'utilisateur, sinon 90 % sur les petits écrans pour voir tout le tableau de bord.
+  win.once('ready-to-show', () => { win.show(); win.webContents.setZoomFactor(st.zoom || (wa.width < 1440 ? 0.9 : 1)); });
+  // Ctrl + molette : zoom (comme dans un navigateur)
+  win.webContents.on('zoom-changed', (_e, dir) => { const z = win.webContents.getZoomFactor(); win.webContents.setZoomFactor(dir === 'in' ? Math.min(2, z + 0.1) : Math.max(0.6, z - 0.1)); });
   win.on('page-title-updated', e => { e.preventDefault(); win.setTitle(NAME); });
 
   // Pas d'internet : page d'attente qui réessaie toute seule.

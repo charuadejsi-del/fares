@@ -160,7 +160,9 @@
   $: firstName = $me?.full_name?.split(' ')[0] || '';
   $: greeting = new Date().getHours() < 12 ? 'صباح الخير' : 'مساء الخير';
   // Coque « Ghania » : menu groupé repliable, recherche Ctrl+K, cloche, actualisation
-  let collapsed = false; try { collapsed = localStorage.getItem('mydtf.side') === '1'; } catch (_) {}
+  // Menu replié : choix mémorisé ; sans choix, replié automatiquement sur les fenêtres étroites (< 1280 px).
+  let collapsed = false;
+  try { const v = localStorage.getItem('mydtf.side'); collapsed = v === null ? innerWidth < 1280 : v === '1'; } catch (_) {}
   function toggleSide() { collapsed = !collapsed; try { localStorage.setItem('mydtf.side', collapsed ? '1' : '0'); } catch (_) {} }
   let palOpen = false, bellOpen = false, spin = false;
   $: total = Object.values($badges).reduce((s, v) => s + (+v || 0), 0);
@@ -338,6 +340,15 @@
   .ib.big { width: 40px; height: 40px; }
   .ib.spin :global(svg) { animation: spin .7s var(--ease); }
   .side.mini { width: 78px; }
+  /* Fenêtre peu haute : menu plus serré pour éviter le défilement */
+  @media (max-height: 820px) {
+    .side { padding-top: 10px; padding-bottom: 10px; }
+    .brand { padding-bottom: 8px; }
+    .gl { padding: 8px 12px 3px; }
+    .nl { padding: 7px 12px; margin-bottom: 1px; }
+    .shift { display: none; }
+  }
+  @media (max-height: 680px) { .gl { display: none; } .nl { padding: 6px 12px; } }
   .side.mini .lt, .side.mini .bt, .side.mini .gl { display: none; }
   .side.mini .nl { justify-content: center; padding: 11px 0; }
   .side.mini .gl + .nl, .side.mini nav > .nl:first-child { margin-top: 10px; }

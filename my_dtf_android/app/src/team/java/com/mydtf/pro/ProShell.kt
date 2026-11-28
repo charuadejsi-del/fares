@@ -9,6 +9,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -77,6 +78,12 @@ fun ProShell(vm: ProViewModel) {
     var askOut by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(Lux.nightBrush)) {
         TopBar(vm, onOut = { askOut = true })
+        vm.netError?.let { e ->
+            Row(Modifier.fillMaxWidth().background(Lux.Danger.copy(alpha = .16f)).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("تعذّر تحديث البيانات: $e", color = Color(0xFFFCA5A5), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                androidx.compose.material3.TextButton(onClick = { vm.refresh() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("إعادة المحاولة", color = Lux.Gold, fontWeight = FontWeight.Bold) }
+            }
+        }
         Box(Modifier.weight(1f)) {
             AnimatedContent(sel, transitionSpec = { (slideInHorizontally { if (targetState > initialState) -it / 5 else it / 5 } + fadeIn()) togetherWith fadeOut() }, label = "tab") { i ->
                 when (tabs.getOrNull(i)?.id) {

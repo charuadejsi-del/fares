@@ -220,15 +220,16 @@ fun PrinterStation(vm: ProViewModel) {
 /** Carte vivante d'une machine. */
 @Composable
 fun MachineCard(m: Machine, big: Boolean = false, onClick: () -> Unit) {
-    val st = mstate(m.status)
+    val st = mstate(m.status); val rd = readiness(m)
     LuxCard(Modifier.fillMaxWidth(), highlight = m.status == "running", onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             StatusDot(st.color, m.status == "running" || m.status == "down")
             Column(Modifier.weight(1f)) {
                 Text(m.name, style = MaterialTheme.typography.titleMedium)
-                Text(m.model ?: "DTF", style = MaterialTheme.typography.labelSmall, color = Lux.Muted)
+                Text("${m.model ?: "DTF"} · الحالة: ${st.label}", style = MaterialTheme.typography.labelMedium, color = Lux.Muted)
             }
-            Text(st.label, color = st.color, fontWeight = FontWeight.Bold)
+            Text(rd.label, color = rd.color, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(rd.color.copy(alpha = .14f)).padding(horizontal = 10.dp, vertical = 4.dp))
         }
         Spacer(Modifier.height(10.dp))
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lux.Night2).padding(12.dp)) {
@@ -240,26 +241,27 @@ fun MachineCard(m: Machine, big: Boolean = false, onClick: () -> Unit) {
                     }
                     LiveClock(m.jobStarted, if (big) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge)
                 }
-                m.status == "down" || m.status == "maintenance" -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Warning, null, tint = st.color); Spacer(Modifier.width(8.dp))
-                    Text(m.statusNote ?: "—", color = st.color, modifier = Modifier.weight(1f))
+                rd.why != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Warning, null, tint = rd.color); Spacer(Modifier.width(8.dp))
+                    Text(rd.why, color = rd.color, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    if (rd.block) Text("منذ ${dur(minsSince(m.statusSince))}", color = Lux.Muted, style = MaterialTheme.typography.labelMedium)
                 }
-                else -> Text("في انتظار ملف · منذ ${dur(minsSince(m.statusSince))}", color = Lux.Muted, style = MaterialTheme.typography.bodySmall)
+                else -> Text("جاهزة — في انتظار ملف · منذ ${dur(minsSince(m.statusSince))}", color = Lux.Ivory, style = MaterialTheme.typography.bodyMedium)
             }
         }
         Spacer(Modifier.height(10.dp))
         val low = m.rollCode != null && (m.rollRemaining ?: 0.0) <= (m.alertM ?: 0.0)
         Row {
-            Text(if (m.rollCode != null) "الرولو ${m.rollCode}" else "لا يوجد رولو مركّب", style = MaterialTheme.typography.labelSmall, color = Lux.Muted, modifier = Modifier.weight(1f))
+            Text(if (m.rollCode != null) "الرولو ${m.rollCode}" else "لا يوجد رولو مركّب", style = MaterialTheme.typography.labelMedium, color = Lux.Muted, modifier = Modifier.weight(1f))
             if (m.rollCode != null) Text(com.mydtf.core.ltr("%.1f / %.0f م".format(m.rollRemaining ?: 0.0, m.rollLength ?: 0.0)), style = MaterialTheme.typography.labelMedium, color = if (low) Lux.Danger else Lux.Ivory)
         }
         Spacer(Modifier.height(4.dp))
         Gauge(if (m.rollCode != null) ((m.rollRemaining ?: 0.0) / (m.rollLength ?: 1.0)).toFloat() else 0f, low)
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("اليوم ${m2(m.metersToday)}", style = MaterialTheme.typography.labelSmall, color = Lux.Muted)
-            Text("هدر ${m2(m.wasteToday)}", style = MaterialTheme.typography.labelSmall, color = if (m.wasteToday > 0) Color(0xFFFBBF24) else Lux.Muted)
-            Text(m.operatorName ?: "—", style = MaterialTheme.typography.labelSmall, color = Lux.Muted)
+            Text("اليوم ${m2(m.metersToday)}", style = MaterialTheme.typography.labelMedium, color = Lux.Muted)
+            Text("هدر ${m2(m.wasteToday)}", style = MaterialTheme.typography.labelMedium, color = if (m.wasteToday > 0) Color(0xFFFBBF24) else Lux.Muted)
+            Text(m.operatorName ?: "—", style = MaterialTheme.typography.labelMedium, color = Lux.Muted)
         }
     }
 }

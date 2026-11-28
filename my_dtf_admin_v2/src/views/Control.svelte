@@ -62,7 +62,7 @@
     att.filter(a => a.auto_closed).forEach(a => alerts.push({ lvl: 'warn', icon: 'clock', t: `${$staff.find(s => s.id === a.user_id)?.full_name || '—'} نسي تسجيل الخروج (${a.work_date})`, href: '#attendance' }));
     if (!($board || []).length) alerts.push({ lvl: 'warn', icon: 'machine', t: 'لم تُضف أي آلة بعد — أضف آلاتك ليعمل مركز التحكّم بالكامل' });
     d = { revToday: today.reduce((s, o) => s + +o.print_amount, 0), nToday: today.length,
-      rev30: valid.reduce((s, o) => s + +o.print_amount, 0), days, max: Math.max(1, ...days.map(x => x.v)),
+      rev30: valid.reduce((s, o) => s + +o.print_amount, 0), rev14: days.reduce((s, x) => s + x.v, 0), n14: days.reduce((s, x) => s + x.n, 0), days, max: Math.max(1, ...days.map(x => x.v)),
       pipe, worst: worst.load > 0.5 ? worst.t : null, team, alerts, stock, inWork: open.filter(o => o.status !== 'shipped').length };
   }
   $: $liveTick, load();
@@ -110,7 +110,11 @@
 
   <div class="grid two" style="margin-top:20px">
     <div class="card">
-      <div class="section-title">المداخيل — آخر 14 يوماً<span class="end muted small">30 يوماً: {da(d.rev30)}</span></div>
+      <div class="section-title"><div>المداخيل اليومية — آخر 14 يوماً<span class="sub">مبلغ الطباعة حسب يوم استلام الطلبية، دون المرفوضة والملغاة · اليوم بلون أفتح</span></div></div>
+      <div class="revk">
+        <div><span class="muted">مجموع آخر 14 يوماً (الرسم)</span><b class="num">{da(d.rev14)}</b><span class="muted">{num(d.n14)} طلبية</span></div>
+        <div><span class="muted">مجموع آخر 30 يوماً</span><b class="num">{da(d.rev30)}</b></div>
+      </div>
       <div class="bars" dir="ltr">
         {#each d.days as x}<div title="{x.n} — {Math.round(x.v)}"><span class="val">{x.v ? ltr(x.v >= 1000 ? (x.v / 1000).toFixed(1) + 'k' : Math.round(x.v)) : ''}</span><i class:today={x.today} style="height:{(x.v / d.max) * 100}%"></i><small>{x.day}</small></div>{/each}
       </div>
@@ -159,8 +163,10 @@
   .hk b { font-size: 22px; color: #fff; } .hero :global(.faint) { color: #ffffffa0; } .hero :global(.accent) { color: var(--accent3); }
   .ringk { flex-direction: row; align-items: center; gap: 10px; }
   .tvb { margin-right: auto; }
-  .wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
-  :global(.tv) .wall { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+  /* auto-fit : les cartes occupent toute la largeur disponible (pas de colonnes vides à droite) */
+  .wall { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; }
+  @media (min-width: 1700px) { .wall { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); } }
+  :global(.tv) .wall { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
   .addm { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted); border-style: dashed; }
   .pipe { display: flex; align-items: stretch; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
   .stage { flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: 6px; padding: 13px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); color: var(--text); }
@@ -170,14 +176,20 @@
   .si { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent2); }
   .stage.warm { border-color: #FBBF2466; } .stage.warm .si { background: #FBBF241F; color: var(--amber); }
   .stage.hot { border-color: #F87171; background: linear-gradient(180deg, #2A1618, var(--card)); } .stage.hot .si { background: #F871712A; color: var(--red); }
-  .arrow { align-self: center; color: var(--faint); font-size: 22px; }
+  .arrow { align-self: center; color: var(--muted); font-size: 24px; }
+  .stage .faint { color: var(--muted); font-size: 13px; }
+  /* Téléphone : la chaîne se lit de haut en bas dans l'ordre des étapes */
+  @media (max-width: 640px) { .pipe { flex-direction: column; overflow: visible; } .stage { min-width: 0; } .arrow { transform: rotate(-90deg); line-height: 1; } }
   .two { grid-template-columns: 1.7fr 1fr; } .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   @media (max-width: 1100px) { .two, .three { grid-template-columns: 1fr; } .hk { border: 0; padding: 0; } .tvb { margin: 0; } }
   .bars { display: flex; align-items: flex-end; gap: 6px; height: 190px; }
   .bars > div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
   .bars i { width: 100%; max-width: 32px; min-height: 2px; border-radius: 7px 7px 2px 2px; background: linear-gradient(180deg, #7C6CF0CC, #7C6CF022); transition: height .5s; }
   .bars i.today { background: linear-gradient(180deg, var(--chart2), var(--chart)); box-shadow: 0 0 18px #7C6CF077; }
-  .bars small { font-size: 11px; color: var(--faint); } .val { font-size: 10px; color: var(--muted); }
+  .bars small { font-size: 12.5px; color: var(--muted); } .val { font-size: 11.5px; color: var(--text); opacity: .85; }
+  .revk { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .revk > div { flex: 1; min-width: 170px; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--line); font-size: 13px; }
+  .revk b { font-size: 19px; color: var(--accent2); }
   .al { display: flex; align-items: center; gap: 10px; text-align: right; width: 100%; padding: 10px 12px; border-radius: 12px; font-size: 13.5px; color: var(--text); background: #FBBF2412; border: 1px solid #FBBF2440; }
   .al :global(svg) { color: var(--amber); flex-shrink: 0; }
   .al.bad { background: #F8717114; border-color: #F8717150; } .al.bad :global(svg) { color: var(--red); }

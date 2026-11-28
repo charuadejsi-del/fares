@@ -37,5 +37,19 @@ const MK = 'mydtf.machine';
 let saved = null; try { saved = localStorage.getItem(MK); } catch (_) {}
 export const myMachine = writable(saved);
 myMachine.subscribe(v => { try { v ? localStorage.setItem(MK, v) : localStorage.removeItem(MK); } catch (_) {} });
-export const MSTATUS = { idle: ['جاهزة', 'idle', 'blue'], running: ['تطبع', 'run', 'green'], maintenance: ['صيانة', 'maint', 'amber'], down: ['عطل', 'down', 'red'] };
+// État déclaré de la machine (choisi par l'équipe). « idle » = à l'arrêt, pas forcément prête à imprimer.
+export const MSTATUS = { idle: ['متوقفة', 'idle', 'blue'], running: ['تطبع', 'run', 'green'], maintenance: ['صيانة', 'maint', 'amber'], down: ['عطل', 'down', 'red'] };
+// Aptitude réelle à imprimer, déduite de l'état ET du rouleau : t = libellé, c = couleur, block = impression impossible, why = raison / action.
+export function readiness(x) {
+  if (!x) return { t: '—', c: 'gray' };
+  const left = +x.roll_remaining, hasRoll = !!x.roll_code;
+  if (x.active === false) return { t: 'غير مفعّلة', c: 'gray', block: true, why: 'الآلة موقوفة من الإعدادات' };
+  if (x.status === 'down') return { t: 'معطّلة', c: 'red', block: true, why: x.status_note || 'عطل — أصلح الآلة ثم غيّر حالتها' };
+  if (x.status === 'maintenance') return { t: 'في الصيانة', c: 'amber', block: true, why: x.status_note || 'صيانة جارية' };
+  if (x.status === 'running') return hasRoll ? { t: 'تطبع', c: 'green' } : { t: 'تطبع — دون رولو مسجّل', c: 'amber', why: 'سجّل الرولو المركّب حتى يُحسب الاستهلاك' };
+  if (!hasRoll) return { t: 'تحتاج رولو', c: 'amber', block: true, why: 'لا يوجد رولو مركّب — ركّب رولو لتبدأ الطباعة' };
+  if (left <= 0) return { t: 'الرولو انتهى', c: 'red', block: true, why: 'الرولو فارغ — بدّله برولو جديد' };
+  if (left <= +x.alert_m) return { t: 'جاهزة — الرولو ينفد', c: 'amber', why: `بقي ${left.toFixed(1)} م فقط — جهّز رولو جديداً` };
+  return { t: 'جاهزة للطباعة', c: 'green' };
+}
 export const tv = writable(false);

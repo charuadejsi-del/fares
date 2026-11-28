@@ -16,7 +16,7 @@
   export let param = '';
 
   let sent = false;
-  let step = 0, images = [], seq = 0, dz = null, sending = false, progress = '', err = '';
+  let step = 0, images = [], seq = 0, dz = null, sending = false, progress = '', err = '', upD = 0, upT = 0;
   let mode = 'pickup', name = '', phone = '', wilaya = null, commune = null, address = '', note = '';
   let fileInput, dragging = false;
 
@@ -73,6 +73,9 @@
   $: copies = items.reduce((s, x) => s + (x.quantity || 0), 0);
   $: shipOk = mode === 'pickup' || (name.trim() && phone.replace(/\D/g, '').length >= 9 && wilaya && commune && (mode === 'stopdesk' || address.trim()));
   $: canNext = step === 0 ? valid && !tooWide && !!Q : step === 1 ? !!Q : step === 2 ? shipOk : true;
+  // Ce qui bloque le bouton « التالي », affiché juste au-dessus de lui (et non en bas de page).
+  $: hint = canNext || sending ? '' : step === 0 ? (!images.length ? 'أضف صورة واحدة على الأقل' : tooWide ? `الصورة ${tooWide} أعرض من الفيلم — صغّر مقاسها` : !valid ? 'أدخل العرض والطول والكمية لكل صورة' : 'جارٍ حساب السعر...')
+    : step === 2 ? 'ناقص: ' + [!name.trim() && 'الاسم', phone.replace(/\D/g, '').length < 9 && 'رقم الهاتف', mode !== 'pickup' && !wilaya && 'الولاية', mode !== 'pickup' && !commune && 'البلدية', mode !== 'pickup' && mode !== 'stopdesk' && !address.trim() && 'العنوان'].filter(Boolean).join('، ') : '';
 
   async function send() {
     sending = true; err = '';
@@ -80,12 +83,12 @@
       const o = await createOrder({ lengthCm: res.length, mode,
         ship: mode === 'pickup' ? { name: name.trim(), phone: phone.trim() } : { name: name.trim(), phone: phone.trim(), wilaya: wilaya?.fr, commune: commune?.fr, address: address.trim() || null },
         note, images: images.map((it, k) => ({ file: it.file, w: items[k].width_cm, h: items[k].height_cm, q: items[k].quantity })) },
-        (d, t) => (progress = `رفع الصور ${d}/${t}...`));
+        (d, t) => { upD = d; upT = t; progress = `رفع الصور ${d}/${t}...`; });
       sent = true; confetti(); navigator.vibrate?.([20, 40, 20]);
       await loadAll(); toast('أُرسلت طلبيتك بنجاح');
       setTimeout(() => (location.hash = '#/order/' + o.id), 1300);
     } catch (e) { err = errMsg(e); }
-    sending = false; progress = '';
+    sending = false; progress = ''; upD = upT = 0;
   }
   const STEPS = ['الصور', 'الفيلم', 'الاستلام', 'التأكيد'];
 </script>
@@ -155,6 +158,8 @@
 {/if}
 
 <div class="bar-bottom card">
+  {#if sending && upT}<div class="up" role="progressbar" aria-valuemin="0" aria-valuemax={upT} aria-valuenow={upD}><i style="width:{Math.max(6, (upD / upT) * 100)}%"></i><span>رفع الصور {upD} من {upT} — لا تغلق الصفحة</span></div>{/if}
+  {#if err}<div class="berr" role="alert">{err}</div>{:else if hint}<div class="bhint">{hint}</div>{/if}
   <div class="grow">
     <div class="muted tiny">{Q ? `${m(Q.meters)} · ${num(copies)} نسخة` : 'أضف صورك ومقاساتها'}</div>
     {#if Q}<div class="price" use:countUp={{ value: Q.amount + (fee || 0), format: v => da(Math.round(v)) }}></div>{#if fee}<div class="faint tiny">منها التوصيل {da(fee)}</div>{/if}{:else}<div class="price">—</div>{/if}
@@ -165,7 +170,6 @@
   {#if step < 3}<button class="btn lg" disabled={!canNext} on:click={() => step++}>{step === 2 ? 'مراجعة' : 'التالي'}</button>
   {:else}<button class="btn lg" class:done={sent} class:pop={sent} disabled={sending || sent} on:click={send}><Icon name="check" size={18} />{sent ? 'أُرسلت ✓' : sending ? progress || '...' : 'تأكيد الإرسال'}</button>{/if}
 </div>
-{#if err}<div class="notice bad small" style="margin-top:10px">{err}</div>{/if}
 
 <style>
   .steps { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; }
@@ -191,7 +195,15 @@
   .mode:disabled { opacity: .45; cursor: not-allowed; }
   .kv { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; } .kv span { color: var(--muted); }
   .kv.tot b { font-size: 20px; }
-  .bar-bottom { position: sticky; bottom: 10px; margin-top: 16px; display: flex; align-items: center; gap: 10px; z-index: 30; border-color: var(--accent-line); }
+  .bar-bottom { position: sticky; bottom: 10px; margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; z-index: 30; border-color: var(--accent-line); }
+  .bar-bottom .grow { min-width: 0; }
+  .bhint, .berr, .up { flex-basis: 100%; font-size: 13.5px; }
+  .bhint { color: #FCD34D; }
+  .berr { color: #FCA5A5; background: #F05A5A14; border: 1px solid #F05A5A55; border-radius: 10px; padding: 8px 10px; }
+  .up { position: relative; height: 30px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--line); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .up i { position: absolute; inset: 0 0 0 auto; background: linear-gradient(90deg, var(--accent), var(--accent2)); opacity: .35; transition: width .4s; }
+  .up span { position: relative; font-weight: 600; }
+  .bar-bottom :global(.btn.lg) { min-height: 48px; }
   .price { font-size: 22px; font-weight: 700; color: var(--accent2); }
   @media (max-width: 800px) { .bar-bottom { bottom: calc(80px + env(safe-area-inset-bottom)); } }
 </style>
