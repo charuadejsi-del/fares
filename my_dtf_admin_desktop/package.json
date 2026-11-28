@@ -1,8 +1,8 @@
 {
-  "name": "my-dtf-admin",
-  "productName": "My DTF Admin",
-  "version": "1.0.0",
-  "description": "My DTF — centre de contrôle de l'atelier (administrateur)",
+  "name": "my-dtf",
+  "productName": "My DTF",
+  "version": "1.1.0",
+  "description": "My DTF — برنامج الورشة للحاسوب: المدير والمسيّر والمصمّم والطابع",
   "author": "My DTF",
   "main": "main.js",
   "private": true,
@@ -10,13 +10,16 @@
     "start": "electron .",
     "dist": "electron-builder --win nsis --publish never"
   },
+  "dependencies": {
+    "electron-updater": "6.3.9"
+  },
   "devDependencies": {
     "electron": "33.2.1",
     "electron-builder": "25.1.8"
   },
   "build": {
-    "appId": "com.mydtf.admin.desktop",
-    "productName": "My DTF Admin",
+    "appId": "com.mydtf.desktop",
+    "productName": "My DTF",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -32,13 +35,25 @@
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "My DTF Admin",
-      "artifactName": "My-DTF-Admin-Setup.exe"
-    }
+      "createStartMenuShortcut": true,
+      "shortcutName": "My DTF",
+      "uninstallDisplayName": "My DTF",
+      "runAfterFinish": true,
+      "installerLanguages": ["ar_SA", "fr_FR", "en_US"],
+      "multiLanguageInstaller": true,
+      "artifactName": "My-DTF-Setup.exe"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/charuadejsi-del/fares/releases/download/my-dtf-desktop-latest/"
+      }
+    ]
   },
   "mydtf": {
-    "adminUrl": "https://mydtf-admin.pages.dev/"
+    "appUrl": "https://mydtf-admin.pages.dev/"
   }
 }
